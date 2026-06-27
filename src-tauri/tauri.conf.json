@@ -48,7 +48,8 @@
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "installerHooks": "nsis-hooks.nsh"
       },
       "webviewInstallMode": {
         "type": "downloadBootstrapper",

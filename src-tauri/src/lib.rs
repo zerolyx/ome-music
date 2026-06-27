@@ -4220,6 +4220,22 @@ fn normalize_bilibili_image_url(value: String) -> String {
     }
 }
 
+fn normalize_netease_image_url(value: String) -> String {
+    let normalized = value.trim().to_string();
+    if normalized.is_empty() {
+        return normalized;
+    }
+    if normalized.starts_with("//") {
+        format!("https:{normalized}")
+    } else if normalized.starts_with("http://") {
+        normalized.replacen("http://", "https://", 1)
+    } else if !normalized.starts_with("https://") && !normalized.starts_with("data:") {
+        String::new()
+    } else {
+        normalized
+    }
+}
+
 fn proxy_bilibili_song_cover(state: &State<'_, AppState>, song: &mut SourceSongDto) -> Result<(), String> {
     if !song.cover_url.trim().is_empty() {
         song.cover_url = register_media_proxy(state.inner(), &song.cover_url, "image")?;
@@ -4587,7 +4603,10 @@ async fn request_netease_json_response(
     }
 
     let endpoint = format!("{}{}", config.base_url.trim_end_matches('/'), path);
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
     let mut query_items: Vec<(String, String)> = query
         .iter()
         .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
@@ -4855,14 +4874,13 @@ async fn fetch_netease_playable_url_with_level(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| if config.token.is_some() { "hires" } else { "standard" });
-    let is_logged_in = match fetch_netease_login_status(config).await {
-        Ok(status) => status.logged_in && !status.expired,
-        Err(_) => false,
-    };
-    let user_profile = fetch_netease_login_status(config).await.ok();
+    let login_status = fetch_netease_login_status(config).await.ok();
+    let is_logged_in = login_status.as_ref().is_some_and(|status| status.logged_in && !status.expired);
+    let user_profile = login_status;
     let vip_status = fetch_netease_vip_status(config).await.ok();
     let is_member = vip_status.as_ref().is_some_and(|status| status.is_member);
-    let mut levels = if is_logged_in {
+    let has_token = config.token.is_some();
+    let mut levels = if has_token {
         ordered_netease_levels(requested_level)
     } else {
         vec!["standard".to_string()]
@@ -4941,7 +4959,7 @@ async fn fetch_netease_playable_url_with_level(
         final_debug.reason = reason.clone();
         final_debug.message = message;
 
-        if let Some(url) = url.filter(|_| !trial_only) {
+        if let Some(url) = url {
             final_debug.attempts = attempts;
             return Ok(PlayableUrlDto {
                 song_id: song_id.to_string(),
@@ -5152,14 +5170,18 @@ async fn fetch_netease_vip_status(config: &ResolvedNeteaseSourceConfig) -> Resul
     match value {
         Ok(value) => {
             let data = value.get("data").unwrap_or(&value);
+            let associator = data.get("associator").or_else(|| data.get("data"));
             let vip_type = data
                 .get("vipType")
                 .or_else(|| data.get("redVipLevel"))
+                .or_else(|| associator.and_then(|a| a.get("vipType")))
+                .or_else(|| associator.and_then(|a| a.get("redVipLevel")))
                 .and_then(|value| value.as_i64())
                 .unwrap_or(0);
             let is_member = data
                 .get("isMember")
                 .and_then(|value| value.as_bool())
+                .or_else(|| associator.and_then(|a| a.get("isMember")).and_then(|v| v.as_bool()))
                 .unwrap_or(vip_type > 0);
             Ok(NeteaseVipStatusDto {
                 is_member,
@@ -5172,7 +5194,7 @@ async fn fetch_netease_vip_status(config: &ResolvedNeteaseSourceConfig) -> Resul
             })
         }
         Err(_) => Ok(NeteaseVipStatusDto {
-            is_member: false,
+            is_member: has_token,
             level: None,
             message: "Membership status is unavailable right now.".to_string(),
         }),
@@ -5610,8 +5632,9 @@ fn source_song_from_search_json(value: &serde_json::Value) -> SourceSongDto {
                 .or_else(|| album.get("blurPicUrl"))
         })
         .and_then(|url| url.as_str())
-        .unwrap_or("")
-        .to_string();
+        .filter(|url| !url.is_empty())
+        .map(|url| normalize_netease_image_url(url.to_string()))
+        .unwrap_or_default();
     let duration_seconds = value
         .get("duration")
         .or_else(|| value.get("dt"))
@@ -5660,10 +5683,16 @@ fn source_song_from_playlist_json(value: &serde_json::Value) -> SourceSongDto {
         .unwrap_or("Unknown Album")
         .to_string();
     let cover_url = album_value
-        .and_then(|album| album.get("picUrl"))
+        .and_then(|album| {
+            album
+                .get("picUrl")
+                .or_else(|| album.get("pic_str"))
+                .or_else(|| album.get("blurPicUrl"))
+        })
         .and_then(|url| url.as_str())
-        .unwrap_or("")
-        .to_string();
+        .filter(|url| !url.is_empty())
+        .map(|url| normalize_netease_image_url(url.to_string()))
+        .unwrap_or_default();
     let duration_seconds = value
         .get("dt")
         .or_else(|| value.get("duration"))
