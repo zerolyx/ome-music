@@ -9,6 +9,7 @@ import {
   type MusicSourceSong
 } from "../features/musicSources/provider";
 import type { Track } from "../types/music";
+import { formatDuration } from "../utils/format";
 import { ArtworkImage } from "./ArtworkImage";
 
 const neteaseProvider = new NetEaseMusicProvider();
@@ -293,15 +294,8 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
   );
 }
 
-function formatDuration(seconds: number): string {
-  if (!seconds) return "--:--";
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.floor(seconds % 60).toString().padStart(2, "0");
-  return `${minutes}:${rest}`;
-}
-
 function compactNumber(value: number): string {
-  if (value >= 10000) return `${(value / 10000).toFixed(1)}w`;
+  if (value >= 10000) return `${(value / 1000).toFixed(0)}k`;
   return `${value}`;
 }
 

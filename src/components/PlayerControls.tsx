@@ -1,4 +1,5 @@
-import { Pause, Play, SkipBack, SkipForward, Volume2 } from "lucide-react";
+import { Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
+import clsx from "clsx";
 import type { LoopMode, Track } from "../types/music";
 import { formatDuration } from "../utils/format";
 
@@ -23,9 +24,13 @@ export function PlayerControls({
   isPlaying,
   progressSeconds,
   volume,
+  shuffle,
+  loopMode,
   onTogglePlay,
   onNext,
   onPrevious,
+  onToggleShuffle,
+  onToggleLoop,
   onSetProgress,
   onSetVolume
 }: PlayerControlsProps) {
@@ -33,27 +38,58 @@ export function PlayerControls({
     return null;
   }
 
-  const progress = Math.min(progressSeconds, track.durationSeconds);
+  const maxSeconds = Math.max(1, track.durationSeconds);
+  const progress = Math.min(progressSeconds, maxSeconds);
+  const isMuted = volume <= 0;
 
   return (
     <footer data-danmaku-safe-zone="controls" className="fixed inset-x-0 bottom-0 z-30 h-24 text-[#4a2108]">
       <div className="absolute inset-x-10 bottom-8 grid grid-cols-[1fr_auto_1fr] items-center">
-        <div />
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={onToggleShuffle}
+            className={clsx("player-icon-button", shuffle && "is-active")}
+            aria-label="Shuffle"
+            aria-pressed={shuffle}
+            title="Shuffle"
+          >
+            <Shuffle className="h-[18px] w-[18px]" />
+          </button>
+          <button
+            type="button"
+            onClick={onToggleLoop}
+            className={clsx("player-icon-button", loopMode !== "off" && "is-active")}
+            aria-label={`Loop: ${loopMode}`}
+            aria-pressed={loopMode !== "off"}
+            title={`Loop: ${loopMode}`}
+          >
+            {loopMode === "one" ? <Repeat1 className="h-[18px] w-[18px]" /> : <Repeat className="h-[18px] w-[18px]" />}
+          </button>
+        </div>
 
         <div className="flex items-center justify-center gap-7">
-          <button type="button" onClick={onPrevious} className="player-icon-button" aria-label="Previous track">
+          <button type="button" onClick={onPrevious} className="player-icon-button" aria-label="Previous track" title="Previous">
             <SkipBack className="h-[18px] w-[18px] fill-current" />
           </button>
-          <button type="button" onClick={onTogglePlay} className="player-main-button" aria-label={isPlaying ? "Pause" : "Play"}>
+          <button type="button" onClick={onTogglePlay} className="player-main-button" aria-label={isPlaying ? "Pause" : "Play"} title={isPlaying ? "Pause" : "Play"}>
             {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="ml-0.5 h-5 w-5 fill-current" />}
           </button>
-          <button type="button" onClick={onNext} className="player-icon-button" aria-label="Next track">
+          <button type="button" onClick={onNext} className="player-icon-button" aria-label="Next track" title="Next">
             <SkipForward className="h-[18px] w-[18px] fill-current" />
           </button>
         </div>
 
-        <div className="hidden items-center justify-end gap-3 md:flex">
-          <Volume2 className="h-4 w-4 text-[#4a2108]/[0.34]" />
+        <div className="flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => onSetVolume(isMuted ? 0.72 : 0)}
+            className="player-icon-button"
+            aria-label={isMuted ? "Unmute" : "Mute"}
+            title={isMuted ? "Unmute" : "Mute"}
+          >
+            {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          </button>
           <input
             type="range"
             min={0}
@@ -61,7 +97,7 @@ export function PlayerControls({
             step={0.01}
             value={volume}
             onChange={(event) => onSetVolume(Number(event.target.value))}
-            className="cinema-range w-24"
+            className="cinema-range hidden w-24 sm:block"
             aria-label="Volume"
           />
         </div>
@@ -71,7 +107,7 @@ export function PlayerControls({
         <input
           type="range"
           min={0}
-          max={Math.max(1, track.durationSeconds)}
+          max={maxSeconds}
           value={progress}
           onChange={(event) => onSetProgress(Number(event.target.value))}
           className="cinema-progress"

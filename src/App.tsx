@@ -118,6 +118,7 @@ export default function App() {
   const progressSecondsRef = useRef(startupSnapshot?.position ?? 0);
   const currentTrackRef = useRef<Track | null>(null);
   const loopModeRef = useRef<LoopMode>("all");
+  const playableSrcRef = useRef("");
   const playableSrcForTrackIdRef = useRef<{ trackId: string; quality: NonNullable<PlayableUrlOptions["level"]> } | null>(null);
   const [tracks, setTracks] = useState<Track[]>(() => (restoredSnapshotTrack ? [restoredSnapshotTrack] : []));
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(() => restoredSnapshotTrack?.id ?? null);
@@ -182,6 +183,10 @@ export default function App() {
   useEffect(() => {
     loopModeRef.current = loopMode;
   }, [loopMode]);
+
+  useEffect(() => {
+    playableSrcRef.current = playableSrc;
+  }, [playableSrc]);
 
   useEffect(() => {
     if (!currentTrack) return;
@@ -573,13 +578,21 @@ export default function App() {
 
     const handleTimeUpdate = () => setProgressSeconds(audio.currentTime);
     const handleEnded = () => handleAudioEndedRef.current();
+    const handleError = () => {
+      const track = currentTrackRef.current;
+      if (!track || !playableSrcRef.current) return;
+      setIsPlaying(false);
+      setLibraryError(playbackReasonMessage(track.unavailableReason));
+    };
 
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("error", handleError);
 
     return () => {
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("error", handleError);
     };
   }, []);
 
@@ -1166,7 +1179,7 @@ function PlaybackNotice({
           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#4a2108]/38">{label}</p>
           <p className="mt-0.5 truncate text-sm font-semibold text-[#4a2108]/68">{message}</p>
         </div>
-        {(reason === "not_logged_in" || reason === "cookie_missing" || reason === "cookie_expired" || reason === "vip_required") && (
+        {(reason === "not_logged_in" || reason === "cookie_missing" || reason === "cookie_expired" || reason === "vip_required" || reason === "trial_only") && (
           <button
             type="button"
             onClick={onOpenSettings}
