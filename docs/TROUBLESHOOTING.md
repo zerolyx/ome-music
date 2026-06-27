@@ -6,7 +6,23 @@ Development builds may be unsigned. Windows SmartScreen may warn before running 
 
 ## WebView2 Missing
 
-Install Microsoft Edge WebView2 Runtime if the app cannot open its window.
+Install Microsoft Edge WebView2 Runtime if the app cannot open its window. The NSIS installer will attempt to download and install it silently on first run.
+
+## Node.js Missing (NetEase Cloud Music)
+
+Starting with v0.2, Ome Music automatically checks whether Node.js is installed when the NetEase Cloud Music source is enabled. If Node.js is not on the system PATH, a centered prompt appears:
+
+- Title: 缺少运行环境 Node.js
+- It explains that NetEase Cloud Music features (search, playback, cover, lyrics) cannot run without Node.js v20 or later
+- It offers a "下载 Node.js" button that opens https://nodejs.org
+- It offers a "重新检测" button to re-run the check after installation
+- It offers a "稍后再说" button to dismiss the prompt
+
+Local music playback is not affected — only NetEase Cloud Music features require Node.js.
+
+After installing Node.js (remember to tick "Add to PATH" on Windows), restart Ome Music and click "重新检测". The NetEase Cloud Music API service will then start automatically.
+
+If you prefer not to install Node.js locally, you can also point the NetEase Base URL to an externally deployed NeteaseCloudMusicApi instance in Settings → Music Sources.
 
 ## NetEase or Bilibili Track Cannot Play
 

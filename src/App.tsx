@@ -16,6 +16,7 @@ import {
 import { getCurrentLyricIndex, importLyricsFile, parseLrc, resolveLyrics, saveLyricOffset, type LyricLine } from "./features/lyrics/lyricsResolver";
 import {
   ensureNeteaseApiService,
+  openExternalUrl,
   BilibiliMusicProvider,
   NetEaseAccountSessionProvider,
   NetEaseMusicProvider,
@@ -147,6 +148,8 @@ export default function App() {
   const [danmakuItems, setDanmakuItems] = useState<DanmakuItem[]>([]);
   const [danmakuDebug, setDanmakuDebug] = useState<BilibiliDanmakuDebug | null>(null);
   const [essentialRestoreDone, setEssentialRestoreDone] = useState(false);
+  const [envPromptDismissed, setEnvPromptDismissed] = useState<boolean>(() => window.localStorage.getItem("ome.env.prompt.dismissed") === "1");
+  const [envPromptRechecking, setEnvPromptRechecking] = useState(false);
   const [showDjPanel, setShowDjPanel] = useState(false);
   const [radioSession, setRadioSession] = useState<RadioSession | null>(null);
   const radioSessionRef = useRef<RadioSession | null>(null);
@@ -212,6 +215,27 @@ export default function App() {
     } catch (error) {
       console.error(`failed to record ${eventType}`, error);
     }
+  }, []);
+
+  const recheckNeteaseEnvironment = useCallback(async () => {
+    setEnvPromptRechecking(true);
+    try {
+      const status = await ensureNeteaseApiService();
+      setSourceServiceStatus(status);
+      if (status.nodeAvailable && status.apiPackageFound && status.running) {
+        setEnvPromptDismissed(false);
+        window.localStorage.removeItem("ome.env.prompt.dismissed");
+      }
+    } catch (error) {
+      console.error("failed to recheck netease environment", error);
+    } finally {
+      setEnvPromptRechecking(false);
+    }
+  }, []);
+
+  const dismissEnvPrompt = useCallback(() => {
+    setEnvPromptDismissed(true);
+    window.localStorage.setItem("ome.env.prompt.dismissed", "1");
   }, []);
 
   useEffect(() => {
@@ -1055,6 +1079,16 @@ export default function App() {
         />
       )}
 
+      {sourceServiceStatus && !sourceServiceStatus.nodeAvailable && !envPromptDismissed && (
+        <EnvironmentPrompt
+          status={sourceServiceStatus}
+          rechecking={envPromptRechecking}
+          onInstall={() => void openExternalUrl("https://nodejs.org")}
+          onRecheck={recheckNeteaseEnvironment}
+          onDismiss={dismissEnvPrompt}
+        />
+      )}
+
       <main className="relative h-screen overflow-hidden">
         <NowPlayingHero
           track={currentTrack}
@@ -1230,4 +1264,93 @@ function playbackNoticeLabel(reason?: string | null): string {
     default:
       return "Unable to play";
   }
+}
+
+function EnvironmentPrompt({
+  status,
+  rechecking,
+  onInstall,
+  onRecheck,
+  onDismiss
+}: {
+  status: NetEaseServiceStatus;
+  rechecking: boolean;
+  onInstall: () => void;
+  onRecheck: () => void;
+  onDismiss: () => void;
+}) {
+  const nodeMissing = !status.nodeAvailable;
+  const apiMissing = status.nodeAvailable && !status.apiPackageFound;
+
+  const title = nodeMissing ? "缺少运行环境 Node.js" : "网易云 API 缺失";
+  const subtitle = nodeMissing ? "NetEase Cloud Music needs Node.js" : "NetEase API package not found";
+  const detail = nodeMissing
+    ? "检测到系统未安装 Node.js，网易云音乐功能（搜索、播放、封面、歌词）将无法运行。本地音乐不受影响。"
+    : "Node.js 已安装，但内置 NeteaseCloudMusicApi 服务包未找到。如果这是安装版，可能是开发者运行时文件缺失。";
+
+  return (
+    <div data-danmaku-safe-zone="env-prompt" className="fixed left-1/2 top-1/2 z-[60] w-[min(480px,calc(100vw-3rem))] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-[#4a2108]/[0.06] bg-[#dfd1c4]/[0.78] p-6 text-[#4a2108] shadow-[0_24px_72px_rgba(74,33,8,0.22)] backdrop-blur-2xl">
+      <header className="flex items-start gap-4">
+        <span className="mt-1 h-3 w-3 shrink-0 rounded-full bg-[#7a2d1c]/65 shadow-[0_0_22px_rgba(122,45,28,0.42)]" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4a2108]/38">{subtitle}</p>
+          <h2 className="mt-1 text-[17px] font-bold text-[#4a2108]/88">{title}</h2>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="app-transition flex h-7 w-7 items-center justify-center rounded-full text-[#4a2108]/38 hover:bg-[#4a2108]/[0.08] hover:text-[#4a2108]/68"
+        >
+          ×
+        </button>
+      </header>
+
+      <p className="mt-3 text-[13px] font-medium leading-relaxed text-[#4a2108]/72">{detail}</p>
+
+      {nodeMissing && (
+        <div className="mt-4 rounded-[18px] bg-[#4a2108]/[0.05] p-3 text-[11px] leading-relaxed text-[#4a2108]/52">
+          <p className="font-bold text-[#4a2108]/62">安装步骤</p>
+          <ol className="mt-1.5 list-decimal space-y-0.5 pl-4">
+            <li>访问 nodejs.org 下载 LTS 版（v20 或更高）</li>
+            <li>安装时勾选「Add to PATH」选项</li>
+            <li>重启 Ome Music，点击下方「重新检测」</li>
+          </ol>
+        </div>
+      )}
+
+      <div className="mt-5 flex items-center gap-2.5">
+        {nodeMissing && (
+          <button
+            type="button"
+            onClick={onInstall}
+            className="app-transition flex-1 rounded-full bg-[#4a2108]/[0.08] px-4 py-2.5 text-xs font-black text-[#4a2108]/72 hover:bg-[#4a2108]/[0.14] hover:text-[#4a2108]/92"
+          >
+            下载 Node.js
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onRecheck}
+          disabled={rechecking}
+          className="app-transition rounded-full bg-[#4a2108]/[0.06] px-4 py-2.5 text-xs font-black text-[#4a2108]/64 hover:bg-[#4a2108]/[0.11] hover:text-[#4a2108]/84 disabled:opacity-50"
+        >
+          {rechecking ? "检测中…" : "重新检测"}
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="app-transition rounded-full px-3 py-2.5 text-xs font-bold text-[#4a2108]/38 hover:text-[#4a2108]/62"
+        >
+          稍后再说
+        </button>
+      </div>
+
+      {!nodeMissing && apiMissing && (
+        <p className="mt-3 text-[10px] text-[#4a2108]/32">
+          如需切换为外部 API 地址，可在「设置 → 音乐来源」中修改 NetEase Base URL。
+        </p>
+      )}
+    </div>
+  );
 }

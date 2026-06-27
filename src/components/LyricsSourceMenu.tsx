@@ -166,8 +166,8 @@ export function LyricsSourceMenu({
               <SourceStatusRow
                 icon={Cloud}
                 name="网易云"
-                status={loginStatus?.loggedIn ? "已连接" : neteaseConfig?.enabled ? "可用" : "关闭"}
-                ready={Boolean(neteaseConfig?.enabled)}
+                status={neteaseStatusLabel({ serviceStatus, loginStatus, neteaseConfig })}
+                ready={Boolean(serviceStatus?.running && neteaseConfig?.enabled)}
               />
               <SourceStatusRow
                 icon={Radio}
@@ -262,6 +262,22 @@ function sourceLabel(source?: string): string {
   if (source === "netease") return "网易云 / NetEase Cloud Music";
   if (source === "bilibili") return "Bilibili Video Atmosphere";
   return "本地音乐 / Local Library";
+}
+
+function neteaseStatusLabel({
+  serviceStatus,
+  loginStatus,
+  neteaseConfig
+}: {
+  serviceStatus: NetEaseServiceStatus | null;
+  loginStatus: NetEaseLoginStatus | null;
+  neteaseConfig: MusicSourceConfig | null;
+}): string {
+  if (!neteaseConfig?.enabled) return "关闭";
+  if (serviceStatus && !serviceStatus.nodeAvailable) return "缺少 Node.js";
+  if (serviceStatus && serviceStatus.nodeAvailable && !serviceStatus.apiPackageFound) return "API 缺失";
+  if (serviceStatus?.running) return loginStatus?.loggedIn ? "已连接" : "可用";
+  return neteaseConfig?.enabled ? "可用" : "关闭";
 }
 
 function danmakuLabel(settings: DanmakuSettings): string {

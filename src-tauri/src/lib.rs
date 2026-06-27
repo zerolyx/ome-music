@@ -296,6 +296,8 @@ pub struct NeteaseServiceStatusDto {
     started: bool,
     base_url: String,
     message: String,
+    node_available: bool,
+    api_package_found: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1464,6 +1466,21 @@ fn open_source_web_login(payload: SourceWebLoginPayload) -> Result<SourceConnect
         ok: true,
         message: "Secure login page opened. Complete it there, then import Cookie if needed.".to_string(),
     })
+}
+
+#[tauri::command]
+fn open_external_url(payload: ExternalUrlPayload) -> Result<(), String> {
+    let url = payload.url.trim();
+    if !url.starts_with("https://") {
+        return Err("Only HTTPS links can be opened from Ome Music.".to_string());
+    }
+    open_url_with_system(url)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalUrlPayload {
+    url: String,
 }
 
 #[tauri::command]
@@ -4449,8 +4466,13 @@ async fn ensure_local_netease_api_service(base_url: &str) -> Result<NeteaseServi
             started: false,
             base_url,
             message: "External music source selected.".to_string(),
+            node_available: false,
+            api_package_found: false,
         });
     }
+
+    let node_available = is_node_available();
+    let api_package_found = find_netease_api_entry().is_some();
 
     if is_netease_api_reachable(&base_url).await {
         return Ok(NeteaseServiceStatusDto {
@@ -4458,6 +4480,30 @@ async fn ensure_local_netease_api_service(base_url: &str) -> Result<NeteaseServi
             started: false,
             base_url,
             message: "Music source is awake.".to_string(),
+            node_available,
+            api_package_found,
+        });
+    }
+
+    if !node_available {
+        return Ok(NeteaseServiceStatusDto {
+            running: false,
+            started: false,
+            base_url,
+            message: "Node.js is not installed. NetEase Cloud Music requires Node.js v20 or later. Please install it from https://nodejs.org".to_string(),
+            node_available: false,
+            api_package_found,
+        });
+    }
+
+    if !api_package_found {
+        return Ok(NeteaseServiceStatusDto {
+            running: false,
+            started: false,
+            base_url,
+            message: "NetEase Cloud Music API package was not found. If this is an installed build, the developer runtime files may be missing.".to_string(),
+            node_available: true,
+            api_package_found: false,
         });
     }
 
@@ -4495,6 +4541,8 @@ async fn ensure_local_netease_api_service(base_url: &str) -> Result<NeteaseServi
                 started: true,
                 base_url,
                 message: "Music source is awake.".to_string(),
+                node_available,
+                api_package_found,
             });
         }
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -4505,7 +4553,19 @@ async fn ensure_local_netease_api_service(base_url: &str) -> Result<NeteaseServi
         started: true,
         base_url,
         message: "Music source is still warming up.".to_string(),
+        node_available,
+        api_package_found,
     })
+}
+
+fn is_node_available() -> bool {
+    Command::new("node")
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .is_ok_and(|output| output.status.success())
 }
 
 async fn is_netease_api_reachable(base_url: &str) -> bool {
@@ -6936,6 +6996,7 @@ fn run_inner() -> Result<(), Box<dyn std::error::Error>> {
             request_netease_sms_code,
             login_netease_with_sms_code,
             open_source_web_login,
+            open_external_url,
             get_netease_login_status,
             refresh_netease_login,
             logout_netease,

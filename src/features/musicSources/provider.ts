@@ -90,6 +90,8 @@ export interface NetEaseServiceStatus {
   started: boolean;
   baseUrl: string;
   message: string;
+  nodeAvailable: boolean;
+  apiPackageFound: boolean;
 }
 
 export interface SaveMusicSourceConfigPayload {
@@ -357,11 +359,21 @@ export async function ensureNeteaseApiService(): Promise<NetEaseServiceStatus> {
       running: true,
       started: false,
       baseUrl: "http://127.0.0.1:3000",
-      message: "Music source is awake."
+      message: "Music source is awake.",
+      nodeAvailable: true,
+      apiPackageFound: true
     };
   }
 
   return invoke<NetEaseServiceStatus>("ensure_netease_api_service");
+}
+
+export async function openExternalUrl(url: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    if (typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  await invoke<void>("open_external_url", { payload: { url } });
 }
 
 export async function saveNeteaseSourceConfig(payload: SaveMusicSourceConfigPayload): Promise<MusicSourceConfig> {

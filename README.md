@@ -34,7 +34,7 @@ Download the latest Windows build from the [GitHub Releases page](https://github
 
 Recommended file:
 
-- `Ome Music_0.1.0_x64-setup.exe`: Windows NSIS installer
+- `Ome Music_0.2.0_x64-setup.exe`: Windows NSIS installer
 
 This project is currently distributed as an unsigned development release, so Windows may show a security warning on first launch.
 
