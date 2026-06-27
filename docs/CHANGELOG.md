@@ -8,6 +8,24 @@
 
 ## [Unreleased]
 
+### 全面审查修复（功能 / UI / 体验）
+
+#### 播放体验
+- **随机播放改为 Fisher-Yates 洗牌队列**：原 `Math.random()` 真随机每次独立抽样，受生日问题影响约 17 次「下一首」后重复概率超 50%，体感「伪随机、容易重复」。改为整轮洗牌队列，保证一轮内不重复，播完再重新洗牌，并尽量避免下一首立即重复当前曲目。
+- **「上一首」加入播放历史栈**：原 shuffle 下「上一首」与「下一首」走同一条随机抽取，无法回到实际播放过的曲目。新增 `playHistoryRef` 栈（上限 200），「上一首」优先弹栈回到上一首实际播放的曲目，shuffle 下同样有效。
+- **单曲列表「列表循环」可正常循环**：原 `loop === "all" && tracks.length > 1` 在只有 1 首歌时落到 `setIsPlaying(false)` 停止，与「单曲循环」行为不一致。改为 `tracks.length > 0`，单曲列表也能循环重播。
+- **单曲循环不再阻塞电台/临时歌单队列**：原 `loop === "one"` 分支在消耗 `agentQueue` 之前 `return`，导致开了单曲循环时排队的电台曲目永远不动。改为先消耗 `agentQueue`，仅队列空时才单曲循环。
+- **歌单同步后当前曲目丢失导致控制条消失**：`onLibraryChanged` 原仅当 `currentTrackId` 为 `null` 时才回退，若当前播放的曲目不在同步后的新列表中，`currentTrackId` 变陈旧 → `currentIndex = -1` → `currentTrack = null` → 底部控制条消失 + `<audio>` 幽灵播放。改为校验当前曲目是否在新列表中，不在则回退到首曲；同时重置洗牌队列与播放历史，避免索引越界。
+- **URL 过期后播放中断无法恢复**：原 `playableSrcForTrackIdRef` 命中即跳过解析，签名 URL / 代理 token 过期后 audio 报错但缓存标记仍在，resolve effect 不重跑，用户必须手动切歌再切回。改为 audio `error` 时清空 `playableSrcForTrackIdRef` 与 `playableSrc`，触发重新解析（自动恢复，无需手动操作）。
+
+#### UI 回归
+- **修复底部空白与窗口可上下拖拽**：v0.3 重构时 shell className 从 `h-screen overflow-hidden` 误改为 `min-h-screen overflow-x-hidden`。按 CSS Overflow Module 规范，`overflow-x: hidden` 会让 `overflow-y` 计算成 `auto`，叠加 `min-h-screen` 允许容器向上增长 → shell 变成纵向滚动容器，页面可上下拖拽并露出 100vh 之外的 `#d0c6ba` 空白底色。改回 `h-screen overflow-hidden` 同时消除两个症状。
+
+#### 设置面板与搜索 UX
+- **删除死代码 `PlaylistAnalysisPanel`**：该组件从未被任何地方 import / 渲染，配套的 `savePlaylistAnalysisReport` 调用结果也从未被读取，属纯冗余。删除文件与调用，精简导入歌单流程。
+- **移除冗余的「检查状态」按钮**：网易云与 Bilibili 的 QR 弹窗均有每 2.2s 自动轮询（`useEffect`），但仍保留了手动「Check Status / 检查状态」按钮作为重复兜底。移除两个手动按钮与对应 dead code（`checkQrLogin` / `checkBilibiliQrLogin` / `onCheckQr` prop），弹窗内改为就近显示「等待扫码确认…」状态文案。
+- **搜索加载文案明确化**：网易云加载文案从诗意的 "Listening outside the room" 改为 "Searching NetEase Cloud Music…"，Bilibili 从 "Tuning the outside room" 改为 "Searching Bilibili…"，新用户易理解。
+
 ### 紧急修复（v0.3.0 回归问题）
 - **网易云扫码登录弹窗不出现**：v0.2 在 `request_netease_json_response` 中新增的本地环境预检（`ensure_local_netease_api_service` 返回 `Err` 即整体失败）过于激进 —— 当 Node.js 未装、`NeteaseCloudMusicApi` 包未找到或服务 12 秒内未就绪时，`create_netease_qr_login` 直接返回 `Err`，前端 catch 只把错误写进面板底部小字 `sourceMessage`，`neteaseQr` 状态永远不被赋值，导致二维码弹窗条件 `{neteaseQr && (...)}` 不成立，用户看到「点了没反应」。
   - **修复**：恢复 v0.1 的行为 —— `let _ = ensure_local_netease_api_service(&config.base_url).await;` 仍尝试拉起本地服务，但**不再以预检结果阻断请求**。预检通过则 HTTP 调用命中已就绪的服务；预检失败则由后续 HTTP 请求自然返回 `Could not reach the NetEase API`，扫码与搜索都能继续工作，不再被环境检查卡死。

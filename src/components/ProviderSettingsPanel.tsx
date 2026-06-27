@@ -58,7 +58,6 @@ import {
   type NetEaseQrLogin,
   type NetEaseVipStatus,
   type MusicSourceConfig,
-  type MusicSourceSong,
   type NetEaseUserPlaylist,
   type PlayableUrlOptions,
   type TasteNotes,
@@ -76,8 +75,7 @@ import {
   type StorageBucketKind,
   type StorageReport,
 } from "../features/storage/storageApi";
-import { createMusicAnalyzer } from "../musicUnderstanding/analyzer";
-import { savePlaylistAnalysisReport } from "../features/playlistAnalysis/storage";
+
 import type { Track } from "../types/music";
 
 interface ProviderSettingsPanelProps {
@@ -611,25 +609,6 @@ export function ProviderSettingsPanel({
     }
   };
 
-  const checkBilibiliQrLogin = async () => {
-    if (!bilibiliQr) return;
-    setCheckingBilibili(true);
-    try {
-      const result = await bilibiliAuthProvider.checkQrLoginStatus(bilibiliQr.key);
-      if (result.loginStatus) {
-        const savedConfig = await getBilibiliSourceConfig();
-        setBilibiliLoginStatus(result.loginStatus);
-        setBilibiliConfig(savedConfig);
-        setBilibiliQr(null);
-      }
-      setSourceMessage(qrStatusMessage(result.status));
-    } catch (error) {
-      setSourceMessage(`无法检查 Bilibili 登录状态 / ${readError(error)}`);
-    } finally {
-      setCheckingBilibili(false);
-    }
-  };
-
   const logoutBilibili = async () => {
     setCheckingBilibili(true);
     setSourceMessage(null);
@@ -675,25 +654,6 @@ export function ProviderSettingsPanel({
       setSourceMessage(`Could not create a sign-in code. ${readError(error)}`);
     } finally {
       setCreatingQr(false);
-    }
-  };
-
-  const checkQrLogin = async () => {
-    if (!neteaseQr) return;
-    setCheckingLogin(true);
-    setSourceMessage(null);
-    try {
-      const result = await neteaseAuthProvider.checkQrLoginStatus(neteaseQr.key);
-      if (result.loginStatus) {
-        setNeteaseLoginStatus(result.loginStatus);
-        const vip = await neteaseAuthProvider.getVipStatus();
-        setNeteaseVipStatus(vip);
-      }
-      setSourceMessage(qrStatusMessage(result.status));
-    } catch (error) {
-      setSourceMessage(`Could not check the sign-in code. ${readError(error)}`);
-    } finally {
-      setCheckingLogin(false);
     }
   };
 
@@ -855,16 +815,7 @@ export function ProviderSettingsPanel({
       const playlist = await neteaseProvider.importPlaylist(trimmedPlaylistId);
       const tracks = await refreshLocalTracksAfterSourceImport();
       onLibraryChanged?.(tracks);
-      const analyzer = createMusicAnalyzer();
-      const report = await analyzer.analyze({
-        id: `netease:${playlist.id}`,
-        name: playlist.name,
-        tracks: playlist.tracks.map(sourceSongToTrack),
-      });
-      await savePlaylistAnalysisReport(report);
-      setSourceMessage(
-        `Imported ${playlist.tracks.length} songs. Playlist interpretation is ready.`,
-      );
+      setSourceMessage(`Imported ${playlist.tracks.length} songs.`);
     } catch (error) {
       setSourceMessage(`Import failed. ${readError(error)}`);
     } finally {
@@ -1648,21 +1599,10 @@ export function ProviderSettingsPanel({
                               Scan with NetEase / 使用网易云扫码
                             </p>
                             <p className="mt-2 text-sm leading-6 text-white/42">
-                              Confirm on your phone. 手机确认后会自动连接。
+                              {isCheckingLogin
+                                ? "Waiting for scan… 等待扫码确认…"
+                                : "Confirm on your phone. 手机确认后会自动连接。"}
                             </p>
-                            <button
-                              type="button"
-                              onClick={checkQrLogin}
-                              disabled={isCheckingLogin}
-                              className="app-transition mt-4 inline-flex h-10 w-fit items-center justify-center gap-2 rounded-full bg-white/[0.08] px-4 text-sm font-semibold text-white/72 hover:bg-white/[0.13] hover:text-white disabled:cursor-wait disabled:opacity-45"
-                            >
-                              {isCheckingLogin ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <RefreshCw className="h-4 w-4" />
-                              )}
-                              Check Status / 检查状态
-                            </button>
                           </div>
                         </div>
                       )}
@@ -1896,7 +1836,6 @@ export function ProviderSettingsPanel({
                         onSave={saveBilibiliDraft}
                         onImportCookie={importBilibiliCookie}
                         onCreateQr={createBilibiliQrLogin}
-                        onCheckQr={checkBilibiliQrLogin}
                         onOtherLoginToggle={() => setBilibiliOtherLoginOpen((value) => !value)}
                         onSecureWebLogin={() => openSecureWebLogin("bilibili")}
                         onLogout={logoutBilibili}
@@ -2219,28 +2158,6 @@ export function ProviderSettingsPanel({
   );
 }
 
-function sourceSongToTrack(song: MusicSourceSong): Track {
-  return {
-    id: `netease:${song.id}`,
-    title: song.title,
-    artist: song.artist,
-    album: song.album,
-    durationSeconds: song.durationSeconds,
-    filePath: song.playableUrl ?? `unavailable:netease:${song.id}`,
-    source: "netease",
-    sourceId: song.id,
-    unavailableReason: song.unavailableReason,
-    coverUrl: song.coverUrl,
-    genres: [],
-    moods: [],
-    language: "unknown",
-    playCount: 0,
-    skipCount: 0,
-    liked: false,
-    importedAt: new Date().toISOString(),
-  };
-}
-
 function BilibiliSourceSettings({
   config,
   enabled,
@@ -2261,7 +2178,6 @@ function BilibiliSourceSettings({
   onSave,
   onImportCookie,
   onCreateQr,
-  onCheckQr,
   onOtherLoginToggle,
   onSecureWebLogin,
   onLogout,
@@ -2286,7 +2202,6 @@ function BilibiliSourceSettings({
   onSave: () => void;
   onImportCookie: () => void;
   onCreateQr: () => void;
-  onCheckQr: () => void;
   onOtherLoginToggle: () => void;
   onSecureWebLogin: () => void;
   onLogout: () => void;
@@ -2390,21 +2305,10 @@ function BilibiliSourceSettings({
                 使用哔哩哔哩扫码 / Scan with Bilibili
               </p>
               <p className="mt-2 text-xs leading-5 text-white/38">
-                手机确认后这里会自动完成连接，无需手动复制 Cookie。
+                {isChecking
+                  ? "等待扫码确认… Waiting for scan…"
+                  : "手机确认后这里会自动完成连接，无需手动复制 Cookie。"}
               </p>
-              <button
-                type="button"
-                onClick={onCheckQr}
-                disabled={isChecking}
-                className="app-transition mt-3 inline-flex h-9 w-fit items-center justify-center gap-2 rounded-full bg-white/[0.08] px-3 text-xs font-semibold text-white/66 hover:bg-white/[0.13] hover:text-white disabled:opacity-45"
-              >
-                {isChecking ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5" />
-                )}
-                检查状态 / Check
-              </button>
             </div>
           </div>
         )}

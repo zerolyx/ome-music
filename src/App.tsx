@@ -147,6 +147,11 @@ export default function App() {
   const currentTrackRef = useRef<Track | null>(null);
   const loopModeRef = useRef<LoopMode>("all");
   const playableSrcRef = useRef("");
+  // Fisher-Yates 洗牌队列：开启 shuffle 时按队列前进，保证整轮不重复；播完后重新洗牌。
+  const shuffleOrderRef = useRef<number[]>([]);
+  const shufflePositionRef = useRef(0);
+  // 播放历史栈：支持"上一首"回到实际播放过的曲目（shuffle 下同样有效）。
+  const playHistoryRef = useRef<string[]>([]);
   const playableSrcForTrackIdRef = useRef<{
     trackId: string;
     quality: NonNullable<PlayableUrlOptions["level"]>;
@@ -638,6 +643,9 @@ export default function App() {
 
       void recordEvent("completed", track, audio.duration || progressSecondsRef.current);
 
+      // 已排队的临时曲目优先消耗（电台/临时歌单），不应被单曲循环卡住。
+      if (playNextQueuedTrack()) return;
+
       if (loop === "one" && track) {
         audio.currentTime = 0;
         setProgressSeconds(0);
@@ -646,9 +654,8 @@ export default function App() {
         return;
       }
 
-      if (playNextQueuedTrack()) return;
-
-      if (loop === "all" && tracks.length > 1) {
+      // 列表循环：单曲也应循环重播，避免"all 模式只有一首歌却停止"。
+      if (loop === "all" && tracks.length > 0) {
         playAdjacentTrack("next", { markSkip: false });
         return;
       }
@@ -668,6 +675,10 @@ export default function App() {
     const handleError = () => {
       const track = currentTrackRef.current;
       if (!track || !playableSrcRef.current) return;
+      // 清理已解析 URL 的缓存标记，使 resolve effect 重新触发，
+      // 解决签名 URL / 代理 token 过期后播放中断却无法恢复的问题。
+      playableSrcForTrackIdRef.current = null;
+      setPlayableSrc("");
       setIsPlaying(false);
       setLibraryError(playbackReasonMessage(track.unavailableReason));
     };
@@ -827,6 +838,21 @@ export default function App() {
     return true;
   };
 
+  // Fisher-Yates 洗牌：对当前 tracks 索引生成一个随机播放顺序，确保整轮不重复。
+  const rebuildShuffleOrder = (excludeIndex: number | null) => {
+    const indices = tracks.map((_, index) => index);
+    for (let i = indices.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    // 尽量避免下一首立即重复当前曲目。
+    if (excludeIndex !== null && indices.length > 1 && indices[0] === excludeIndex) {
+      [indices[0], indices[1]] = [indices[1], indices[0]];
+    }
+    shuffleOrderRef.current = indices;
+    shufflePositionRef.current = 0;
+  };
+
   const playAdjacentTrack = (
     direction: "next" | "previous",
     options: { markSkip?: boolean } = {},
@@ -841,14 +867,45 @@ export default function App() {
       return;
     }
 
+    // 上一首：优先回到播放历史栈，shuffle 下同样有效。
+    if (direction === "previous") {
+      const history = playHistoryRef.current;
+      if (history.length > 0) {
+        const previousId = history.pop()!;
+        if (markSkip && currentTrack) void recordEvent("skip", currentTrack);
+        lastPlayEventKeyRef.current = null;
+        setCurrentTrackId(previousId);
+        setProgressSeconds(0);
+        setIsPlaying(true);
+        return;
+      }
+    }
+
+    // 下一首入栈历史（用于后续"上一首"返回）。
+    if (direction === "next" && currentTrack) {
+      playHistoryRef.current.push(currentTrack.id);
+      if (playHistoryRef.current.length > 200) playHistoryRef.current.shift();
+    }
+
     if (markSkip && currentTrack) {
       void recordEvent("skip", currentTrack);
     }
 
-    const offset = direction === "next" ? 1 : -1;
-    const nextIndex = shuffle
-      ? Math.floor(Math.random() * tracks.length)
-      : (currentIndex + offset + tracks.length) % tracks.length;
+    let nextIndex: number;
+    if (shuffle) {
+      // Fisher-Yates 洗牌队列：保证整轮不重复，播完再重新洗牌。
+      if (
+        shuffleOrderRef.current.length !== tracks.length ||
+        shufflePositionRef.current >= shuffleOrderRef.current.length
+      ) {
+        rebuildShuffleOrder(currentIndex);
+      }
+      nextIndex = shuffleOrderRef.current[shufflePositionRef.current] ?? currentIndex;
+      shufflePositionRef.current += 1;
+    } else {
+      const offset = direction === "next" ? 1 : -1;
+      nextIndex = (currentIndex + offset + tracks.length) % tracks.length;
+    }
     lastPlayEventKeyRef.current = null;
     setCurrentTrackId(tracks[nextIndex].id);
     setProgressSeconds(0);
@@ -1124,7 +1181,7 @@ export default function App() {
   };
 
   return (
-    <div className="startup-shell min-h-screen overflow-x-hidden bg-[#d0c6ba] text-[#4a2108]">
+    <div className="startup-shell h-screen overflow-hidden bg-[#d0c6ba] text-[#4a2108]">
       <div className="fixed inset-0 bg-[#d0c6ba]" />
       {currentTrack && (
         <>
@@ -1320,7 +1377,14 @@ export default function App() {
             }}
             onLibraryChanged={(updatedTracks) => {
               setTracks(updatedTracks);
-              setCurrentTrackId((value) => value ?? updatedTracks[0]?.id ?? null);
+              setCurrentTrackId((value) =>
+                value && updatedTracks.some((track) => track.id === value)
+                  ? value
+                  : (updatedTracks[0]?.id ?? null),
+              );
+              // 歌单同步后重置洗牌队列与播放历史，避免索引越界或陈旧顺序。
+              shuffleOrderRef.current = [];
+              shufflePositionRef.current = 0;
               void neteaseProvider
                 .getLatestTasteNotes()
                 .then(setTasteNotes)

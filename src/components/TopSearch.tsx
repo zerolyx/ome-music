@@ -241,7 +241,7 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
               {isSearchingSource ? (
                 <div className="flex items-center gap-2 px-2 py-3 text-xs font-semibold text-[#4a2108]/38">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Listening outside the room
+                  Searching NetEase Cloud Music…
                 </div>
               ) : neteaseResults.length ? (
                 neteaseResults.map((song) => (
@@ -286,7 +286,7 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
               {isSearchingBilibili ? (
                 <div className="flex items-center gap-2 px-2 py-3 text-xs font-semibold text-[#4a2108]/38">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Tuning the outside room
+                  Searching Bilibili…
                 </div>
               ) : bilibiliResults.length ? (
                 bilibiliResults.map((song) => (
