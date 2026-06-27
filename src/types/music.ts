@@ -127,34 +127,6 @@ export interface UserMusicProfile {
   updatedAt: string;
 }
 
-export interface PlaylistCluster {
-  label: string;
-  basis: "artist" | "genre" | "decade" | "language" | "mood";
-  trackIds: string[];
-  summary: string;
-}
-
-export interface PlaylistAnalysis {
-  playlistId: string;
-  scale: "small" | "large";
-  clusters: PlaylistCluster[];
-  profileSummary: string;
-  createdAt: string;
-}
-
-export interface RecommendationContext {
-  timeOfDay: "morning" | "afternoon" | "evening" | "lateNight";
-  weather: "sunny" | "rainy" | "cloudy" | "snowy" | "unknown";
-  mood?: TrackMood;
-}
-
-export interface RecommendationItem {
-  trackId: string;
-  reason: string;
-  lane: "familiar" | "fresh" | "explore";
-  score: number;
-}
-
 export interface MoodEntry {
   id: string;
   date: string;

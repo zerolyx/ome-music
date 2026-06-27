@@ -48,19 +48,3 @@ export async function savePlaylistAnalysisReport(report: PlaylistAnalysisReport)
 
   return invoke<PlaylistAnalysisRun>("save_playlist_analysis_result", { payload });
 }
-
-export async function getLatestPlaylistAnalysisReport(playlistId: string): Promise<PlaylistAnalysisReport | null> {
-  const run = isTauriRuntime()
-    ? await invoke<PlaylistAnalysisRun | null>("get_latest_playlist_analysis", { playlistId })
-    : previewRuns.get(playlistId) ?? null;
-
-  if (!run) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(run.reportJson) as PlaylistAnalysisReport;
-  } catch {
-    return null;
-  }
-}

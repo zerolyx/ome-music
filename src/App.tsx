@@ -118,6 +118,7 @@ export default function App() {
   const progressSecondsRef = useRef(startupSnapshot?.position ?? 0);
   const currentTrackRef = useRef<Track | null>(null);
   const loopModeRef = useRef<LoopMode>("all");
+  const playableSrcRef = useRef("");
   const playableSrcForTrackIdRef = useRef<{ trackId: string; quality: NonNullable<PlayableUrlOptions["level"]> } | null>(null);
   const [tracks, setTracks] = useState<Track[]>(() => (restoredSnapshotTrack ? [restoredSnapshotTrack] : []));
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(() => restoredSnapshotTrack?.id ?? null);
@@ -138,7 +139,7 @@ export default function App() {
   const [lyricOffsetMs, setLyricOffsetMs] = useState(0);
   const [isLyricsLoading, setLyricsLoading] = useState(false);
   const [isProviderSettingsOpen, setProviderSettingsOpen] = useState(false);
-  const [settingsFocus, setSettingsFocus] = useState<"all" | "music">("music");
+  const [settingsFocus, setSettingsFocus] = useState<"all" | "music" | "atmosphere">("music");
   const [playbackDebug, setPlaybackDebug] = useState<NetEasePlaybackDebug | null>(null);
   const [sourceServiceStatus, setSourceServiceStatus] = useState<NetEaseServiceStatus | null>(null);
   const [sourceLoginStatus, setSourceLoginStatus] = useState<NetEaseLoginStatus | null>(null);
@@ -182,6 +183,10 @@ export default function App() {
   useEffect(() => {
     loopModeRef.current = loopMode;
   }, [loopMode]);
+
+  useEffect(() => {
+    playableSrcRef.current = playableSrc;
+  }, [playableSrc]);
 
   useEffect(() => {
     if (!currentTrack) return;
@@ -573,13 +578,21 @@ export default function App() {
 
     const handleTimeUpdate = () => setProgressSeconds(audio.currentTime);
     const handleEnded = () => handleAudioEndedRef.current();
+    const handleError = () => {
+      const track = currentTrackRef.current;
+      if (!track || !playableSrcRef.current) return;
+      setIsPlaying(false);
+      setLibraryError(playbackReasonMessage(track.unavailableReason));
+    };
 
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("error", handleError);
 
     return () => {
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("error", handleError);
     };
   }, []);
 
@@ -904,6 +917,9 @@ export default function App() {
         if (neteaseSelectionRef.current === requestId) setLibraryError("This track is unavailable from the current source.");
         return null;
       }
+      if (playable.url) {
+        preparedPlayableRef.current.set(imported.id, { audioUrl: playable.url });
+      }
       return imported;
     } catch (error) {
       if (neteaseSelectionRef.current !== requestId) return null;
@@ -985,11 +1001,16 @@ export default function App() {
       <div className="fixed inset-0 bg-[#d0c6ba]" />
       {currentTrack && (
         <>
-          <img
-            src={currentTrack.coverUrl}
-            alt=""
-            className="fixed inset-0 h-full w-full scale-[1.28] object-cover opacity-45 blur-[118px] saturate-[1.25] sepia-[0.18]"
-          />
+          {currentTrack.coverUrl ? (
+            <img
+              src={currentTrack.coverUrl}
+              alt=""
+              onError={(event) => {
+                event.currentTarget.style.display = "none";
+              }}
+              className="fixed inset-0 h-full w-full scale-[1.28] object-cover opacity-45 blur-[118px] saturate-[1.25] sepia-[0.18]"
+            />
+          ) : null}
           <div className="fixed inset-0 bg-[radial-gradient(circle_at_62%_45%,rgba(198,96,67,0.34),transparent_34%),radial-gradient(circle_at_28%_61%,rgba(82,86,83,0.42),transparent_38%),linear-gradient(105deg,rgba(190,193,186,0.86)_0%,rgba(207,190,176,0.74)_48%,rgba(225,168,148,0.58)_100%)]" />
         </>
       )}
@@ -1017,6 +1038,10 @@ export default function App() {
           setSettingsFocus("music");
           setProviderSettingsOpen(true);
         }}
+        onOpenAtmosphereSettings={() => {
+          setSettingsFocus("atmosphere");
+          setProviderSettingsOpen(true);
+        }}
       />
 
       {libraryError && currentTrack && (
@@ -1030,7 +1055,7 @@ export default function App() {
         />
       )}
 
-      <main className="relative min-h-screen">
+      <main className="relative h-screen overflow-hidden">
         <NowPlayingHero
           track={currentTrack}
           lyrics={lyrics}
@@ -1166,7 +1191,7 @@ function PlaybackNotice({
           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#4a2108]/38">{label}</p>
           <p className="mt-0.5 truncate text-sm font-semibold text-[#4a2108]/68">{message}</p>
         </div>
-        {(reason === "not_logged_in" || reason === "cookie_missing" || reason === "cookie_expired" || reason === "vip_required") && (
+        {(reason === "not_logged_in" || reason === "cookie_missing" || reason === "cookie_expired" || reason === "vip_required" || reason === "trial_only") && (
           <button
             type="button"
             onClick={onOpenSettings}

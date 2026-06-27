@@ -64,7 +64,7 @@ export function NowPlayingHero({
 
   if (!track) {
     return (
-      <section className="relative flex min-h-screen items-center justify-center px-8">
+      <section className="relative flex min-h-[calc(100svh-7rem)] items-center justify-center px-8">
         <div className="max-w-xl text-center">
           <p className="mb-5 text-sm font-medium text-[#4a2108]/[0.38]">OME</p>
           <h1 className="text-5xl font-black leading-tight text-[#4a2108]/[0.82] sm:text-7xl">
@@ -75,6 +75,7 @@ export function NowPlayingHero({
           </p>
           {error && <p className="mt-5 text-sm text-[#7a2d1c]/70">{error}</p>}
           <button
+            type="button"
             onClick={onImport}
             disabled={isImporting}
             className="app-transition mt-10 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#4a2108]/[0.86] px-6 text-sm font-semibold text-[#efe4d8] shadow-[0_18px_46px_rgba(74,33,8,0.22)] hover:scale-[1.015] hover:bg-[#4a2108] disabled:cursor-wait disabled:opacity-70"
@@ -90,7 +91,7 @@ export function NowPlayingHero({
   const isBilibiliStage = track.source === "bilibili" && !isLyricsLoading && lyrics.length === 0;
 
   return (
-    <section className="now-playing-stage relative mx-auto grid min-h-screen w-full max-w-[1780px] grid-cols-1 items-center gap-12 px-[clamp(2rem,5vw,6rem)] md:grid-cols-[minmax(280px,0.82fr)_minmax(500px,1.38fr)] md:gap-[clamp(3rem,5.6vw,6.5rem)]">
+    <section className="now-playing-stage relative mx-auto grid w-full max-w-[1780px] grid-cols-1 items-center gap-12 overflow-hidden px-[clamp(2rem,5vw,6rem)] md:grid-cols-[minmax(280px,0.82fr)_minmax(500px,1.38fr)] md:gap-[clamp(3rem,5.6vw,6.5rem)]">
       <div data-danmaku-safe-zone="left-visual" className="left-visual-stack relative z-10 flex min-w-0 flex-col items-center md:items-start">
         <div className="record-sleeve">
           <ArtworkImage src={track.coverUrl} alt={track.album || track.title} source={track.source} className="h-full w-full rounded-[18px] object-cover" />
@@ -110,7 +111,7 @@ export function NowPlayingHero({
             className="block w-full cursor-pointer text-left"
             aria-expanded={isTitleExpanded}
           >
-            <h1 title={track.title} className="line-clamp-2 max-h-[2.12em] text-[clamp(1.18rem,1.65vw,1.72rem)] font-bold leading-[1.06] text-[#4a2108]/88 transition-opacity duration-300 hover:opacity-70">
+            <h1 title={track.title} className="line-clamp-2 max-h-[2.12em] text-[clamp(1.18rem,1.65vw,1.72rem)] font-bold leading-[1.06] text-[#4a2108]/88 transition-colors duration-300 hover:text-[#4a2108]">
               {track.title}
             </h1>
           </div>
@@ -248,7 +249,7 @@ function BilibiliVideoAtmosphere({
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !src || video.readyState < 1 || Math.abs(video.currentTime - progressSeconds) < 0.85) return;
+    if (!video || !src || video.readyState < 2 || Math.abs(video.currentTime - progressSeconds) < 0.85) return;
     video.currentTime = progressSeconds;
   }, [progressSeconds, src]);
 

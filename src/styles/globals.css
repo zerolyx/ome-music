@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   --settings-text-primary: rgba(245, 242, 238, 0.92);
   --settings-text-secondary: rgba(235, 231, 226, 0.72);
   --settings-text-muted: rgba(230, 224, 218, 0.52);
@@ -36,11 +36,12 @@ html,
 body,
 #root {
   min-height: 100%;
+  height: 100%;
 }
 
 body {
   margin: 0;
-  overflow-x: hidden;
+  overflow: hidden;
   background: #d0c6ba;
   color: #4a2108;
   font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
@@ -230,6 +231,7 @@ button {
   }
 
   .quick-settings-panel {
+    color-scheme: light;
     color: rgba(74, 33, 8, 0.78);
     background: rgba(224, 211, 199, 0.52);
     border: 1px solid rgba(255, 255, 255, 0.24);
@@ -239,7 +241,7 @@ button {
     backdrop-filter: blur(34px) saturate(1.12);
   }
 
-.quick-settings-pill {
+  .quick-settings-pill {
     display: inline-flex;
     height: 2rem;
     align-items: center;
@@ -492,6 +494,16 @@ button {
     transform: scale(0.95);
   }
 
+  .player-icon-button.is-active {
+    color: rgba(74, 33, 8, 0.86);
+    background: rgba(74, 33, 8, 0.1);
+  }
+
+  .player-icon-button.is-active:hover {
+    color: rgb(74, 33, 8);
+    background: rgba(74, 33, 8, 0.14);
+  }
+
   .cinema-range::-webkit-slider-thumb,
   .cinema-progress::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -580,6 +592,7 @@ button {
   }
 
   .settings-panel {
+    color-scheme: dark;
     color: var(--settings-text-secondary);
     background: var(--settings-panel-bg);
     border-color: var(--settings-panel-border);

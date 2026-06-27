@@ -5112,7 +5112,7 @@ fn classify_netease_trial_reason(
     if !is_logged_in {
         return "cookie_expired".to_string();
     }
-    if fee == Some(1) && !is_member {
+    if matches!(fee, Some(1) | Some(4)) && !is_member {
         return "vip_required".to_string();
     }
     "trial_only".to_string()
@@ -5202,7 +5202,8 @@ fn classify_netease_unavailable_reason(
             || message.contains("cookie")
             || message.contains("会员")
             || message.contains("登录")
-            || fee == 1)
+            || fee == 1
+            || fee == 4)
     {
         return "not_logged_in".to_string();
     }
@@ -5214,7 +5215,7 @@ fn classify_netease_unavailable_reason(
     {
         return "cookie_expired".to_string();
     }
-    if message.contains("vip") || message.contains("会员") || fee == 1 {
+    if message.contains("vip") || message.contains("会员") || fee == 1 || fee == 4 {
         return "vip_required".to_string();
     }
     if message.contains("copyright") || message.contains("版权") || code == -110 {
@@ -5602,7 +5603,12 @@ fn source_song_from_search_json(value: &serde_json::Value) -> SourceSongDto {
         .unwrap_or("Unknown Album")
         .to_string();
     let cover_url = album_value
-        .and_then(|album| album.get("picUrl").or_else(|| album.get("picUrl")))
+        .and_then(|album| {
+            album
+                .get("picUrl")
+                .or_else(|| album.get("pic_str"))
+                .or_else(|| album.get("blurPicUrl"))
+        })
         .and_then(|url| url.as_str())
         .unwrap_or("")
         .to_string();

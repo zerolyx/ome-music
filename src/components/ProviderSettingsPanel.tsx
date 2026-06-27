@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   ChevronDown,
   Cloud,
   Database,
@@ -80,14 +81,14 @@ import type { Track } from "../types/music";
 
 interface ProviderSettingsPanelProps {
   open: boolean;
-  focus?: "all" | "music";
+  focus?: "all" | "music" | "atmosphere";
   playbackQuality: NonNullable<PlayableUrlOptions["level"]>;
   onPlaybackQualityChange: (level: NonNullable<PlayableUrlOptions["level"]>) => void;
   onClose: () => void;
   onLibraryChanged?: (tracks: Track[]) => void;
 }
 
-type SettingsSection = "overview" | "sources" | "curator" | "playback" | "atmosphere" | "storage" | "advanced";
+type SettingsSection = "overview" | "sources" | "curator" | "playback" | "atmosphere" | "storage" | "advanced" | "guide";
 
 const settingsSections: Array<{ id: SettingsSection; title: string; subtitle: string; icon: LucideIcon }> = [
   { id: "overview", title: "快速开始", subtitle: "Quick Setup", icon: Radio },
@@ -96,7 +97,8 @@ const settingsSections: Array<{ id: SettingsSection; title: string; subtitle: st
   { id: "atmosphere", title: "弹幕氛围", subtitle: "Atmosphere", icon: SlidersHorizontal },
   { id: "curator", title: "鉴赏家与声音", subtitle: "Curator & Voice", icon: KeyRound },
   { id: "storage", title: "存储", subtitle: "Storage", icon: HardDrive },
-  { id: "advanced", title: "高级", subtitle: "Advanced", icon: Settings2 }
+  { id: "advanced", title: "高级", subtitle: "Advanced", icon: Settings2 },
+  { id: "guide", title: "使用指南", subtitle: "Guide", icon: BookOpen }
 ];
 
 const emptyConfig: LlmProviderConfig = {
@@ -130,7 +132,9 @@ const bilibiliProvider = new BilibiliMusicProvider();
 const bilibiliAuthProvider = new BilibiliAccountSessionProvider();
 
 export function ProviderSettingsPanel({ open, focus = "all", playbackQuality, onPlaybackQualityChange, onClose, onLibraryChanged }: ProviderSettingsPanelProps) {
-  const [activeSection, setActiveSection] = useState<SettingsSection>(focus === "music" ? "sources" : "overview");
+  const [activeSection, setActiveSection] = useState<SettingsSection>(
+    focus === "music" ? "sources" : focus === "atmosphere" ? "atmosphere" : "overview"
+  );
   const [config, setConfig] = useState<LlmProviderConfig>(emptyConfig);
   const [providerName, setProviderName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -200,7 +204,7 @@ export function ProviderSettingsPanel({ open, focus = "all", playbackQuality, on
   useEffect(() => {
     if (!open) return;
 
-    setActiveSection(focus === "music" ? "sources" : "overview");
+    setActiveSection(focus === "music" ? "sources" : focus === "atmosphere" ? "atmosphere" : "overview");
 
     let cancelled = false;
     setIsLoading(true);
@@ -352,7 +356,6 @@ export function ProviderSettingsPanel({ open, focus = "all", playbackQuality, on
 
   useEffect(() => {
     if (!open || activeSection !== "storage") return;
-    setStorageOpen(true);
     void getStorageReport()
       .then(setStorageReport)
       .catch((error) => setStorageMessage(`无法读取存储状态 / Could not read storage. ${readError(error)}`));
@@ -402,12 +405,22 @@ export function ProviderSettingsPanel({ open, focus = "all", playbackQuality, on
         baseUrl: neteaseBaseUrl,
         token: neteaseToken.trim() || undefined
       });
+      const savedBilibiliConfig = await saveBilibiliSourceConfig({
+        enabled: bilibiliEnabled,
+        baseUrl: bilibiliBaseUrl,
+        token: undefined,
+        searchScope: bilibiliSearchScope
+      });
       setConfig(savedConfig);
       setSpeechConfig(savedSpeechConfig);
       setMusicSourceConfig(savedMusicSourceConfig);
       setNeteaseEnabled(savedMusicSourceConfig.enabled);
       setNeteaseBaseUrl(savedMusicSourceConfig.baseUrl);
       setNeteaseToken("");
+      setBilibiliConfig(savedBilibiliConfig);
+      setBilibiliEnabled(savedBilibiliConfig.enabled);
+      setBilibiliBaseUrl(savedBilibiliConfig.baseUrl);
+      setBilibiliSearchScope(savedBilibiliConfig.searchScope);
       setProviderName(savedConfig.providerName);
       setBaseUrl(savedConfig.baseUrl);
       setModel(savedConfig.model);
@@ -1007,6 +1020,7 @@ export function ProviderSettingsPanel({ open, focus = "all", playbackQuality, on
 
             {activeSection === "curator" && (
               <>
+                <SettingsIntro title="鉴赏家与声音" subtitle="Curator & Voice" />
                 <SectionLabel icon={KeyRound} title="Music Understanding" subtitle="音乐理解" />
                 <Field label="Provider Name / 供应商">
                   <input
@@ -1227,13 +1241,43 @@ export function ProviderSettingsPanel({ open, focus = "all", playbackQuality, on
               </div>
             )}
 
+            {activeSection === "guide" && (
+              <div className="space-y-5">
+                <SettingsIntro title="使用指南" subtitle="How to keep the room quiet and the music first." />
+                <div className="settings-surface space-y-4">
+                  <GuideTopic title="导入本地音乐" subtitle="Import local music">
+                    在主界面顶部搜索框聚焦后，点击出现的「Choose Music Folder」按钮，选择一个音频文件夹。Ome Music 只记录文件路径，不复制原始音频。
+                  </GuideTopic>
+                  <GuideTopic title="连接音乐源" subtitle="Connect a music source">
+                    前往「音乐来源」连接网易云或 Bilibili。网易云支持扫码与 Cookie 导入；Bilibili 公共内容可直接使用，登录后可访问更多内容。凭据保存在系统钥匙串，不会明文落盘。
+                  </GuideTopic>
+                  <GuideTopic title="搜索与播放" subtitle="Search and play">
+                    顶部搜索框同时检索本地库与已连接的远端源。点击结果即可播放；远端曲目会先解析可播放地址，失败时会给出原因。
+                  </GuideTopic>
+                  <GuideTopic title="歌词与偏移" subtitle="Lyrics and timing">
+                    默认自动匹配歌词。在快捷设置（右上齿轮）可重新匹配、导入 .lrc 文件，或以 ±500ms 微调时间轴。
+                  </GuideTopic>
+                  <GuideTopic title="弹幕氛围" subtitle="Danmaku atmosphere">
+                    Bilibili 曲目可显示视频氛围层与弹幕。弹幕会避让封面、标题、歌词核心区与播放控件。在「弹幕氛围」中调整模式、密度、速度与情绪强度。
+                  </GuideTopic>
+                  <GuideTopic title="Ome Radio 与鉴赏家" subtitle="Radio and curator">
+                    左栏 Ome Radio 依据听歌记忆生成私人电台；右栏 DJ 鉴赏家可语音或文字点歌、生成歌单。DJ 始终以克制的英文回应，工具调用执行音乐操作。
+                  </GuideTopic>
+                </div>
+                <div className="settings-surface">
+                  <p className="text-sm font-semibold text-white/74">Music First.</p>
+                  <p className="mt-2 text-xs leading-6 text-white/36">所有高级能力都在背后工作，不抢主视觉。当不确定时，让它保持安静。</p>
+                </div>
+              </div>
+            )}
+
             {activeSection === "sources" && <div className="space-y-4">
               <SettingsIntro title="音乐来源" subtitle="Every shelf you listen from, in one place." />
               <div className="settings-surface flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.07] text-white/64"><Library className="h-4 w-4" /></span><div><p className="text-sm font-semibold text-white/84">本地音乐 / Local Library</p><p className="mt-1 text-xs text-white/36">通过主界面搜索框导入，不复制原始文件。</p></div></div>
                 <span className="quick-settings-pill">Ready</span>
               </div>
-            <div className="space-y-4 rounded-[24px] border border-white/[0.06] bg-white/[0.035] p-4">
+            <div className="settings-surface space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-3">
@@ -1583,7 +1627,7 @@ export function ProviderSettingsPanel({ open, focus = "all", playbackQuality, on
 
             {activeSection === "storage" && <div className="space-y-4">
               <SettingsIntro title="存储管理" subtitle="See what Ome keeps, and clear only what is safe." />
-            <div className="rounded-[24px] border border-white/[0.06] bg-white/[0.035]">
+            <div className="settings-surface">
               <button
                 type="button"
                 onClick={() => {
@@ -1597,7 +1641,7 @@ export function ProviderSettingsPanel({ open, focus = "all", playbackQuality, on
                     <HardDrive className="h-4 w-4" />
                   </span>
                   <div>
-                    <h3 className="text-sm font-semibold text-white/84">高级 / Advanced · 存储管理 / Storage</h3>
+                    <h3 className="text-sm font-semibold text-white/84">存储管理 / Storage</h3>
                     <p className="mt-1 text-xs text-white/36">
                       {storageReport ? `缓存 ${storageReport.totalCacheDisplaySize} · 数据库 ${storageReport.database.displaySize}` : "查看缓存大小，不删除音乐文件。"}
                     </p>
@@ -1611,7 +1655,7 @@ export function ProviderSettingsPanel({ open, focus = "all", playbackQuality, on
                   {storageReport ? (
                     <div className="grid gap-3 md:grid-cols-2">
                       <StorageRow icon={HardDrive} label="应用缓存 / App Cache" value={storageReport.appCache.displaySize} />
-                      <StorageRow icon={HardDrive} label="WebView 缓存 / WebView Cache" value={storageReport.webviewCache.displaySize} />
+                      <StorageRow icon={HardDrive} label="WebView 缓存 / WebView Cache" value={`${storageReport.webviewCache.displaySize} (自动管理)`} />
                       <StorageRow icon={Music2} label="封面缓存 / Cover Cache" value={storageReport.coverCache.displaySize} />
                       <StorageRow icon={ListMusic} label="歌词缓存 / Lyrics Cache" value={storageReport.lyricsCache.displaySize} />
                       <StorageRow icon={FileDown} label="日志 / Logs" value={storageReport.logs.displaySize} />
@@ -2008,6 +2052,16 @@ function SourceButton({ icon: Icon, label, loading = false, disabled = false, on
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : Icon ? <Icon className="h-4 w-4" /> : null}
       {label}
     </button>
+  );
+}
+
+function GuideTopic({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+  return (
+    <div className="rounded-[18px] border border-white/[0.05] bg-white/[0.025] p-4">
+      <p className="text-sm font-semibold text-white/82">{title}</p>
+      <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-white/32">{subtitle}</p>
+      <p className="mt-2 text-xs leading-6 text-white/52">{children}</p>
+    </div>
   );
 }
 

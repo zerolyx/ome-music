@@ -22,11 +22,9 @@ Ome Music is built for local-first listening. It opens quickly, keeps personal d
 
 ## Screenshots
 
-Safe public screenshots are not included yet. The images below are placeholders:
+![Ome Music main screenshot](docs/assets/screenshot-main.png)
 
-![Ome Music main screenshot placeholder](docs/assets/screenshot-main.png)
-
-![Ome Music settings screenshot placeholder](docs/assets/screenshot-settings.png)
+![Ome Music settings screenshot](docs/assets/screenshot-settings.png)
 
 Only commit screenshots that are safe for public display. Do not include API keys, cookies, account names, private playlists, logs, local paths, or personal listening history.
 
@@ -34,10 +32,9 @@ Only commit screenshots that are safe for public display. Do not include API key
 
 Download the latest Windows build from the [GitHub Releases page](https://github.com/zerolyx/ome-music/releases).
 
-Recommended files:
+Recommended file:
 
-- `Ome.Music.Setup.exe`: Windows installer
-- `Ome.Music.exe`: portable executable
+- `Ome Music_0.1.0_x64-setup.exe`: Windows NSIS installer
 
 This project is currently distributed as an unsigned development release, so Windows may show a security warning on first launch.
 

@@ -1,4 +1,4 @@
-import type { MoodEntry, RecommendationItem, Track, UserMusicProfile } from "../types/music";
+import type { Track, UserMusicProfile } from "../types/music";
 
 export const mockTracks: Track[] = [
   {
@@ -92,25 +92,4 @@ export const mockProfile: UserMusicProfile = {
   confidence: 0.82,
   isLearning: false,
   updatedAt: "2026-06-10T12:30:00.000Z"
-};
-
-export const mockRecommendations: RecommendationItem[] = [
-  {
-    trackId: "trk-001",
-    lane: "familiar",
-    score: 0.94,
-    reason: "This one carries a little night air, soft enough to stay with."
-  }
-];
-
-export const mockMoodEntry: MoodEntry = {
-  id: "mood-001",
-  date: "2026-06-11",
-  mood: "平静",
-  moodSignal: "focused",
-  note: "A quiet evening.",
-  desiredVibe: "专注背景",
-  privateTags: ["quiet"],
-  recommendedTrackIds: ["trk-001"],
-  createdAt: "2026-06-11T00:00:00.000Z"
 };
