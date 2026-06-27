@@ -88,10 +88,10 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
         .then((songs) => {
           if (!cancelled) setNeteaseResults(songs.slice(0, 12));
         })
-        .catch(() => {
+        .catch((error) => {
           if (!cancelled) {
             setNeteaseResults([]);
-            setNeteaseMessage("The outside source is quiet just now.");
+            setNeteaseMessage(readNeteaseSearchError(error));
           }
         })
         .finally(() => {
@@ -346,6 +346,20 @@ function readSourceError(error: unknown): string {
     return "Bilibili needs a brief pause. Try this search again in a moment.";
   }
   return "Bilibili is quiet just now. Please try again.";
+}
+
+function readNeteaseSearchError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (
+    message.includes("Could not reach") ||
+    message.includes("无法连接") ||
+    message.includes("ECONNREFUSED") ||
+    message.includes("connect to") ||
+    message.includes("Network Error")
+  ) {
+    return "NetEase API 未连接。请确认本地 API 服务已启动，或在设置中改用可用的 API 地址。 / Could not reach the NetEase API. Check that the local service is running or set a reachable API URL in Settings.";
+  }
+  return message || "NetEase Cloud Music is quiet just now. Please try again.";
 }
 
 function SearchGroup({ title, children }: { title: string; children: React.ReactNode }) {

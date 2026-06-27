@@ -4667,17 +4667,12 @@ async fn request_netease_json_response(
         return Err("NetEase Cloud Music is not enabled.".to_string());
     }
 
+    // Try to start the local NeteaseCloudMusicApi service when pointing at a local URL,
+    // but never block the request on it. If the service is unavailable the HTTP call
+    // below will surface a clear "Could not reach the NetEase API" error, which keeps
+    // search and QR login responsive instead of failing fast on environment pre-checks.
     if is_local_netease_base_url(&config.base_url) {
-        let status = ensure_local_netease_api_service(&config.base_url).await?;
-        if !status.running {
-            if !status.node_available {
-                return Err("系统未安装 Node.js，网易云 API 服务无法启动。请安装 Node.js v20+ 后重试。 / Node.js is not installed. Install Node.js v20+ to use NetEase Cloud Music.".to_string());
-            }
-            if !status.api_package_found {
-                return Err("网易云 API 服务包未找到。如果这是安装版，请确认运行时文件完整。 / The NetEase API package was not found. If this is an installed build, the runtime files may be missing.".to_string());
-            }
-            return Err(format!("网易云 API 服务仍在启动中，请稍后重试。 / {} ", status.message));
-        }
+        let _ = ensure_local_netease_api_service(&config.base_url).await;
     }
 
     let endpoint = format!("{}{}", config.base_url.trim_end_matches('/'), path);

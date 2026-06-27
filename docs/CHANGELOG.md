@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+### 紧急修复（v0.3.0 回归问题）
+- **网易云扫码登录弹窗不出现**：v0.2 在 `request_netease_json_response` 中新增的本地环境预检（`ensure_local_netease_api_service` 返回 `Err` 即整体失败）过于激进 —— 当 Node.js 未装、`NeteaseCloudMusicApi` 包未找到或服务 12 秒内未就绪时，`create_netease_qr_login` 直接返回 `Err`，前端 catch 只把错误写进面板底部小字 `sourceMessage`，`neteaseQr` 状态永远不被赋值，导致二维码弹窗条件 `{neteaseQr && (...)}` 不成立，用户看到「点了没反应」。
+  - **修复**：恢复 v0.1 的行为 —— `let _ = ensure_local_netease_api_service(&config.base_url).await;` 仍尝试拉起本地服务，但**不再以预检结果阻断请求**。预检通过则 HTTP 调用命中已就绪的服务；预检失败则由后续 HTTP 请求自然返回 `Could not reach the NetEase API`，扫码与搜索都能继续工作，不再被环境检查卡死。
+- **启用网易云后搜索不到目标歌曲**：同一根因 —— `request_netease_json_response` 的预检 `Err` 让 `search_netease_songs` 直接失败；而前端 `TopSearch.tsx` 的 `.catch(() => setNeteaseMessage("The outside source is quiet just now."))` 又把后端精确错误吞成模糊文案，用户既搜不到歌也看不到原因。
+  - **修复**：随上一项恢复 v0.1 行为后，搜索请求能正常打到本地 API 服务；同时 `TopSearch.tsx` 改用 `readNeteaseSearchError(error)` 透出后端真实错误，连接失败时提示「NetEase API 未连接，请确认本地服务已启动或在设置中改用可用的 API 地址」，而非笼统的「outside source is quiet」。
+
 ### 新增
 - **CI 流水线**（来自 [@chinokoyuki](https://github.com/chinokoyuki) 的 [PR #2](https://github.com/zerolyx/ome-music/pull/2)，采纳配置部分）：新增 `.github/workflows/ci.yml`，对 `main` 分支与 PR 运行 Rust（`cargo check` / `cargo clippy -D warnings` / `cargo fmt --check`）与 TypeScript（`tsc --noEmit` / `eslint` / `prettier --check`）两套检查，支持 `paths-ignore` 跳过纯文档变更，使用 `Swatinem/rust-cache@v2` 与 `cancel-in-progress` 节省 CI 资源。
 - **代码风格基线**：新增 ESLint 9 flat config（`eslint.config.mjs`，含 `typescript-eslint`、`react-hooks`、`react-refresh` 插件）与 Prettier 配置（`.prettierrc`），并补充 `lint` / `format` / `format:check` 脚本与对应 devDependencies。
