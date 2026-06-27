@@ -9,7 +9,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "netease:api": "NeteaseCloudMusicApi",
-    "size:audit": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/size-audit.ps1",
+    "size:audit": "node scripts/size-audit.mjs",
     "tauri": "tauri",
     "release:windows": "tauri build",
     "desktop": "tauri dev"

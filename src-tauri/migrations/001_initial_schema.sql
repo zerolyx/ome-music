@@ -173,7 +173,7 @@ CREATE TABLE IF NOT EXISTS mood_entries (
   id TEXT PRIMARY KEY,
   entry_date TEXT NOT NULL UNIQUE,
   mood TEXT NOT NULL,
-  note_encrypted TEXT,
+  note_text TEXT,
   private_tags_json TEXT NOT NULL DEFAULT '[]',
   recommended_track_ids_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

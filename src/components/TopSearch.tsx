@@ -24,6 +24,7 @@ interface TopSearchProps {
 export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }: TopSearchProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const bilibiliPlayRequestRef = useRef(0);
+  const closeSoonTimerRef = useRef<number | null>(null);
   const [query, setQuery] = useState("");
   const [isOpen, setOpen] = useState(false);
   const [neteaseEnabled, setNeteaseEnabled] = useState(false);
@@ -143,8 +144,14 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  useEffect(() => () => {
+    if (closeSoonTimerRef.current !== null) window.clearTimeout(closeSoonTimerRef.current);
+  }, []);
+
   const closeSoon = () => {
-    window.setTimeout(() => {
+    if (closeSoonTimerRef.current !== null) window.clearTimeout(closeSoonTimerRef.current);
+    closeSoonTimerRef.current = window.setTimeout(() => {
+      closeSoonTimerRef.current = null;
       if (!rootRef.current?.contains(document.activeElement)) setOpen(false);
     }, 120);
   };

@@ -31,6 +31,10 @@ interface SafeCorridor {
 export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, trackId }: GlobalDanmakuAtmosphereLayerProps) {
   const [settings, setSettings] = useState<DanmakuSettings>(() => getDanmakuSettings());
   const [lines, setLines] = useState<AmbientLine[]>([]);
+  const linesRef = useRef<AmbientLine[]>([]);
+  useEffect(() => {
+    linesRef.current = lines;
+  }, [lines]);
   const lastTimeRef = useRef(0);
   const lastSpawnTimeRef = useRef(-10);
   const isAmbient = settings.enabled && settings.displayMode === "ambient";
@@ -88,7 +92,7 @@ export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, tr
     const spawnInterval = settings.density === "high" ? 0.75 : settings.density === "medium" ? 1.25 : 2;
     if (!didSeek && currentTime - lastSpawnTimeRef.current < spawnInterval) return;
 
-    const visibleText = new Set(lines.map((line) => normalizeText(line.text)));
+    const visibleText = new Set(linesRef.current.map((line) => normalizeText(line.text)));
     const maxNewItems = settings.density === "high" ? 2 : 1;
     const candidates = items
       .filter((item) => item.time > fromTime && item.time <= currentTime + 0.6)
@@ -129,7 +133,7 @@ export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, tr
       const limit = settings.density === "high" ? 16 : settings.density === "medium" ? 12 : 8;
       return [...current, ...additions].slice(-limit);
     });
-  }, [currentTime, isAmbient, isPlaying, items, lines, settings, trackId]);
+  }, [currentTime, isAmbient, isPlaying, items, settings, trackId]);
 
   if (!isAmbient) return null;
 

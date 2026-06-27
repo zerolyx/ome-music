@@ -15,7 +15,7 @@ export interface CuratorLanguageGuardContext {
 
 const CJK_TEXT = /[\u3400-\u9fff]/;
 const CJK_CHARS = /[\u3400-\u9fff]+/g;
-const FORBIDDEN_REPLY_WORDS = /\b(a\.?i\.?|assistant|algorithm|model|user profile|tool call)\b/gi;
+export const FORBIDDEN_REPLY_WORDS = /\b(a\.?i\.?|assistant|algorithm|model|user profile|tool call)\b/gi;
 
 const TITLE_TRANSLATIONS: Record<string, string> = {
   蝴蝶: "Butterfly",
@@ -99,7 +99,7 @@ function normalizeSpokenText(text: string, originalTrackTitle?: string, translat
   return spoken || fallbackLine(originalTrackTitle);
 }
 
-function cleanCuratorText(text: string): string {
+export function cleanCuratorText(text: string): string {
   return text
     .replace(FORBIDDEN_REPLY_WORDS, "the old booth")
     .replace(/\*[^*]{1,120}\*/g, "")

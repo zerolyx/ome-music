@@ -1,7 +1,7 @@
 import type { DesiredMusicVibe, JournalMood, Track, TrackMood } from "../../types/music";
 import { saveMoodEntry } from "../library/libraryApi";
 import { requestMusicUnderstanding } from "../llm/provider";
-import { guardCuratorReply } from "./curatorLanguageGuard";
+import { cleanCuratorText, guardCuratorReply } from "./curatorLanguageGuard";
 
 export interface DjNote {
   id: string;
@@ -27,7 +27,6 @@ const CURATOR_SYSTEM_PROMPT = [
   "Keep replies concise, intimate, and musical."
 ].join(" ");
 
-const FORBIDDEN_REPLY_WORDS = /\b(a\.?i\.?|assistant|algorithm|model|user profile)\b/gi;
 const CJK_TEXT = /[\u3400-\u9fff]/;
 
 export async function askCurator(input: string, track: Track | null, notes: DjNote[]): Promise<string> {
@@ -77,21 +76,7 @@ export async function recordCuratorSignal(input: string): Promise<void> {
 }
 
 export function sanitizeCuratorReply(text: string): string {
-  return cleanCuratorReplyText(text);
-}
-
-function cleanCuratorReplyText(text: string): string {
-  return text
-    .replace(FORBIDDEN_REPLY_WORDS, "the old booth")
-    .replace(/\*[^*]{1,120}\*/g, "")
-    .replace(/\([^)]{1,120}\)/g, "")
-    .replace(/["“”]/g, "")
-    .replace(/^[\s:;,-]+/, "")
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join(" ")
-    .trim();
+  return cleanCuratorText(text);
 }
 
 function buildFallbackReply(input: string, track: Track | null): string {

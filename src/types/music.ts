@@ -24,6 +24,8 @@ export type DesiredMusicVibe =
 
 export type LoopMode = "off" | "one" | "all";
 
+export type MusicSource = "local" | "netease" | "bilibili";
+
 export type MusicLanguage = "zh" | "en" | "jp" | "kr" | "instrumental" | "unknown";
 
 export interface Artist {
@@ -48,7 +50,7 @@ export interface Track {
   album: string;
   durationSeconds: number;
   filePath: string;
-  source: string;
+  source: MusicSource;
   sourceId?: string | null;
   unavailableReason?: string | null;
   coverUrl: string;

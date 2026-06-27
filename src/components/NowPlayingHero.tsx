@@ -97,11 +97,23 @@ export function NowPlayingHero({
         </div>
 
         <div className="mt-6 w-[min(70vw,390px)] text-center md:w-[min(29vw,420px)] md:text-left">
-          <button type="button" onClick={() => setTitleExpanded((value) => !value)} className="block w-full text-left" aria-expanded={isTitleExpanded}>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setTitleExpanded((value) => !value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setTitleExpanded((value) => !value);
+              }
+            }}
+            className="block w-full cursor-pointer text-left"
+            aria-expanded={isTitleExpanded}
+          >
             <h1 title={track.title} className="line-clamp-2 max-h-[2.12em] text-[clamp(1.18rem,1.65vw,1.72rem)] font-bold leading-[1.06] text-[#4a2108]/88 transition-opacity duration-300 hover:opacity-70">
               {track.title}
             </h1>
-          </button>
+          </div>
           <div className="mt-4 space-y-1.5 text-[13px] font-semibold leading-5 text-[#4a2108]/[0.3]">
             <p>{track.artist}</p>
             <p>{track.album}</p>
@@ -256,7 +268,6 @@ function BilibiliVideoAtmosphere({
           }}
           onLoadedMetadata={(event) => {
             event.currentTarget.currentTime = Math.min(progressSeconds, Math.max(0, event.currentTarget.duration || progressSeconds));
-            if (isPlaying) void event.currentTarget.play().catch(() => undefined);
           }}
           className={clsx(
             "absolute inset-0 z-[1] h-full w-full object-cover blur-[1.4px] saturate-[0.92] contrast-[0.97] sepia-[0.08] transition-opacity duration-700",

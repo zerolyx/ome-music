@@ -110,17 +110,21 @@ export default function App() {
   const lyricRequestRef = useRef(0);
   const playableRequestRef = useRef(0);
   const bilibiliSelectionRef = useRef(0);
-  const startupSnapshotRef = useRef(loadLastSessionSnapshot());
-  const restoredTrackRef = useRef<Track | null>(startupSnapshotRef.current ? snapshotToTrack(startupSnapshotRef.current) : null);
+  const neteaseSelectionRef = useRef(0);
+  const [startupSnapshot] = useState(() => loadLastSessionSnapshot());
+  const [restoredSnapshotTrack] = useState<Track | null>(() => (startupSnapshot ? snapshotToTrack(startupSnapshot) : null));
   const snapshotSaveTimerRef = useRef<number | null>(null);
   const preparedPlayableRef = useRef<Map<string, { audioUrl: string; videoUrl?: string | null }>>(new Map());
-  const [tracks, setTracks] = useState<Track[]>(() => (restoredTrackRef.current ? [restoredTrackRef.current] : []));
-  const [currentTrackId, setCurrentTrackId] = useState<string | null>(() => restoredTrackRef.current?.id ?? null);
+  const progressSecondsRef = useRef(startupSnapshot?.position ?? 0);
+  const currentTrackRef = useRef<Track | null>(null);
+  const loopModeRef = useRef<LoopMode>("all");
+  const playableSrcForTrackIdRef = useRef<{ trackId: string; quality: NonNullable<PlayableUrlOptions["level"]> } | null>(null);
+  const [tracks, setTracks] = useState<Track[]>(() => (restoredSnapshotTrack ? [restoredSnapshotTrack] : []));
+  const [currentTrackId, setCurrentTrackId] = useState<string | null>(() => restoredSnapshotTrack?.id ?? null);
   const [agentQueue, setAgentQueue] = useState<Track[]>([]);
-  const [, setTemporaryPlaylistTitle] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progressSeconds, setProgressSeconds] = useState(() => startupSnapshotRef.current?.position ?? 0);
-  const [volume, setVolume] = useState(() => startupSnapshotRef.current?.volume ?? 0.72);
+  const [progressSeconds, setProgressSeconds] = useState(() => startupSnapshot?.position ?? 0);
+  const [volume, setVolume] = useState(() => startupSnapshot?.volume ?? 0.72);
   const [shuffle, setShuffle] = useState(false);
   const [loopMode, setLoopMode] = useState<LoopMode>("all");
   const [isImporting, setIsImporting] = useState(false);
@@ -158,11 +162,26 @@ export default function App() {
     () => tracks.findIndex((track) => track.id === currentTrackId),
     [currentTrackId, tracks]
   );
-  const currentTrack = currentIndex >= 0 ? tracks[currentIndex] : null;
+  const currentTrack = useMemo(
+    () => (currentIndex >= 0 ? tracks[currentIndex] ?? null : null),
+    [currentIndex, tracks]
+  );
   const currentLyricIndex = useMemo(
     () => getCurrentLyricIndex(lyrics, progressSeconds, lyricOffsetMs),
     [lyrics, lyricOffsetMs, progressSeconds]
   );
+
+  useEffect(() => {
+    progressSecondsRef.current = progressSeconds;
+  }, [progressSeconds]);
+
+  useEffect(() => {
+    currentTrackRef.current = currentTrack;
+  }, [currentTrack]);
+
+  useEffect(() => {
+    loopModeRef.current = loopMode;
+  }, [loopMode]);
 
   useEffect(() => {
     if (!currentTrack) return;
@@ -175,24 +194,25 @@ export default function App() {
     };
   }, [currentTrack, progressSeconds, volume]);
 
-  const recordEvent = useCallback(async (eventType: PlaybackEventType, track: Track | null, position = progressSeconds) => {
+  const recordEvent = useCallback(async (eventType: PlaybackEventType, track: Track | null, position?: number) => {
     if (!track) return;
+    const resolvedPosition = position ?? progressSecondsRef.current;
 
     try {
       await recordPlaybackEvent({
         trackId: track.id,
         eventType,
-        positionSeconds: Math.max(0, Math.floor(position))
+        positionSeconds: Math.max(0, Math.floor(resolvedPosition))
       });
     } catch (error) {
       console.error(`failed to record ${eventType}`, error);
     }
-  }, [progressSeconds]);
+  }, []);
 
   useEffect(() => {
     markStartup("frontendMountedAt");
     markStartup("shellVisibleAt");
-    if (startupSnapshotRef.current) markStartup("lastSessionLoadedAt");
+    if (startupSnapshot) markStartup("lastSessionLoadedAt");
     noteStartupTask("music-source-status delayed until after first paint");
     reportStartup("Ome shell visible");
 
@@ -201,7 +221,7 @@ export default function App() {
       listLocalTracks()
         .then((loadedTracks) => {
           if (cancelled) return;
-          const restoredTrack = restoredTrackRef.current;
+          const restoredTrack = restoredSnapshotTrack;
           const mergedTracks = restoredTrack && !loadedTracks.some((track) => track.id === restoredTrack.id)
             ? [restoredTrack, ...loadedTracks]
             : loadedTracks;
@@ -261,15 +281,15 @@ export default function App() {
       window.clearTimeout(backgroundTimer);
       window.clearTimeout(djTimer);
     };
-  }, []);
+  }, [restoredSnapshotTrack]);
 
   useEffect(() => {
-    setRadioSession((session) => {
-      const nextSession = updateRadioSessionPlayback(session, currentTrackId, isPlaying);
-      radioSessionRef.current = nextSession;
-      return nextSession;
-    });
+    setRadioSession((session) => updateRadioSessionPlayback(session, currentTrackId, isPlaying));
   }, [currentTrackId, isPlaying]);
+
+  useEffect(() => {
+    radioSessionRef.current = radioSession;
+  }, [radioSession]);
 
   useEffect(() => {
     if (!audioRef.current) {
@@ -347,6 +367,18 @@ export default function App() {
   }, [currentTrack, currentTrackId, essentialRestoreDone, reloadLyrics]);
 
   useEffect(() => {
+    if (!currentTrack) {
+      playableSrcForTrackIdRef.current = null;
+      setPlayableSrc("");
+      setVideoAtmosphereSrc("");
+      setLibraryError(null);
+      setPlaybackDebug(null);
+      return;
+    }
+
+    // If we already have a playable URL resolved for this track at the current quality, keep it across isPlaying toggles.
+    if (playableSrcForTrackIdRef.current?.trackId === currentTrack.id && playableSrcForTrackIdRef.current?.quality === playbackQuality) return;
+
     const requestId = playableRequestRef.current + 1;
     playableRequestRef.current = requestId;
     setPlayableSrc("");
@@ -354,7 +386,6 @@ export default function App() {
     setLibraryError(null);
     setPlaybackDebug(null);
 
-    if (!currentTrack) return;
     const prepared = preparedPlayableRef.current.get(currentTrack.id);
     if (!prepared && isRemoteTrack(currentTrack) && !isPlaying) return;
 
@@ -394,11 +425,13 @@ export default function App() {
     resolvePlayable()
       .then(({ audioUrl, videoUrl }) => {
         if (playableRequestRef.current !== requestId) return;
+        playableSrcForTrackIdRef.current = { trackId: currentTrack.id, quality: playbackQuality };
         setPlayableSrc(audioUrl);
         setVideoAtmosphereSrc(videoUrl ?? "");
       })
       .catch((error) => {
         if (playableRequestRef.current !== requestId) return;
+        playableSrcForTrackIdRef.current = null;
         audioRef.current?.pause();
         setIsPlaying(false);
         setLibraryError(error instanceof Error ? error.message : playbackReasonMessage());
@@ -502,25 +535,28 @@ export default function App() {
     audio.volume = isVoiceDucking ? volume * 0.36 : volume;
   }, [isVoiceDucking, volume]);
 
+  const handleAudioEndedRef = useRef<() => void>(() => {});
+
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    handleAudioEndedRef.current = () => {
+      const audio = audioRef.current;
+      const track = currentTrackRef.current;
+      const loop = loopModeRef.current;
+      if (!audio) return;
 
-    const handleTimeUpdate = () => setProgressSeconds(audio.currentTime);
-    const handleEnded = () => {
-      void recordEvent("completed", currentTrack, audio.duration || progressSeconds);
+      void recordEvent("completed", track, audio.duration || progressSecondsRef.current);
 
-      if (loopMode === "one" && currentTrack) {
+      if (loop === "one" && track) {
         audio.currentTime = 0;
         setProgressSeconds(0);
-        void recordEvent("replayed", currentTrack, 0);
+        void recordEvent("replayed", track, 0);
         void audio.play();
         return;
       }
 
       if (playNextQueuedTrack()) return;
 
-      if (loopMode === "all" && tracks.length > 1) {
+      if (loop === "all" && tracks.length > 1) {
         playAdjacentTrack("next", { markSkip: false });
         return;
       }
@@ -529,6 +565,14 @@ export default function App() {
       setProgressSeconds(0);
       lastPlayEventKeyRef.current = null;
     };
+  });
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => setProgressSeconds(audio.currentTime);
+    const handleEnded = () => handleAudioEndedRef.current();
 
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
@@ -537,7 +581,7 @@ export default function App() {
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", handleEnded);
     };
-  });
+  }, []);
 
   const importFolder = async () => {
     setIsImporting(true);
@@ -597,7 +641,6 @@ export default function App() {
           }
         ]
       };
-      radioSessionRef.current = nextSession;
       return nextSession;
     });
   };
@@ -622,7 +665,6 @@ export default function App() {
       if (!firstTrack) return;
       const preparingSession: RadioSession = { ...session, status: "preparing", currentTrackIndex: 0 };
       setActiveRadioSession(preparingSession);
-      setTemporaryPlaylistTitle(preparingSession.title);
       setAgentQueue(preparingSession.tracks.slice(1));
       await speakRadioSegments(getRadioSegmentsForTrackStart(preparingSession, 0));
       const playingSession: RadioSession = { ...preparingSession, status: "playing" };
@@ -772,7 +814,6 @@ export default function App() {
     }
 
     const [firstTrack, ...queuedTracks] = playlistTracks;
-    setTemporaryPlaylistTitle(title);
     setAgentQueue(queuedTracks);
     playLocalTrack(firstTrack);
   };
@@ -841,25 +882,31 @@ export default function App() {
   };
 
   const importNetEaseTrack = async (song: MusicSourceSong): Promise<Track | null> => {
+    const requestId = neteaseSelectionRef.current + 1;
+    neteaseSelectionRef.current = requestId;
     setLibraryError(null);
     try {
       const status = await ensureNeteaseApiService();
+      if (neteaseSelectionRef.current !== requestId) return null;
       setSourceServiceStatus(status);
       const playable = await neteaseProvider.getPlayableUrl(song.id, { level: playbackQuality });
+      if (neteaseSelectionRef.current !== requestId) return null;
       setPlaybackDebug(playable.debug ?? null);
       if (!playable.url || playable.unavailable) {
-        setLibraryError(playbackReasonMessage(playable.reason));
+        if (neteaseSelectionRef.current === requestId) setLibraryError(playbackReasonMessage(playable.reason));
         return null;
       }
       const updatedTracks = await neteaseProvider.importSong(song.id);
+      if (neteaseSelectionRef.current !== requestId) return null;
       setTracks(updatedTracks);
       const imported = updatedTracks.find((track) => track.source === "netease" && sourceIdForTrack(track) === song.id);
       if (!imported) {
-        setLibraryError("This track is unavailable from the current source.");
+        if (neteaseSelectionRef.current === requestId) setLibraryError("This track is unavailable from the current source.");
         return null;
       }
       return imported;
     } catch (error) {
+      if (neteaseSelectionRef.current !== requestId) return null;
       setLibraryError(error instanceof Error ? error.message : "This track is unavailable from the current source.");
       return null;
     }

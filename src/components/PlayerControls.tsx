@@ -41,13 +41,13 @@ export function PlayerControls({
         <div />
 
         <div className="flex items-center justify-center gap-7">
-          <button onClick={onPrevious} className="player-icon-button" aria-label="Previous track">
+          <button type="button" onClick={onPrevious} className="player-icon-button" aria-label="Previous track">
             <SkipBack className="h-[18px] w-[18px] fill-current" />
           </button>
-          <button onClick={onTogglePlay} className="player-main-button" aria-label={isPlaying ? "Pause" : "Play"}>
+          <button type="button" onClick={onTogglePlay} className="player-main-button" aria-label={isPlaying ? "Pause" : "Play"}>
             {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="ml-0.5 h-5 w-5 fill-current" />}
           </button>
-          <button onClick={onNext} className="player-icon-button" aria-label="Next track">
+          <button type="button" onClick={onNext} className="player-icon-button" aria-label="Next track">
             <SkipForward className="h-[18px] w-[18px] fill-current" />
           </button>
         </div>
@@ -71,7 +71,7 @@ export function PlayerControls({
         <input
           type="range"
           min={0}
-          max={track.durationSeconds}
+          max={Math.max(1, track.durationSeconds)}
           value={progress}
           onChange={(event) => onSetProgress(Number(event.target.value))}
           className="cinema-progress"

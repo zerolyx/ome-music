@@ -81,6 +81,7 @@ export function DjCuratorPanel({
   const scrollFrameRef = useRef<number | null>(null);
   const isNearBottomRef = useRef(true);
   const lastWaveformUpdateRef = useRef(0);
+  const agentStatusTimerRef = useRef<number | null>(null);
 
   const currentWhisper = useMemo(() => {
     if (!track) return "Waiting for the first record.";
@@ -111,6 +112,7 @@ export function DjCuratorPanel({
     recordingRef.current?.cancel();
     recordingRef.current = null;
     if (recordingTimeoutRef.current !== null) window.clearTimeout(recordingTimeoutRef.current);
+    if (agentStatusTimerRef.current !== null) window.clearTimeout(agentStatusTimerRef.current);
   }, []);
 
   const speak = (text: string) => {
@@ -124,6 +126,10 @@ export function DjCuratorPanel({
   const submit = async (overrideText?: string) => {
     const text = (overrideText ?? input).trim();
     if (!text || isThinking) return;
+    if (agentStatusTimerRef.current !== null) {
+      window.clearTimeout(agentStatusTimerRef.current);
+      agentStatusTimerRef.current = null;
+    }
 
     const listenerNote: DjNote = {
       id: crypto.randomUUID(),
@@ -188,7 +194,10 @@ export function DjCuratorPanel({
       speak(fallbackReply.spokenText);
     } finally {
       setThinking(false);
-      window.setTimeout(() => setAgentStatus("Listening..."), 1600);
+      agentStatusTimerRef.current = window.setTimeout(() => {
+        agentStatusTimerRef.current = null;
+        setAgentStatus("Listening...");
+      }, 1600);
     }
   };
 

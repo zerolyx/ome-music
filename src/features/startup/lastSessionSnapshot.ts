@@ -52,7 +52,7 @@ export function snapshotToTrack(snapshot: LastSessionSnapshot): Track {
     album: snapshot.album,
     durationSeconds: snapshot.duration,
     filePath: snapshot.filePath,
-    source: snapshot.source,
+    source: snapshot.source as Track["source"],
     sourceId: snapshot.sourceId,
     unavailableReason: null,
     coverUrl: snapshot.coverUrl,

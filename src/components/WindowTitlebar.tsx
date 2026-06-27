@@ -11,16 +11,27 @@ export function WindowTitlebar() {
     if (!isTauriRuntime()) return;
 
     const appWindow = getCurrentWindow();
+    let disposed = false;
     let unlisten: (() => void) | undefined;
 
-    void appWindow.isMaximized().then(setIsMaximized).catch(() => undefined);
+    void appWindow.isMaximized().then((value) => {
+      if (!disposed) setIsMaximized(value);
+    }).catch(() => undefined);
     void appWindow.onResized(async () => {
+      if (disposed) return;
       setIsMaximized(await appWindow.isMaximized().catch(() => false));
     }).then((dispose) => {
-      unlisten = dispose;
+      if (disposed) {
+        dispose();
+      } else {
+        unlisten = dispose;
+      }
     });
 
-    return () => unlisten?.();
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, []);
 
   const runWindowAction = async (action: "minimize" | "maximize" | "close") => {

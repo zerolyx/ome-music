@@ -194,8 +194,20 @@ export async function startSpeechRecording(onLevel: (level: number) => void): Pr
     void audioContext.close().catch(() => undefined);
   };
 
+  let stopResolve: ((clip: SpeechRecordingClip) => void) | null = null;
+  let stopReject: ((error: Error) => void) | null = null;
+
   recorder.ondataavailable = (event) => {
     if (event.data.size > 0) chunks.push(event.data);
+  };
+  recorder.onerror = () => {
+    cleanup();
+    const error = new Error("The microphone line went quiet.");
+    if (stopReject) {
+      stopReject(error);
+      stopResolve = null;
+      stopReject = null;
+    }
   };
   recorder.start(250);
   animationFrame = window.requestAnimationFrame(updateLevel);
@@ -208,16 +220,16 @@ export async function startSpeechRecording(onLevel: (level: number) => void): Pr
       }
       stopped = true;
       return new Promise<SpeechRecordingClip>((resolve, reject) => {
-        recorder.onerror = () => {
-          cleanup();
-          reject(new Error("The microphone line went quiet."));
-        };
+        stopResolve = resolve;
+        stopReject = reject;
         recorder.onstop = async () => {
           cleanup();
           const durationMs = performance.now() - startedAt;
           const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
           if (durationMs < 500 || blob.size < 300) {
             reject(new Error("The recording is too short."));
+            stopResolve = null;
+            stopReject = null;
             return;
           }
           resolve({
@@ -225,6 +237,8 @@ export async function startSpeechRecording(onLevel: (level: number) => void): Pr
             mimeType: blob.type || "audio/webm",
             durationMs
           });
+          stopResolve = null;
+          stopReject = null;
         };
         recorder.stop();
       });
@@ -232,6 +246,8 @@ export async function startSpeechRecording(onLevel: (level: number) => void): Pr
     cancel: () => {
       if (stopped) return;
       stopped = true;
+      stopResolve = null;
+      stopReject = null;
       recorder.onerror = null;
       recorder.onstop = cleanup;
       if (recorder.state === "inactive") cleanup();
@@ -321,17 +337,24 @@ function speakWithBrowser(text: string, config: SpeechProviderConfig, callbacks:
 function playAudioDataUrl(dataUrl: string, callbacks: SpeechPlaybackCallbacks): Promise<void> {
   return new Promise((resolve, reject) => {
     const audio = new Audio(dataUrl);
+    const release = () => {
+      audio.pause();
+      audio.src = "";
+    };
     audio.onplay = () => callbacks.onStart?.();
     audio.onended = () => {
+      release();
       callbacks.onEnd?.();
       resolve();
     };
     audio.onerror = () => {
+      release();
       callbacks.onError?.();
       callbacks.onEnd?.();
       reject(new Error("The curator voice could not be played."));
     };
     void audio.play().catch((error) => {
+      release();
       callbacks.onError?.();
       callbacks.onEnd?.();
       reject(error);

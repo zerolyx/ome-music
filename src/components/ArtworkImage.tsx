@@ -10,13 +10,14 @@ interface ArtworkImageProps {
 }
 
 export function ArtworkImage({ src, alt, source, className, fallbackClassName }: ArtworkImageProps) {
-  const [failed, setFailed] = useState(!src);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const failed = !src || failedSrc === src;
 
   useEffect(() => {
-    setFailed(!src);
+    setFailedSrc(null);
   }, [src]);
 
-  if (failed || !src) {
+  if (failed) {
     return (
       <div
         className={clsx(
@@ -34,5 +35,5 @@ export function ArtworkImage({ src, alt, source, className, fallbackClassName }:
     );
   }
 
-  return <img src={src} alt={alt} className={className} onError={() => setFailed(true)} />;
+  return <img src={src} alt={alt} className={className} onError={() => setFailedSrc(src)} />;
 }

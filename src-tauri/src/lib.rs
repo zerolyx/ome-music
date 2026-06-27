@@ -22,6 +22,7 @@ use walkdir::WalkDir;
 
 const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "wav", "m4a"];
 const INITIAL_SCHEMA: &str = include_str!("../migrations/001_initial_schema.sql");
+const MIGRATION_002: &str = include_str!("../migrations/002_mood_note_rename_and_indexes.sql");
 const LLM_KEYRING_SERVICE: &str = "ome.music.provider";
 const LLM_KEYRING_ACCOUNT: &str = "local";
 const NETEASE_KEYRING_SERVICE: &str = "ome.music.source.netease";
@@ -39,7 +40,11 @@ pub struct AppState {
 struct MediaProxyEntry {
     urls: Vec<String>,
     kind: &'static str,
+    expires_at: std::time::SystemTime,
 }
+
+const MEDIA_PROXY_TTL: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+const MEDIA_PROXY_MAX_ENTRIES: usize = 256;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -891,15 +896,28 @@ async fn import_music_folder(
 
     let folder_path = folder_path
         .as_path()
-        .ok_or_else(|| "鏃犳硶璇诲彇鎵€閫夋枃浠跺す璺緞".to_string())?
+        .ok_or_else(|| "Could not read the selected folder path.".to_string())?
         .to_path_buf();
+
+    let directory_label = folder_path.to_string_lossy().to_string();
+
+    // Discovery + tag parsing is CPU/IO heavy. Run it off the async executor so the
+    // Tauri command loop stays responsive; only the DB upserts touch the connection.
+    let discovered = tauri::async_runtime::spawn_blocking(move || {
+        discover_audio_files(&folder_path)
+            .into_iter()
+            .map(|file_path| (file_path.clone(), parse_track(&file_path)))
+            .collect::<Vec<_>>()
+    })
+    .await
+    .map_err(|error| error.to_string())?;
 
     let mut imported_count = 0;
     let mut skipped_count = 0;
     let db = state.db.lock().map_err(|error| error.to_string())?;
 
-    for file_path in discover_audio_files(&folder_path) {
-        match parse_track(&file_path).and_then(|track| upsert_track(&db, &track).map(|_| track)) {
+    for (file_path, parsed) in discovered {
+        match parsed.and_then(|track| upsert_track(&db, &track).map(|_| track)) {
             Ok(_) => imported_count += 1,
             Err(error) => {
                 eprintln!("skipped audio file {}: {error}", file_path.display());
@@ -909,7 +927,7 @@ async fn import_music_folder(
     }
 
     Ok(ImportResult {
-        directory: Some(folder_path.to_string_lossy().to_string()),
+        directory: Some(directory_label),
         imported_count,
         skipped_count,
         tracks: load_tracks(&db)?,
@@ -2036,7 +2054,9 @@ async fn generate_llm_text(
 
     {
         let db = state.db.lock().map_err(|error| error.to_string())?;
-        let _ = insert_llm_request_audit(&db, &config.provider_name, &payload.purpose, &text);
+        if let Err(error) = insert_llm_request_audit(&db, &config.provider_name, &payload.purpose, &text) {
+            eprintln!("llm audit log failed: {error}");
+        }
     }
 
     Ok(LlmTextResponse {
@@ -2516,7 +2536,13 @@ fn initialize_database(app: &tauri::App) -> Result<Connection, String> {
     fs::create_dir_all(&app_data_dir).map_err(|error| error.to_string())?;
     let db_path = app_data_dir.join("ome_music.sqlite3");
     let db = Connection::open(db_path).map_err(|error| error.to_string())?;
+    // Enforce foreign keys on this connection so legacy ON DELETE CASCADE rules fire.
+    db.execute_batch("PRAGMA foreign_keys = ON;")
+        .map_err(|error| error.to_string())?;
     db.execute_batch(INITIAL_SCHEMA)
+        .map_err(|error| error.to_string())?;
+    ensure_mood_entries_note_text(&db)?;
+    db.execute_batch(MIGRATION_002)
         .map_err(|error| error.to_string())?;
     ensure_track_columns(&db)?;
     ensure_profile_tables(&db)?;
@@ -2524,6 +2550,31 @@ fn initialize_database(app: &tauri::App) -> Result<Connection, String> {
     ensure_music_source_tables(&db)?;
     ensure_lyrics_tables(&db)?;
     Ok(db)
+}
+
+fn ensure_mood_entries_note_text(db: &Connection) -> Result<(), String> {
+    // Rename the legacy `note_encrypted` column to `note_text` once. The journal has
+    // never actually stored ciphertext; the old name misled readers into assuming
+    // encryption that did not exist.
+    let has_old: bool = db
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('mood_entries') WHERE name = 'note_encrypted')",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    let has_new: bool = db
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('mood_entries') WHERE name = 'note_text')",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    if has_old && !has_new {
+        db.execute("ALTER TABLE mood_entries RENAME COLUMN note_encrypted TO note_text", [])
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 fn build_storage_report(app: &AppHandle, state: &State<'_, AppState>) -> Result<StorageReportDto, String> {
@@ -2981,17 +3032,19 @@ fn save_llm_provider_config_to_db(db: &Connection, payload: SaveLlmProviderConfi
 }
 
 fn save_llm_api_key(api_key: &str) -> Result<(), String> {
-    let keyring_result = keyring::Entry::new(LLM_KEYRING_SERVICE, LLM_KEYRING_ACCOUNT)
+    // Reject plaintext fallback: secrets must live in the OS keyring. If the keyring is
+    // unavailable we surface the error so the caller can warn the listener instead of
+    // silently writing recoverable base64 to disk.
+    keyring::Entry::new(LLM_KEYRING_SERVICE, LLM_KEYRING_ACCOUNT)
         .map_err(|error| error.to_string())?
         .set_password(api_key)
-        .map_err(|error| error.to_string());
-    let fallback_result = save_llm_api_key_fallback(api_key);
+        .map_err(|error| error.to_string())?;
 
-    if keyring_result.is_ok() || fallback_result.is_ok() {
-        Ok(())
-    } else {
-        Err(keyring_result.err().or_else(|| fallback_result.err()).unwrap_or_else(|| "Could not save curator source credential.".to_string()))
+    // Clean up any legacy plaintext fallback from older builds.
+    if let Some(path) = llm_api_key_fallback_path() {
+        let _ = fs::remove_file(path);
     }
+    Ok(())
 }
 
 fn read_llm_api_key() -> Option<String> {
@@ -3001,14 +3054,6 @@ fn read_llm_api_key() -> Option<String> {
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
         .or_else(read_llm_api_key_fallback)
-}
-
-fn save_llm_api_key_fallback(api_key: &str) -> Result<(), String> {
-    let path = llm_api_key_fallback_path().ok_or_else(|| "Could not locate local config folder.".to_string())?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(path, general_purpose::STANDARD.encode(api_key.as_bytes())).map_err(|error| error.to_string())
 }
 
 fn read_llm_api_key_fallback() -> Option<String> {
@@ -3132,16 +3177,17 @@ fn resolve_netease_source_config(
 }
 
 fn save_netease_token(token: &str) -> Result<(), String> {
-    let keyring_result = keyring::Entry::new(NETEASE_KEYRING_SERVICE, NETEASE_KEYRING_ACCOUNT)
-        .map_err(|error| error.to_string())
-        .and_then(|entry| entry.set_password(token).map_err(|error| error.to_string()));
-    let fallback_result = save_netease_token_fallback(token);
+    // Reject plaintext fallback: sessions must live in the OS keyring.
+    keyring::Entry::new(NETEASE_KEYRING_SERVICE, NETEASE_KEYRING_ACCOUNT)
+        .map_err(|error| error.to_string())?
+        .set_password(token)
+        .map_err(|error| error.to_string())?;
 
-    if keyring_result.is_ok() || fallback_result.is_ok() {
-        Ok(())
-    } else {
-        Err(keyring_result.err().or_else(|| fallback_result.err()).unwrap_or_else(|| "Could not save source session.".to_string()))
+    // Clean up any legacy plaintext fallback from older builds.
+    if let Some(path) = netease_token_fallback_path() {
+        let _ = fs::remove_file(path);
     }
+    Ok(())
 }
 
 fn read_netease_token() -> Option<String> {
@@ -3161,14 +3207,6 @@ fn delete_netease_token() -> Result<(), String> {
         let _ = fs::remove_file(path);
     }
     Ok(())
-}
-
-fn save_netease_token_fallback(token: &str) -> Result<(), String> {
-    let path = netease_token_fallback_path().ok_or_else(|| "Could not locate local config folder.".to_string())?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(path, general_purpose::STANDARD.encode(token.as_bytes())).map_err(|error| error.to_string())
 }
 
 fn read_netease_token_fallback() -> Option<String> {
@@ -3304,23 +3342,17 @@ fn resolve_bilibili_source_config(
 }
 
 fn save_bilibili_token(token: &str) -> Result<(), String> {
-    let keyring_result = keyring::Entry::new(BILIBILI_KEYRING_SERVICE, BILIBILI_KEYRING_ACCOUNT)
-        .map_err(|error| error.to_string())
-        .and_then(|entry| entry.set_password(token).map_err(|error| error.to_string()));
+    // Reject plaintext fallback: Bilibili sessions must live in the OS keyring.
+    keyring::Entry::new(BILIBILI_KEYRING_SERVICE, BILIBILI_KEYRING_ACCOUNT)
+        .map_err(|error| error.to_string())?
+        .set_password(token)
+        .map_err(|error| error.to_string())?;
 
-    if keyring_result.is_ok() {
-        if let Some(path) = bilibili_token_fallback_path() {
-            let _ = fs::remove_file(path);
-        }
-        return Ok(());
+    // Clean up any legacy plaintext fallback from older builds.
+    if let Some(path) = bilibili_token_fallback_path() {
+        let _ = fs::remove_file(path);
     }
-
-    save_bilibili_token_fallback(token).map_err(|fallback_error| {
-        keyring_result
-            .err()
-            .map(|keyring_error| format!("Could not save Bilibili session. {keyring_error}; {fallback_error}"))
-            .unwrap_or(fallback_error)
-    })
+    Ok(())
 }
 
 fn read_bilibili_token() -> Option<String> {
@@ -3340,14 +3372,6 @@ fn delete_bilibili_token() -> Result<(), String> {
         let _ = fs::remove_file(path);
     }
     Ok(())
-}
-
-fn save_bilibili_token_fallback(token: &str) -> Result<(), String> {
-    let path = bilibili_token_fallback_path().ok_or_else(|| "Could not locate local config folder.".to_string())?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(path, general_purpose::STANDARD.encode(token.as_bytes())).map_err(|error| error.to_string())
 }
 
 fn read_bilibili_token_fallback() -> Option<String> {
@@ -3987,11 +4011,11 @@ fn dedupe_danmaku(items: Vec<DanmakuItemDto>) -> Vec<DanmakuItemDto> {
 
 fn decode_xml_text(value: &str) -> String {
     value
-        .replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&apos;", "'")
+        .replace("&amp;", "&")
         .trim()
         .to_string()
 }
@@ -4253,12 +4277,36 @@ fn register_media_proxy_candidates(
     if urls.is_empty() {
         return Err("Media source is unavailable.".to_string());
     }
-    let token = stable_id(&format!("{kind}:{}", urls.join("|")));
-    state
-        .media_proxy
-        .lock()
-        .map_err(|error| error.to_string())?
-        .insert(token.clone(), MediaProxyEntry { urls, kind });
+    // Token must be unguessable: combine the URL hash with a process-wide counter
+    // and the current monotonic time so consecutive registrations differ even for
+    // identical inputs. SHA-1 is fine here as a mixing function (not a password).
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nonce = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let salt = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let token = stable_id(&format!("{kind}:{nonce}:{salt}:{}", urls.join("|")));
+
+    let mut registry = state.media_proxy.lock().map_err(|error| error.to_string())?;
+    // Evict expired entries and enforce a soft LRU cap.
+    let now = std::time::SystemTime::now();
+    registry.retain(|_, entry| now < entry.expires_at);
+    if registry.len() >= MEDIA_PROXY_MAX_ENTRIES {
+        // Drop the oldest entry by expiry time.
+        let oldest_key = registry
+            .iter()
+            .min_by_key(|(_, entry)| entry.expires_at)
+            .map(|(key, _)| key.clone());
+        if let Some(key) = oldest_key {
+            registry.remove(&key);
+        }
+    }
+    registry.insert(token.clone(), MediaProxyEntry {
+        urls,
+        kind,
+        expires_at: now + MEDIA_PROXY_TTL,
+    });
 
     #[cfg(target_os = "windows")]
     return Ok(format!("http://ome-media.localhost/{token}"));
@@ -4273,7 +4321,8 @@ async fn respond_bilibili_media(app: AppHandle, request: tauri::http::Request<Ve
         .media_proxy
         .lock()
         .ok()
-        .and_then(|registry| registry.get(token).cloned());
+        .and_then(|registry| registry.get(token).cloned())
+        .filter(|entry| entry.expires_at > std::time::SystemTime::now());
     let Some(entry) = entry else {
         return media_proxy_error(tauri::http::StatusCode::NOT_FOUND, "Media link expired.");
     };
@@ -4329,7 +4378,6 @@ async fn respond_bilibili_media(app: AppHandle, request: tauri::http::Request<Ve
     let content_length = if is_head { remote_content_length.unwrap_or(0) as usize } else { body.len() };
     let mut builder = tauri::http::Response::builder()
         .status(status)
-        .header(tauri::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
         .header(tauri::http::header::CACHE_CONTROL, "private, max-age=300")
         .header(tauri::http::header::CONTENT_LENGTH, content_length.to_string());
     let resolved_content_type = match content_type.as_deref() {
@@ -4353,9 +4401,13 @@ fn media_proxy_error(status: tauri::http::StatusCode, message: &str) -> tauri::h
     tauri::http::Response::builder()
         .status(status)
         .header(tauri::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")
-        .header(tauri::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
         .body(message.as_bytes().to_vec())
-        .unwrap()
+        .unwrap_or_else(|_| {
+            tauri::http::Response::builder()
+                .status(status)
+                .body(Vec::new())
+                .expect("empty media proxy error body must build")
+        })
 }
 
 fn parse_bilibili_duration(value: Option<&serde_json::Value>) -> Option<u64> {
@@ -6117,13 +6169,13 @@ fn save_mood_entry_to_db(db: &Connection, payload: SaveMoodEntryPayload) -> Resu
 
     db.execute(
         "INSERT INTO mood_entries (
-          id, entry_date, mood, note_encrypted, private_tags_json,
+          id, entry_date, mood, note_text, private_tags_json,
           recommended_track_ids_json, created_at, updated_at
         )
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON CONFLICT(entry_date) DO UPDATE SET
           mood = excluded.mood,
-          note_encrypted = excluded.note_encrypted,
+          note_text = excluded.note_text,
           private_tags_json = excluded.private_tags_json,
           recommended_track_ids_json = excluded.recommended_track_ids_json,
           updated_at = CURRENT_TIMESTAMP",
@@ -6167,7 +6219,7 @@ fn load_mood_entries_by_where<P: rusqlite::Params>(
     _limit: u32,
 ) -> Result<Vec<MoodEntryDto>, String> {
     let sql = format!(
-        "SELECT id, entry_date, mood, note_encrypted, private_tags_json, recommended_track_ids_json, created_at
+        "SELECT id, entry_date, mood, note_text, private_tags_json, recommended_track_ids_json, created_at
          FROM mood_entries {clause}"
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
@@ -6788,9 +6840,15 @@ mod tests {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if let Err(error) = run_inner() {
+        eprintln!("Ome Music failed to start: {error}");
+        std::process::exit(1);
+    }
+}
+
+fn run_inner() -> Result<(), Box<dyn std::error::Error>> {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol("ome-media", |context, request, responder| {
             let app = context.app_handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -6873,7 +6931,7 @@ pub fn run() {
             save_playlist_analysis_result,
             get_latest_playlist_analysis
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Ome Music");
+        .run(tauri::generate_context!())?;
+    Ok(())
 }
 

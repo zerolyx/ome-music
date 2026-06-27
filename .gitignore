@@ -82,3 +82,8 @@ PersonalConfig/
 # OS
 .DS_Store
 Thumbs.db
+
+# Editor / direnv
+.envrc
+*.swp
+*~
