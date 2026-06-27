@@ -91,7 +91,7 @@ export function NowPlayingHero({
   const isBilibiliStage = track.source === "bilibili" && !isLyricsLoading && lyrics.length === 0;
 
   return (
-    <section className="now-playing-stage relative mx-auto grid min-h-screen w-full max-w-[1780px] grid-cols-1 items-center gap-12 px-[clamp(2rem,5vw,6rem)] md:grid-cols-[minmax(280px,0.82fr)_minmax(500px,1.38fr)] md:gap-[clamp(3rem,5.6vw,6.5rem)]">
+    <section className="now-playing-stage relative mx-auto grid w-full max-w-[1780px] grid-cols-1 items-center gap-12 overflow-hidden px-[clamp(2rem,5vw,6rem)] md:grid-cols-[minmax(280px,0.82fr)_minmax(500px,1.38fr)] md:gap-[clamp(3rem,5.6vw,6.5rem)]">
       <div data-danmaku-safe-zone="left-visual" className="left-visual-stack relative z-10 flex min-w-0 flex-col items-center md:items-start">
         <div className="record-sleeve">
           <ArtworkImage src={track.coverUrl} alt={track.album || track.title} source={track.source} className="h-full w-full rounded-[18px] object-cover" />

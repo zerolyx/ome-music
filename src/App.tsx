@@ -1047,7 +1047,7 @@ export default function App() {
         />
       )}
 
-      <main className="relative min-h-screen">
+      <main className="relative h-screen overflow-hidden">
         <NowPlayingHero
           track={currentTrack}
           lyrics={lyrics}
