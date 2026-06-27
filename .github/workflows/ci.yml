@@ -1,0 +1,55 @@
+name: CI
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "LICENSE"
+  pull_request:
+    branches: [main]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  # ── Rust 检查 ──────────────────────────────────────────────
+  rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - name: 安装 Tauri 系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev libgtk-3-dev
+      - name: cargo check
+        run: cargo check --workspace
+      - name: cargo clippy
+        run: cargo clippy --workspace -- -D warnings
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+  # ── TypeScript 检查 ────────────────────────────────────────
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: TypeScript 类型检查
+        run: npx tsc --noEmit
+      - name: ESLint
+        run: npm run lint
+      - name: Prettier
+        run: npm run format:check

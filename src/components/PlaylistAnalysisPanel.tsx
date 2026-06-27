@@ -9,7 +9,12 @@ interface PlaylistAnalysisPanelProps {
   onAnalyze: () => void;
 }
 
-export function PlaylistAnalysisPanel({ report, isAnalyzing, trackCount, onAnalyze }: PlaylistAnalysisPanelProps) {
+export function PlaylistAnalysisPanel({
+  report,
+  isAnalyzing,
+  trackCount,
+  onAnalyze,
+}: PlaylistAnalysisPanelProps) {
   const [isOpen, setOpen] = useState(false);
   const final = report?.finalInterpretation;
 
@@ -43,7 +48,11 @@ export function PlaylistAnalysisPanel({ report, isAnalyzing, trackCount, onAnaly
               disabled={isAnalyzing || trackCount === 0}
               className="app-transition inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-white/[0.1] px-4 text-sm font-medium text-white/70 hover:bg-white/[0.16] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {isAnalyzing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
               {isAnalyzing ? "解读中" : report ? "重新解读" : "开始解读"}
             </button>
           </div>
@@ -56,7 +65,9 @@ export function PlaylistAnalysisPanel({ report, isAnalyzing, trackCount, onAnaly
             <div className="mb-6 flex items-start justify-between gap-5">
               <div>
                 <p className="text-sm font-medium text-white/44">歌单解读</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">{report?.playlistName ?? "当前曲库"}</h2>
+                <h2 className="mt-2 text-2xl font-semibold text-white">
+                  {report?.playlistName ?? "当前曲库"}
+                </h2>
               </div>
               <button
                 type="button"
@@ -75,11 +86,15 @@ export function PlaylistAnalysisPanel({ report, isAnalyzing, trackCount, onAnaly
               </div>
             )}
 
-            {!isAnalyzing && !final && <p className="text-sm leading-6 text-white/42">只读取曲目信息，不发送音频文件。</p>}
+            {!isAnalyzing && !final && (
+              <p className="text-sm leading-6 text-white/42">只读取曲目信息，不发送音频文件。</p>
+            )}
 
             {!isAnalyzing && final && (
               <div className="space-y-7">
-                <p className="max-w-3xl text-2xl font-semibold leading-9 text-white/86">{final.musicPersonality}</p>
+                <p className="max-w-3xl text-2xl font-semibold leading-9 text-white/86">
+                  {final.musicPersonality}
+                </p>
 
                 <div className="grid gap-6 md:grid-cols-3">
                   <TextGroup title="情绪" items={final.favoriteMoods} />
@@ -87,7 +102,9 @@ export function PlaylistAnalysisPanel({ report, isAnalyzing, trackCount, onAnaly
                   <TextGroup title="风格" items={final.genrePreferences} />
                 </div>
 
-                <p className="max-w-3xl text-sm leading-6 text-white/48">{final.recommendationStrategy}</p>
+                <p className="max-w-3xl text-sm leading-6 text-white/48">
+                  {final.recommendationStrategy}
+                </p>
 
                 {report.layeredChunks.length > 0 && (
                   <div className="grid gap-3 md:grid-cols-3">
@@ -118,7 +135,10 @@ function TextGroup({ title, items }: { title: string; items: string[] }) {
       <div className="mb-3 text-xs font-medium tracking-[0.12em] text-white/34">{title}</div>
       <div className="flex flex-wrap gap-2">
         {items.slice(0, 4).map((item) => (
-          <span key={item} className="rounded-full bg-white/[0.06] px-3 py-1.5 text-sm text-white/52">
+          <span
+            key={item}
+            className="rounded-full bg-white/[0.06] px-3 py-1.5 text-sm text-white/52"
+          >
             {item}
           </span>
         ))}

@@ -37,7 +37,7 @@ export function loadLastSessionSnapshot(): LastSessionSnapshot | null {
       position: Number(parsed.position || 0),
       volume: Number.isFinite(parsed.volume) ? Number(parsed.volume) : 0.72,
       backgroundColors: Array.isArray(parsed.backgroundColors) ? parsed.backgroundColors : [],
-      updatedAt: parsed.updatedAt || new Date(0).toISOString()
+      updatedAt: parsed.updatedAt || new Date(0).toISOString(),
     };
   } catch {
     return null;
@@ -63,7 +63,7 @@ export function snapshotToTrack(snapshot: LastSessionSnapshot): Track {
     playCount: 0,
     skipCount: 0,
     liked: false,
-    importedAt: snapshot.updatedAt
+    importedAt: snapshot.updatedAt,
   };
 }
 
@@ -81,7 +81,7 @@ export function saveLastSessionSnapshot(track: Track, position: number, volume: 
     position: Math.max(0, Math.floor(position)),
     volume,
     backgroundColors: [],
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   };
 
   try {

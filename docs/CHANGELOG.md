@@ -6,6 +6,26 @@
 
 ---
 
+## [Unreleased]
+
+### 新增
+- **CI 流水线**（来自 [@chinokoyuki](https://github.com/chinokoyuki) 的 [PR #2](https://github.com/zerolyx/ome-music/pull/2)，采纳配置部分）：新增 `.github/workflows/ci.yml`，对 `main` 分支与 PR 运行 Rust（`cargo check` / `cargo clippy -D warnings` / `cargo fmt --check`）与 TypeScript（`tsc --noEmit` / `eslint` / `prettier --check`）两套检查，支持 `paths-ignore` 跳过纯文档变更，使用 `Swatinem/rust-cache@v2` 与 `cancel-in-progress` 节省 CI 资源。
+- **代码风格基线**：新增 ESLint 9 flat config（`eslint.config.mjs`，含 `typescript-eslint`、`react-hooks`、`react-refresh` 插件）与 Prettier 配置（`.prettierrc`），并补充 `lint` / `format` / `format:check` 脚本与对应 devDependencies。
+- **Docker 镜像构建**：新增 `Dockerfile.api`（基于 `node:22-alpine` 的 `NeteaseCloudMusicApi` 服务镜像）与 `Dockerfile.build`（基于 `ubuntu:24.04` 的 Tauri Linux 构建环境镜像）；在 `release.yml` 中追加 `docker-api` 与 `docker-build-env` 两个 job，跟随版本 tag 推送到 GHCR（`ghcr.io/zerolyx/ome-netease-api` 与 `ghcr.io/zerolyx/ome-build-env`），并为 release workflow 增加 `packages: write` 权限。
+- **贡献者名单**：`CONTRIBUTING.md` 新增 Contributors 章节，登记 [@zerolyx](https://github.com/zerolyx)（创建者）与 [@chinokoyuki](https://github.com/chinokoyuki)（CI/CD 流水线贡献）；PR 提交前检查清单同步更新为包含 `npm run lint` / `format:check` / `tsc --noEmit` 与 `cargo fmt --check` / `clippy -D warnings`。
+
+### 修复
+- **预存 ESLint error 清理**（使新流水线可正常通过）：
+  - 删除 `src/App.tsx` 中从未被调用的 `isRestoredOnlyTrack` 函数与配套 `restoredOnlyPrefixPattern` 正则（dead code）。
+  - 移除 `src/features/speech/provider.ts` 中只赋值不读取的 `stopResolve` 状态变量，Promise 仍通过闭包内的 `resolve` / `reject` 正常完成。
+- **统一代码风格**：对全仓 `src/**` 与配置文件运行 `prettier --write`，36 个文件统一为 2 空格缩进、双引号、行宽 100、LF 结尾的风格。
+
+### 变更
+- CI/CD 配置文件提取自 PR #2，未合并该 PR 中的 43 个源码改动（与 v0.3 代码已分叉，直接合并会回滚 v0.3 的引导界面与登录修复）。
+- `release.yml` 中 Docker 构建任务与既有中文 releaseBody 并存，未覆盖原有版本说明。
+
+---
+
 ## [0.3.0] — 2026-06-27
 
 ### 新增

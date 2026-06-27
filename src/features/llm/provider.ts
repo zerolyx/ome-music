@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { isTauriRuntime } from "../library/libraryApi";
 
-export type MusicUnderstandingPurpose = "playlist_analysis" | "preference_summary" | "recommendation_reason";
+export type MusicUnderstandingPurpose =
+  "playlist_analysis" | "preference_summary" | "recommendation_reason";
 
 export interface LlmProviderConfig {
   providerName: string;
@@ -54,7 +55,7 @@ const emptyProviderConfig: LlmProviderConfig = {
   model: "",
   maskedApiKey: "",
   hasApiKey: false,
-  configured: false
+  configured: false,
 };
 
 let devPreviewConfig = emptyProviderConfig;
@@ -67,7 +68,9 @@ export async function getLlmProviderConfig(): Promise<LlmProviderConfig> {
   return invoke<LlmProviderConfig>("get_llm_provider_config");
 }
 
-export async function saveLlmProviderConfig(payload: SaveLlmProviderConfigPayload): Promise<LlmProviderConfig> {
+export async function saveLlmProviderConfig(
+  payload: SaveLlmProviderConfigPayload,
+): Promise<LlmProviderConfig> {
   if (!isTauriRuntime()) {
     devPreviewConfig = {
       providerName: payload.providerName,
@@ -75,7 +78,7 @@ export async function saveLlmProviderConfig(payload: SaveLlmProviderConfigPayloa
       model: payload.model,
       maskedApiKey: payload.apiKey ? "••••••••••••" : devPreviewConfig.maskedApiKey,
       hasApiKey: Boolean(payload.apiKey) || devPreviewConfig.hasApiKey,
-      configured: false
+      configured: false,
     };
     return devPreviewConfig;
   }
@@ -107,8 +110,8 @@ export class ConfiguredLlmProvider implements MusicUnderstandingProvider {
         systemPrompt: request.systemPrompt,
         userPrompt: request.userPrompt,
         maxTokens: request.maxTokens,
-        temperature: request.temperature
-      }
+        temperature: request.temperature,
+      },
     });
 
     return response.text;

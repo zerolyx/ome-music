@@ -15,12 +15,7 @@ export type TrackMood =
 export type JournalMood = "开心" | "平静" | "疲惫" | "焦虑" | "伤感" | "兴奋";
 
 export type DesiredMusicVibe =
-  | "安静氛围"
-  | "轻快明亮"
-  | "专注背景"
-  | "情绪陪伴"
-  | "能量提升"
-  | "探索新歌";
+  "安静氛围" | "轻快明亮" | "专注背景" | "情绪陪伴" | "能量提升" | "探索新歌";
 
 export type LoopMode = "off" | "one" | "all";
 

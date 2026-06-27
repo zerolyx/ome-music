@@ -26,7 +26,7 @@ const emptyBucket: StorageBucket = {
   label: "Unavailable",
   bytes: 0,
   displaySize: "0 B",
-  path: ""
+  path: "",
 };
 
 export async function getStorageReport(): Promise<StorageReport> {
@@ -40,7 +40,7 @@ export async function getStorageReport(): Promise<StorageReport> {
       database: emptyBucket,
       totalCacheBytes: 0,
       totalCacheDisplaySize: "0 B",
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
     };
   }
 

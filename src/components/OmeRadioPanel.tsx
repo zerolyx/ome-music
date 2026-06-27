@@ -15,10 +15,15 @@ const radioKinds: Array<{ kind: RadioKind; label: string }> = [
   { kind: "memory", label: "Memory" },
   { kind: "lateNight", label: "Late" },
   { kind: "quietRoom", label: "Soft" },
-  { kind: "discovery", label: "Drift" }
+  { kind: "discovery", label: "Drift" },
 ];
 
-export function OmeRadioPanel({ session, currentTrack, onCreateRadio, onStartRadio }: OmeRadioPanelProps) {
+export function OmeRadioPanel({
+  session,
+  currentTrack,
+  onCreateRadio,
+  onStartRadio,
+}: OmeRadioPanelProps) {
   const [isOpen, setOpen] = useState(false);
   const activeTrack = session?.tracks[session.currentTrackIndex] ?? currentTrack;
   const hostNote = session?.hostNotes[session.hostNotes.length - 1]?.text;
@@ -32,7 +37,7 @@ export function OmeRadioPanel({ session, currentTrack, onCreateRadio, onStartRad
       data-danmaku-safe-zone="radio"
       className={clsx(
         "fixed left-5 top-1/2 z-30 w-[min(310px,calc(100vw-56px))] -translate-y-1/2 transition duration-[520ms] ease-out",
-        isOpen ? "translate-x-0 opacity-100" : "-translate-x-[calc(100%-48px)] opacity-72"
+        isOpen ? "translate-x-0 opacity-100" : "-translate-x-[calc(100%-48px)] opacity-72",
       )}
     >
       <div className="overflow-hidden rounded-[30px] border border-[#4a2108]/[0.035] bg-[#eadbcd]/[0.18] shadow-[0_22px_70px_rgba(74,33,8,0.10)] backdrop-blur-3xl">
@@ -45,13 +50,25 @@ export function OmeRadioPanel({ session, currentTrack, onCreateRadio, onStartRad
           >
             {isOpen ? <ChevronRight className="h-4 w-4" /> : <Radio className="h-4 w-4" />}
           </button>
-          <div className={clsx("min-w-0 transition duration-[420ms]", isOpen ? "opacity-100" : "opacity-0")}>
-            <p className="text-xs font-semibold text-[#4a2108]/46">{session ? radioStatusLabel(session.status) : "Off Air"}</p>
+          <div
+            className={clsx(
+              "min-w-0 transition duration-[420ms]",
+              isOpen ? "opacity-100" : "opacity-0",
+            )}
+          >
+            <p className="text-xs font-semibold text-[#4a2108]/46">
+              {session ? radioStatusLabel(session.status) : "Off Air"}
+            </p>
             <h2 className="truncate text-[15px] font-black text-[#4a2108]">Ome Radio</h2>
           </div>
         </div>
 
-        <div className={clsx("transition duration-[520ms] ease-out", isOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0")}>
+        <div
+          className={clsx(
+            "transition duration-[520ms] ease-out",
+            isOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0",
+          )}
+        >
           <div className="px-5 pb-5 pt-3">
             <div className="rounded-[24px] bg-[#4a2108]/[0.045] p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#4a2108]/30">
@@ -103,15 +120,23 @@ function RadioLine({ label, track }: { label: string; track: Track | null }) {
   return (
     <div className="flex items-center gap-3 rounded-[18px] bg-[#4a2108]/[0.04] px-3 py-2">
       {track ? (
-        <img src={track.coverUrl} alt="" className="h-9 w-9 rounded-[10px] object-cover shadow-[0_10px_24px_rgba(74,33,8,0.16)]" />
+        <img
+          src={track.coverUrl}
+          alt=""
+          className="h-9 w-9 rounded-[10px] object-cover shadow-[0_10px_24px_rgba(74,33,8,0.16)]"
+        />
       ) : (
         <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#4a2108]/[0.06] text-[#4a2108]/38">
           <Disc3 className="h-4 w-4" />
         </span>
       )}
       <div className="min-w-0">
-        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#4a2108]/28">{label}</p>
-        <p className="truncate text-sm font-black text-[#4a2108]/70">{track?.title ?? "Waiting for records"}</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#4a2108]/28">
+          {label}
+        </p>
+        <p className="truncate text-sm font-black text-[#4a2108]/70">
+          {track?.title ?? "Waiting for records"}
+        </p>
       </div>
     </div>
   );

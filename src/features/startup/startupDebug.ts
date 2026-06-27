@@ -17,12 +17,14 @@ const start = typeof performance !== "undefined" ? performance.now() : Date.now(
 
 const debug: StartupEntry = {
   appStartAt: 0,
-  blockingTasks: []
+  blockingTasks: [],
 };
 
 export function markStartup(name: StartupMark): void {
   if (!enabled) return;
-  debug[name] = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - start);
+  debug[name] = Math.round(
+    (typeof performance !== "undefined" ? performance.now() : Date.now()) - start,
+  );
 }
 
 export function noteStartupTask(task: string): void {
@@ -32,10 +34,12 @@ export function noteStartupTask(task: string): void {
 
 export function reportStartup(label = "Ome startup"): void {
   if (!enabled) return;
-  const totalStartupTime = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - start);
+  const totalStartupTime = Math.round(
+    (typeof performance !== "undefined" ? performance.now() : Date.now()) - start,
+  );
   // Keep the diagnostics in devtools only; normal users never see this.
   console.info(`[${label}]`, {
     ...debug,
-    totalStartupTime
+    totalStartupTime,
   });
 }

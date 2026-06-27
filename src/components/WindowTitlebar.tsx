@@ -14,19 +14,24 @@ export function WindowTitlebar() {
     let disposed = false;
     let unlisten: (() => void) | undefined;
 
-    void appWindow.isMaximized().then((value) => {
-      if (!disposed) setIsMaximized(value);
-    }).catch(() => undefined);
-    void appWindow.onResized(async () => {
-      if (disposed) return;
-      setIsMaximized(await appWindow.isMaximized().catch(() => false));
-    }).then((dispose) => {
-      if (disposed) {
-        dispose();
-      } else {
-        unlisten = dispose;
-      }
-    });
+    void appWindow
+      .isMaximized()
+      .then((value) => {
+        if (!disposed) setIsMaximized(value);
+      })
+      .catch(() => undefined);
+    void appWindow
+      .onResized(async () => {
+        if (disposed) return;
+        setIsMaximized(await appWindow.isMaximized().catch(() => false));
+      })
+      .then((dispose) => {
+        if (disposed) {
+          dispose();
+        } else {
+          unlisten = dispose;
+        }
+      });
 
     return () => {
       disposed = true;
@@ -47,7 +52,10 @@ export function WindowTitlebar() {
   };
 
   return (
-    <header className="window-titlebar fixed inset-x-0 top-0 z-30 h-8 select-none" aria-label="Window title bar">
+    <header
+      className="window-titlebar fixed inset-x-0 top-0 z-30 h-8 select-none"
+      aria-label="Window title bar"
+    >
       <div
         data-tauri-drag-region
         className="absolute inset-0"
@@ -57,17 +65,30 @@ export function WindowTitlebar() {
         }}
       />
 
-      <div data-tauri-drag-region className="pointer-events-none absolute left-3 top-0 flex h-8 items-center gap-2">
+      <div
+        data-tauri-drag-region
+        className="pointer-events-none absolute left-3 top-0 flex h-8 items-center gap-2"
+      >
         <span className="window-titlebar-mark h-1.5 w-1.5 rounded-full" />
         <span className="text-[10px] font-bold tracking-[0.08em] text-[#4a2108]/28">Ome Music</span>
       </div>
 
-      <div className="absolute right-1.5 top-1 z-50 flex h-6 items-center gap-0.5" data-danmaku-safe-zone="window-controls">
+      <div
+        className="absolute right-1.5 top-1 z-50 flex h-6 items-center gap-0.5"
+        data-danmaku-safe-zone="window-controls"
+      >
         <WindowButton label="Minimize" onClick={() => void runWindowAction("minimize")}>
           <Minus className="h-3.5 w-3.5" strokeWidth={1.7} />
         </WindowButton>
-        <WindowButton label={isMaximized ? "Restore" : "Maximize"} onClick={() => void runWindowAction("maximize")}>
-          {isMaximized ? <Square className="h-2.5 w-2.5" strokeWidth={1.6} /> : <Maximize2 className="h-3 w-3" strokeWidth={1.6} />}
+        <WindowButton
+          label={isMaximized ? "Restore" : "Maximize"}
+          onClick={() => void runWindowAction("maximize")}
+        >
+          {isMaximized ? (
+            <Square className="h-2.5 w-2.5" strokeWidth={1.6} />
+          ) : (
+            <Maximize2 className="h-3 w-3" strokeWidth={1.6} />
+          )}
         </WindowButton>
         <WindowButton label="Close" onClick={() => void runWindowAction("close")} close>
           <X className="h-3.5 w-3.5" strokeWidth={1.7} />
@@ -81,7 +102,7 @@ function WindowButton({
   label,
   onClick,
   close = false,
-  children
+  children,
 }: {
   label: string;
   onClick: () => void;

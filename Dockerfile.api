@@ -1,0 +1,7 @@
+# ── NeteaseCloudMusicApi 服务 ──────────────────────────────
+FROM node:22-alpine
+ENV NODE_ENV=production
+RUN npm install -g NeteaseCloudMusicApi@^4.32.0
+EXPOSE 3000
+USER node
+CMD ["NeteaseCloudMusicApi"]

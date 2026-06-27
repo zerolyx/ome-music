@@ -38,13 +38,15 @@ export const defaultDanmakuSettings: DanmakuSettings = {
   emotionalIntensity: "quiet",
   filterRepeated: true,
   hideLongComments: true,
-  avoidLyricsArea: true
+  avoidLyricsArea: true,
 };
 
 export function getDanmakuSettings(): DanmakuSettings {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? normalizeDanmakuSettings({ ...defaultDanmakuSettings, ...JSON.parse(raw) }) : defaultDanmakuSettings;
+    return raw
+      ? normalizeDanmakuSettings({ ...defaultDanmakuSettings, ...JSON.parse(raw) })
+      : defaultDanmakuSettings;
   } catch {
     return defaultDanmakuSettings;
   }
@@ -66,16 +68,29 @@ function normalizeDanmakuSettings(settings: DanmakuSettings): DanmakuSettings {
   return {
     enabled: displayMode !== "off",
     displayMode,
-    opacity: Math.max(0.12, Math.min(0.72, Number(settings.opacity) || defaultDanmakuSettings.opacity)),
+    opacity: Math.max(
+      0.12,
+      Math.min(0.72, Number(settings.opacity) || defaultDanmakuSettings.opacity),
+    ),
     density: ["low", "medium", "high"].includes(settings.density) ? settings.density : "low",
     speed: ["slow", "normal", "fast"].includes(settings.speed) ? settings.speed : "slow",
     direction: ["rtl", "ltr", "mixed"].includes(settings.direction) ? settings.direction : "rtl",
-    fontSize: ["small", "medium", "large"].includes(settings.fontSize) ? settings.fontSize : "medium",
-    motionStyle: ["classic", "drift", "meteor", "float", "pulse", "mixed"].includes(settings.motionStyle) ? settings.motionStyle : "drift",
-    entranceStyle: ["fade", "slide", "soft-rise", "glow-drift"].includes(settings.entranceStyle) ? settings.entranceStyle : "fade",
-    emotionalIntensity: ["quiet", "balanced", "expressive"].includes(settings.emotionalIntensity) ? settings.emotionalIntensity : "quiet",
+    fontSize: ["small", "medium", "large"].includes(settings.fontSize)
+      ? settings.fontSize
+      : "medium",
+    motionStyle: ["classic", "drift", "meteor", "float", "pulse", "mixed"].includes(
+      settings.motionStyle,
+    )
+      ? settings.motionStyle
+      : "drift",
+    entranceStyle: ["fade", "slide", "soft-rise", "glow-drift"].includes(settings.entranceStyle)
+      ? settings.entranceStyle
+      : "fade",
+    emotionalIntensity: ["quiet", "balanced", "expressive"].includes(settings.emotionalIntensity)
+      ? settings.emotionalIntensity
+      : "quiet",
     filterRepeated: Boolean(settings.filterRepeated),
     hideLongComments: Boolean(settings.hideLongComments),
-    avoidLyricsArea: Boolean(settings.avoidLyricsArea)
+    avoidLyricsArea: Boolean(settings.avoidLyricsArea),
   };
 }

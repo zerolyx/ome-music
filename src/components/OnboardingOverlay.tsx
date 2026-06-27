@@ -8,7 +8,6 @@ import {
   Radio,
   SkipForward,
   Sparkles,
-  X
 } from "lucide-react";
 import type { NetEaseServiceStatus } from "../features/musicSources/provider";
 
@@ -56,7 +55,7 @@ export function OnboardingOverlay({
   onClose,
   onImportMusic,
   onOpenNeteaseSettings,
-  onOpenBilibiliSettings
+  onOpenBilibiliSettings,
 }: OnboardingOverlayProps) {
   const [stepIndex, setStepIndex] = useState(0);
 
@@ -71,9 +70,7 @@ export function OnboardingOverlay({
   };
 
   const musicImported = localTrackCount > 0;
-  const neteaseReady = Boolean(
-    serviceStatus?.running || (serviceStatus?.nodeAvailable === false)
-  );
+  const neteaseReady = Boolean(serviceStatus?.running || serviceStatus?.nodeAvailable === false);
 
   const steps: OnboardingStep[] = [
     {
@@ -81,7 +78,7 @@ export function OnboardingOverlay({
       icon: Sparkles,
       title: "欢迎使用 Ome Music",
       subtitle: "Welcome to Ome Music",
-      body: "小而美的沉浸式桌面音乐播放器。支持本地音乐、网易云音乐、Bilibili 音频与氛围弹幕。让我们用几步完成初始设置，你也可以随时跳过。"
+      body: "小而美的沉浸式桌面音乐播放器。支持本地音乐、网易云音乐、Bilibili 音频与氛围弹幕。让我们用几步完成初始设置，你也可以随时跳过。",
     },
     {
       id: "local",
@@ -91,19 +88,20 @@ export function OnboardingOverlay({
       body: "点击顶部搜索框，输入本地音乐文件夹路径（如 D:\\Music），按回车即可自动扫描导入。支持 mp3、flac、wav、m4a 等格式。",
       cta: musicImported ? undefined : { label: "去导入", onClick: onImportMusic },
       done: musicImported,
-      doneLabel: `已导入 ${localTrackCount} 首`
+      doneLabel: `已导入 ${localTrackCount} 首`,
     },
     {
       id: "netease",
       icon: Cloud,
       title: "连接网易云音乐",
       subtitle: "Connect NetEase Cloud Music",
-      body: neteaseReady && !serviceStatus?.nodeAvailable
-        ? "检测到系统未安装 Node.js。网易云音乐功能（搜索、播放、封面、歌词）需要 Node.js v20+ 运行环境。请在设置中安装 Node.js，或使用外部 API 地址。本地音乐不受影响。"
-        : "网易云音乐功能需要 Node.js v20+ 和本地 API 服务。安装 Node.js 后软件会自动启动 API 服务。然后在设置中扫码登录即可播放会员歌曲。",
+      body:
+        neteaseReady && !serviceStatus?.nodeAvailable
+          ? "检测到系统未安装 Node.js。网易云音乐功能（搜索、播放、封面、歌词）需要 Node.js v20+ 运行环境。请在设置中安装 Node.js，或使用外部 API 地址。本地音乐不受影响。"
+          : "网易云音乐功能需要 Node.js v20+ 和本地 API 服务。安装 Node.js 后软件会自动启动 API 服务。然后在设置中扫码登录即可播放会员歌曲。",
       cta: { label: "去设置", onClick: onOpenNeteaseSettings },
       done: neteaseLoggedIn,
-      doneLabel: "已登录"
+      doneLabel: "已登录",
     },
     {
       id: "bilibili",
@@ -113,15 +111,15 @@ export function OnboardingOverlay({
       body: "Bilibili 音源无需额外运行环境。在设置中扫码登录后即可搜索和播放 Bilibili 音频，并解锁视频氛围层与弹幕效果。",
       cta: { label: "去设置", onClick: onOpenBilibiliSettings },
       done: bilibiliLoggedIn,
-      doneLabel: "已登录"
+      doneLabel: "已登录",
     },
     {
       id: "ready",
       icon: Check,
       title: "一切就绪",
       subtitle: "All Set",
-      body: "现在你可以开始享受音乐了。在顶部搜索框搜索歌曲，点击右上角齿轮调整歌词与弹幕，底部控制栏管理播放。祝聆听愉快！"
-    }
+      body: "现在你可以开始享受音乐了。在顶部搜索框搜索歌曲，点击右上角齿轮调整歌词与弹幕，底部控制栏管理播放。祝聆听愉快！",
+    },
   ];
 
   const currentStep = steps[stepIndex];

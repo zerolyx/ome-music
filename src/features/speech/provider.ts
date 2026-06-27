@@ -53,7 +53,7 @@ const defaultSpeechConfig: SpeechProviderConfig = {
   voice: "FunAudioLLM/CosyVoice2-0.5B:alex",
   languageDetection: true,
   sttModel: "FunAudioLLM/SenseVoiceSmall",
-  ttsModel: "FunAudioLLM/CosyVoice2-0.5B"
+  ttsModel: "FunAudioLLM/CosyVoice2-0.5B",
 };
 
 export function getSpeechProviderConfig(): SpeechProviderConfig {
@@ -68,16 +68,25 @@ export function getSpeechProviderConfig(): SpeechProviderConfig {
     const sttProvider = normalizeProvider(parsed.sttProvider);
     const ttsProvider = normalizeProvider(parsed.ttsProvider);
 
-    const ttsModel = typeof parsed.ttsModel === "string" && parsed.ttsModel.trim() ? parsed.ttsModel : defaultSpeechConfig.ttsModel;
-    const rawVoice = typeof parsed.voice === "string" && parsed.voice.trim() ? parsed.voice : defaultSpeechConfig.voice;
+    const ttsModel =
+      typeof parsed.ttsModel === "string" && parsed.ttsModel.trim()
+        ? parsed.ttsModel
+        : defaultSpeechConfig.ttsModel;
+    const rawVoice =
+      typeof parsed.voice === "string" && parsed.voice.trim()
+        ? parsed.voice
+        : defaultSpeechConfig.voice;
 
     return {
       sttProvider: sttProvider === "off" ? "curator" : sttProvider,
       ttsProvider: ttsProvider === "off" ? "curator" : ttsProvider,
       voice: normalizeCuratorVoice(rawVoice, ttsModel),
       languageDetection: parsed.languageDetection !== false,
-      sttModel: typeof parsed.sttModel === "string" && parsed.sttModel.trim() ? parsed.sttModel : defaultSpeechConfig.sttModel,
-      ttsModel
+      sttModel:
+        typeof parsed.sttModel === "string" && parsed.sttModel.trim()
+          ? parsed.sttModel
+          : defaultSpeechConfig.sttModel,
+      ttsModel,
     };
   } catch {
     return defaultSpeechConfig;
@@ -92,7 +101,7 @@ export function saveSpeechProviderConfig(config: SpeechProviderConfig): SpeechPr
     voice: normalizeCuratorVoice(config.voice, ttsModel),
     languageDetection: config.languageDetection,
     sttModel: config.sttModel?.trim() || defaultSpeechConfig.sttModel,
-    ttsModel
+    ttsModel,
   };
 
   if (typeof window !== "undefined") {
@@ -115,7 +124,7 @@ export function listSpeechVoices(): Promise<SpeechVoiceOption[]> {
         .map((voice) => ({
           id: voice.name,
           name: voice.name,
-          lang: voice.lang
+          lang: voice.lang,
         }));
       resolve(voices);
     };
@@ -131,8 +140,14 @@ export function listSpeechVoices(): Promise<SpeechVoiceOption[]> {
   });
 }
 
-export async function startSpeechRecording(onLevel: (level: number) => void): Promise<SpeechRecordingSession> {
-  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+export async function startSpeechRecording(
+  onLevel: (level: number) => void,
+): Promise<SpeechRecordingSession> {
+  if (
+    typeof navigator === "undefined" ||
+    !navigator.mediaDevices?.getUserMedia ||
+    typeof MediaRecorder === "undefined"
+  ) {
     throw new Error("No microphone was found.");
   }
 
@@ -142,8 +157,8 @@ export async function startSpeechRecording(onLevel: (level: number) => void): Pr
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: true
-      }
+        autoGainControl: true,
+      },
     });
   } catch (error) {
     const name = error instanceof DOMException ? error.name : "";
@@ -194,7 +209,6 @@ export async function startSpeechRecording(onLevel: (level: number) => void): Pr
     void audioContext.close().catch(() => undefined);
   };
 
-  let stopResolve: ((clip: SpeechRecordingClip) => void) | null = null;
   let stopReject: ((error: Error) => void) | null = null;
 
   recorder.ondataavailable = (event) => {
@@ -205,7 +219,6 @@ export async function startSpeechRecording(onLevel: (level: number) => void): Pr
     const error = new Error("The microphone line went quiet.");
     if (stopReject) {
       stopReject(error);
-      stopResolve = null;
       stopReject = null;
     }
   };
@@ -220,7 +233,6 @@ export async function startSpeechRecording(onLevel: (level: number) => void): Pr
       }
       stopped = true;
       return new Promise<SpeechRecordingClip>((resolve, reject) => {
-        stopResolve = resolve;
         stopReject = reject;
         recorder.onstop = async () => {
           cleanup();
@@ -228,16 +240,14 @@ export async function startSpeechRecording(onLevel: (level: number) => void): Pr
           const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
           if (durationMs < 500 || blob.size < 300) {
             reject(new Error("The recording is too short."));
-            stopResolve = null;
             stopReject = null;
             return;
           }
           resolve({
             base64: await blobToBase64(blob),
             mimeType: blob.type || "audio/webm",
-            durationMs
+            durationMs,
           });
-          stopResolve = null;
           stopReject = null;
         };
         recorder.stop();
@@ -246,19 +256,18 @@ export async function startSpeechRecording(onLevel: (level: number) => void): Pr
     cancel: () => {
       if (stopped) return;
       stopped = true;
-      stopResolve = null;
       stopReject = null;
       recorder.onerror = null;
       recorder.onstop = cleanup;
       if (recorder.state === "inactive") cleanup();
       else recorder.stop();
-    }
+    },
   };
 }
 
 export async function transcribeRecordedSpeech(
   recording: SpeechRecordingClip,
-  config = getSpeechProviderConfig()
+  config = getSpeechProviderConfig(),
 ): Promise<string> {
   if (config.sttProvider !== "curator" || !isTauriRuntime()) {
     throw new Error("Voice transcription needs a configured speech source.");
@@ -268,8 +277,8 @@ export async function transcribeRecordedSpeech(
       audioBase64: recording.base64,
       mimeType: recording.mimeType,
       model: config.sttModel,
-      language: config.languageDetection ? undefined : "en"
-    }
+      language: config.languageDetection ? undefined : "en",
+    },
   });
   const text = response.text.trim();
   if (!text) throw new Error("Transcription failed. Please try again.");
@@ -279,7 +288,7 @@ export async function transcribeRecordedSpeech(
 export async function speakCuratorText(
   text: string,
   config = getSpeechProviderConfig(),
-  callbacks: SpeechPlaybackCallbacks = {}
+  callbacks: SpeechPlaybackCallbacks = {},
 ): Promise<boolean> {
   if (!text.trim()) return false;
 
@@ -289,8 +298,8 @@ export async function speakCuratorText(
         payload: {
           text,
           model: config.ttsModel,
-          voice: config.voice || defaultSpeechConfig.voice
-        }
+          voice: config.voice || defaultSpeechConfig.voice,
+        },
       });
       await playAudioDataUrl(response.audioDataUrl, callbacks);
       return true;
@@ -311,7 +320,11 @@ function pickRecordingMimeType(): string {
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
 }
 
-function speakWithBrowser(text: string, config: SpeechProviderConfig, callbacks: SpeechPlaybackCallbacks): boolean {
+function speakWithBrowser(
+  text: string,
+  config: SpeechProviderConfig,
+  callbacks: SpeechPlaybackCallbacks,
+): boolean {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
     return false;
   }
@@ -362,14 +375,19 @@ function playAudioDataUrl(dataUrl: string, callbacks: SpeechPlaybackCallbacks): 
   });
 }
 
-function findVoice(voices: SpeechSynthesisVoice[], selectedVoice: string): SpeechSynthesisVoice | null {
+function findVoice(
+  voices: SpeechSynthesisVoice[],
+  selectedVoice: string,
+): SpeechSynthesisVoice | null {
   if (selectedVoice) {
     const exact = voices.find((voice) => voice.name === selectedVoice);
     if (exact) return exact;
   }
 
   return (
-    voices.find((voice) => /uk|british|england|daniel|serena|george|arthur/i.test(`${voice.name} ${voice.lang}`)) ??
+    voices.find((voice) =>
+      /uk|british|england|daniel|serena|george|arthur/i.test(`${voice.name} ${voice.lang}`),
+    ) ??
     voices.find((voice) => voice.lang.toLowerCase() === "en-gb") ??
     voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) ??
     null
