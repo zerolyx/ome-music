@@ -33,7 +33,12 @@ export interface CuratorAgentContext {
   playPreviousTrack: () => void;
   togglePlayback: () => void;
   setVolume: (volume: number) => void;
-  createRadioSession: (args: { kind?: RadioKind; theme?: string; mood?: TrackMood; scene?: string }) => RadioSession | null;
+  createRadioSession: (args: {
+    kind?: RadioKind;
+    theme?: string;
+    mood?: TrackMood;
+    scene?: string;
+  }) => RadioSession | null;
   startRadioSession: (sessionId?: string) => boolean;
   softenRadio: (level?: number) => RadioSession | null;
   brightenRadio: (level?: number) => RadioSession | null;
@@ -116,7 +121,10 @@ interface SearchMusicResult {
 
 const neteaseProvider = new NetEaseMusicProvider();
 
-export async function runCuratorAgent(message: string, context: CuratorAgentContext): Promise<CuratorAgentResult> {
+export async function runCuratorAgent(
+  message: string,
+  context: CuratorAgentContext,
+): Promise<CuratorAgentResult> {
   const intent = parseCuratorIntent(message);
   const debug = createDebug(message, intent);
 
@@ -127,7 +135,7 @@ export async function runCuratorAgent(message: string, context: CuratorAgentCont
           handled: true,
           status: "Listening...",
           reply: greetingReply(context.currentTrack),
-          playbackChanged: false
+          playbackChanged: false,
         });
 
       case "pause":
@@ -138,7 +146,7 @@ export async function runCuratorAgent(message: string, context: CuratorAgentCont
           handled: true,
           status: "Paused.",
           reply: "I will let the room go quiet for a moment.",
-          playbackChanged: context.isPlaying
+          playbackChanged: context.isPlaying,
         });
 
       case "resume":
@@ -149,7 +157,7 @@ export async function runCuratorAgent(message: string, context: CuratorAgentCont
           handled: true,
           status: "Playing.",
           reply: "Back on the air, softly.",
-          playbackChanged: !context.isPlaying
+          playbackChanged: !context.isPlaying,
         });
 
       case "next":
@@ -160,7 +168,7 @@ export async function runCuratorAgent(message: string, context: CuratorAgentCont
           handled: true,
           status: "Turning...",
           reply: intent.mood ? moodReply(intent.mood) : "Let us move the needle along.",
-          playbackChanged: true
+          playbackChanged: true,
         });
 
       case "previous":
@@ -171,7 +179,7 @@ export async function runCuratorAgent(message: string, context: CuratorAgentCont
           handled: true,
           status: "Turning...",
           reply: "One step back on the record shelf.",
-          playbackChanged: true
+          playbackChanged: true,
         });
 
       case "volume":
@@ -183,7 +191,7 @@ export async function runCuratorAgent(message: string, context: CuratorAgentCont
           handled: true,
           status: volumeStatus(intent.volumeDirection),
           reply: volumeReply(intent.volumeDirection),
-          playbackChanged: false
+          playbackChanged: false,
         });
 
       case "create_radio":
@@ -222,7 +230,7 @@ export async function runCuratorAgent(message: string, context: CuratorAgentCont
           handled: true,
           status: "Listening...",
           reply: "I hear you. Shall I make the room softer?",
-          playbackChanged: false
+          playbackChanged: false,
         });
 
       default:
@@ -230,7 +238,7 @@ export async function runCuratorAgent(message: string, context: CuratorAgentCont
           handled: false,
           status: "Listening...",
           reply: "",
-          playbackChanged: false
+          playbackChanged: false,
         });
     }
   } catch (error) {
@@ -239,18 +247,25 @@ export async function runCuratorAgent(message: string, context: CuratorAgentCont
       handled: true,
       status: "Unchanged.",
       reply: "The booth caught a little dust there. Try me once more, and I will keep it simple.",
-      playbackChanged: false
+      playbackChanged: false,
     });
   }
 }
 
-async function searchAndQueue(intent: ParsedIntent, context: CuratorAgentContext, debug: CuratorAgentDebug): Promise<CuratorAgentResult> {
+async function searchAndQueue(
+  intent: ParsedIntent,
+  context: CuratorAgentContext,
+  debug: CuratorAgentDebug,
+): Promise<CuratorAgentResult> {
   const query = intent.query || intent.label || debug.userMessage;
   debug.plannedAction = "search music and queue first playable match";
   debug.selectedTool = "search_music";
   debug.toolArguments = { query, source: intent.source ?? "all", limit: 8 };
 
-  const results = await searchMusic({ query, source: intent.source ?? "all", limit: 8 }, context.localTracks);
+  const results = await searchMusic(
+    { query, source: intent.source ?? "all", limit: 8 },
+    context.localTracks,
+  );
   debug.searchResultsCount = results.local.length + results.netease.length;
   const track = await materializeFirstPlayable(results, context, debug);
 
@@ -263,7 +278,7 @@ async function searchAndQueue(intent: ParsedIntent, context: CuratorAgentContext
       status: "Queued.",
       reply: "I have slipped it into the queue for you.",
       playbackChanged: false,
-      candidates: [track, ...results.local, ...results.netease].slice(0, 4)
+      candidates: [track, ...results.local, ...results.netease].slice(0, 4),
     });
   }
 
@@ -272,17 +287,24 @@ async function searchAndQueue(intent: ParsedIntent, context: CuratorAgentContext
     status: "Unchanged.",
     reply: "I found the name, but not a clean playable pressing for the queue.",
     playbackChanged: false,
-    candidates: [...results.local, ...results.netease].slice(0, 4)
+    candidates: [...results.local, ...results.netease].slice(0, 4),
   });
 }
 
-async function searchAndPlay(intent: ParsedIntent, context: CuratorAgentContext, debug: CuratorAgentDebug): Promise<CuratorAgentResult> {
+async function searchAndPlay(
+  intent: ParsedIntent,
+  context: CuratorAgentContext,
+  debug: CuratorAgentDebug,
+): Promise<CuratorAgentResult> {
   const query = intent.query || intent.label || debug.userMessage;
   debug.plannedAction = "search music and play first playable match";
   debug.selectedTool = "search_music";
   debug.toolArguments = { query, source: intent.source ?? "all", limit: 8 };
 
-  const results = await searchMusic({ query, source: intent.source ?? "all", limit: 8 }, context.localTracks);
+  const results = await searchMusic(
+    { query, source: intent.source ?? "all", limit: 8 },
+    context.localTracks,
+  );
   debug.searchResultsCount = results.local.length + results.netease.length;
 
   const selected = await playFirstPlayable(results, context, debug);
@@ -292,7 +314,7 @@ async function searchAndPlay(intent: ParsedIntent, context: CuratorAgentContext,
       status: "Turning...",
       reply: playReply(intent.label || query, selected),
       playbackChanged: true,
-      candidates: [...results.local, ...results.netease].slice(0, 4)
+      candidates: [...results.local, ...results.netease].slice(0, 4),
     });
   }
 
@@ -301,11 +323,15 @@ async function searchAndPlay(intent: ParsedIntent, context: CuratorAgentContext,
     status: "Unchanged.",
     reply: "I found the name, but not a clean playable pressing tonight.",
     playbackChanged: false,
-    candidates: [...results.local, ...results.netease].slice(0, 4)
+    candidates: [...results.local, ...results.netease].slice(0, 4),
   });
 }
 
-async function recommendAndPlay(intent: ParsedIntent, context: CuratorAgentContext, debug: CuratorAgentDebug): Promise<CuratorAgentResult> {
+async function recommendAndPlay(
+  intent: ParsedIntent,
+  context: CuratorAgentContext,
+  debug: CuratorAgentDebug,
+): Promise<CuratorAgentResult> {
   debug.plannedAction = "recommend tracks and play the best match";
   debug.selectedTool = "recommend_tracks";
   debug.toolArguments = {
@@ -313,7 +339,7 @@ async function recommendAndPlay(intent: ParsedIntent, context: CuratorAgentConte
     theme: intent.theme,
     scene: intent.scene,
     source: intent.source ?? "all",
-    limit: 12
+    limit: 12,
   };
 
   const results = await recommendTracks(intent, context.localTracks, 12);
@@ -325,7 +351,7 @@ async function recommendAndPlay(intent: ParsedIntent, context: CuratorAgentConte
       status: "Turning...",
       reply: moodReply(intent.mood, intent.theme),
       playbackChanged: true,
-      candidates: [...results.local, ...results.netease].slice(0, 4)
+      candidates: [...results.local, ...results.netease].slice(0, 4),
     });
   }
 
@@ -334,22 +360,32 @@ async function recommendAndPlay(intent: ParsedIntent, context: CuratorAgentConte
     status: "Unchanged.",
     reply: "I looked through the shelf, but nothing playable felt right just now.",
     playbackChanged: false,
-    candidates: [...results.local, ...results.netease].slice(0, 4)
+    candidates: [...results.local, ...results.netease].slice(0, 4),
   });
 }
 
 async function createAndPlayTemporaryPlaylist(
   intent: ParsedIntent,
   context: CuratorAgentContext,
-  debug: CuratorAgentDebug
+  debug: CuratorAgentDebug,
 ): Promise<CuratorAgentResult> {
   const theme = intent.theme || intent.query || "late night";
   const title = temporaryPlaylistTitle(theme, intent.mood);
   debug.plannedAction = "create temporary playlist and play it";
   debug.selectedTool = "create_temporary_playlist";
-  debug.toolArguments = { title, theme, mood: intent.mood, source: intent.source ?? "all", limit: 16 };
+  debug.toolArguments = {
+    title,
+    theme,
+    mood: intent.mood,
+    source: intent.source ?? "all",
+    limit: 16,
+  };
 
-  const results = await recommendTracks({ ...intent, theme, source: intent.source ?? "all" }, context.localTracks, 24);
+  const results = await recommendTracks(
+    { ...intent, theme, source: intent.source ?? "all" },
+    context.localTracks,
+    24,
+  );
   debug.searchResultsCount = results.local.length + results.netease.length;
   const playlistTracks = await materializePlaylistTracks(results, context, 16, debug);
   debug.queueLength = Math.max(0, playlistTracks.length - 1);
@@ -360,7 +396,7 @@ async function createAndPlayTemporaryPlaylist(
       status: "Unchanged.",
       reply: "I tried to build the set, but the shelf did not give me enough playable records.",
       playbackChanged: false,
-      candidates: [...results.local, ...results.netease].slice(0, 4)
+      candidates: [...results.local, ...results.netease].slice(0, 4),
     });
   }
 
@@ -374,14 +410,14 @@ async function createAndPlayTemporaryPlaylist(
     status: "Playlist ready.",
     reply: playlistReply(theme),
     playbackChanged: true,
-    candidates: playlistTracks.slice(0, 4)
+    candidates: playlistTracks.slice(0, 4),
   });
 }
 
 function createAndStartRadio(
   intent: ParsedIntent,
   context: CuratorAgentContext,
-  debug: CuratorAgentDebug
+  debug: CuratorAgentDebug,
 ): CuratorAgentResult {
   const kind = intent.radioKind ?? radioKindFromTheme(intent.theme) ?? "daily";
   debug.plannedAction = "create an Ome Radio session and start it";
@@ -392,7 +428,7 @@ function createAndStartRadio(
     kind,
     theme: intent.theme,
     mood: intent.mood,
-    scene: intent.scene
+    scene: intent.scene,
   });
   debug.createdPlaylistId = session?.id;
   debug.queueLength = Math.max(0, (session?.tracks.length ?? 0) - 1);
@@ -403,7 +439,7 @@ function createAndStartRadio(
       handled: true,
       status: "Unchanged.",
       reply: "I tried to tune the room, but the shelf needs a few playable records first.",
-      playbackChanged: false
+      playbackChanged: false,
     });
   }
 
@@ -414,14 +450,14 @@ function createAndStartRadio(
     status: started ? "On Air" : "Unchanged.",
     reply: radioStartedReply(kind),
     playbackChanged: started,
-    candidates: session.tracks.slice(0, 4)
+    candidates: session.tracks.slice(0, 4),
   });
 }
 
 function startCurrentRadio(
   intent: ParsedIntent,
   context: CuratorAgentContext,
-  debug: CuratorAgentDebug
+  debug: CuratorAgentDebug,
 ): CuratorAgentResult {
   debug.plannedAction = "start the current Ome Radio session";
   debug.selectedTool = "start_radio_session";
@@ -431,15 +467,17 @@ function startCurrentRadio(
   return finish(debug, {
     handled: true,
     status: started ? "On Air" : "Unchanged.",
-    reply: started ? "We are on air. I will keep the records close to the room." : "The radio needs a few playable records before it can breathe.",
-    playbackChanged: started
+    reply: started
+      ? "We are on air. I will keep the records close to the room."
+      : "The radio needs a few playable records before it can breathe.",
+    playbackChanged: started,
   });
 }
 
 function softenCurrentRadio(
   intent: ParsedIntent,
   context: CuratorAgentContext,
-  debug: CuratorAgentDebug
+  debug: CuratorAgentDebug,
 ): CuratorAgentResult {
   debug.plannedAction = "soften the Ome Radio session";
   debug.selectedTool = "soften_radio";
@@ -454,7 +492,7 @@ function softenCurrentRadio(
       handled: true,
       status: "Unchanged.",
       reply: "I would soften it, but the quiet shelf is a little bare tonight.",
-      playbackChanged: false
+      playbackChanged: false,
     });
   }
 
@@ -465,14 +503,14 @@ function softenCurrentRadio(
     status: started ? "Softened." : "Unchanged.",
     reply: "I have softened the room. We will stay near the quieter records.",
     playbackChanged: started,
-    candidates: session.tracks.slice(0, 4)
+    candidates: session.tracks.slice(0, 4),
   });
 }
 
 function brightenCurrentRadio(
   intent: ParsedIntent,
   context: CuratorAgentContext,
-  debug: CuratorAgentDebug
+  debug: CuratorAgentDebug,
 ): CuratorAgentResult {
   debug.plannedAction = "brighten the Ome Radio session";
   debug.selectedTool = "brighten_radio";
@@ -487,7 +525,7 @@ function brightenCurrentRadio(
       handled: true,
       status: "Unchanged.",
       reply: "I looked for a brighter shelf, but nothing playable stepped forward.",
-      playbackChanged: false
+      playbackChanged: false,
     });
   }
 
@@ -498,14 +536,14 @@ function brightenCurrentRadio(
     status: started ? "On Air" : "Unchanged.",
     reply: "A little more daylight in the room. I have opened the window just enough.",
     playbackChanged: started,
-    candidates: session.tracks.slice(0, 4)
+    candidates: session.tracks.slice(0, 4),
   });
 }
 
 function switchRadioTheme(
   intent: ParsedIntent,
   context: CuratorAgentContext,
-  debug: CuratorAgentDebug
+  debug: CuratorAgentDebug,
 ): CuratorAgentResult {
   const kind = intent.radioKind ?? radioKindFromTheme(intent.theme) ?? "memory";
   debug.plannedAction = "switch Ome Radio theme";
@@ -521,7 +559,7 @@ function switchRadioTheme(
       handled: true,
       status: "Unchanged.",
       reply: "I reached for that shelf, but there is not enough playable music there yet.",
-      playbackChanged: false
+      playbackChanged: false,
     });
   }
 
@@ -532,14 +570,14 @@ function switchRadioTheme(
     status: started ? "On Air" : "Unchanged.",
     reply: radioStartedReply(kind),
     playbackChanged: started,
-    candidates: session.tracks.slice(0, 4)
+    candidates: session.tracks.slice(0, 4),
   });
 }
 
 async function materializeFirstPlayable(
   results: SearchMusicResult,
   context: CuratorAgentContext,
-  debug: CuratorAgentDebug
+  debug: CuratorAgentDebug,
 ): Promise<Track | null> {
   const local = results.local.find((track) => !track.filePath.startsWith("unavailable:"));
   if (local) {
@@ -562,7 +600,7 @@ async function materializeFirstPlayable(
 async function playFirstPlayable(
   results: SearchMusicResult,
   context: CuratorAgentContext,
-  debug: CuratorAgentDebug
+  debug: CuratorAgentDebug,
 ): Promise<Track | MusicSourceSong | null> {
   const local = results.local.find((track) => !track.filePath.startsWith("unavailable:"));
   if (local) {
@@ -592,7 +630,7 @@ async function materializePlaylistTracks(
   results: SearchMusicResult,
   context: CuratorAgentContext,
   limit: number,
-  debug: CuratorAgentDebug
+  debug: CuratorAgentDebug,
 ): Promise<Track[]> {
   const tracks: Track[] = [];
   const seen = new Set<string>();
@@ -621,7 +659,11 @@ async function materializePlaylistTracks(
   return tracks;
 }
 
-async function recommendTracks(intent: ParsedIntent, localTracks: Track[], limit: number): Promise<SearchMusicResult> {
+async function recommendTracks(
+  intent: ParsedIntent,
+  localTracks: Track[],
+  limit: number,
+): Promise<SearchMusicResult> {
   const local = rankLocalTracks(localTracks, intent).slice(0, limit);
   const query = buildSearchQuery(intent);
   let netease: MusicSourceSong[] = [];
@@ -636,22 +678,27 @@ async function recommendTracks(intent: ParsedIntent, localTracks: Track[], limit
 
   return {
     local: (intent.source ?? "all") === "netease" ? [] : local,
-    netease
+    netease,
   };
 }
 
-async function searchMusic(args: SearchMusicArgs, localTracks: Track[]): Promise<SearchMusicResult> {
+async function searchMusic(
+  args: SearchMusicArgs,
+  localTracks: Track[],
+): Promise<SearchMusicResult> {
   const query = [args.artist, args.query, args.theme].filter(Boolean).join(" ").trim();
   const normalized = query.toLowerCase();
   const limit = args.limit ?? 8;
-  const local = (args.source ?? "all") === "netease"
-    ? []
-    : localTracks
-        .filter((track) => {
-          const haystack = `${track.title} ${track.artist} ${track.album} ${track.genres.join(" ")} ${track.moods.join(" ")}`.toLowerCase();
-          return normalized ? haystack.includes(normalized) : matchTrackMoodTheme(track, args);
-        })
-        .slice(0, limit);
+  const local =
+    (args.source ?? "all") === "netease"
+      ? []
+      : localTracks
+          .filter((track) => {
+            const haystack =
+              `${track.title} ${track.artist} ${track.album} ${track.genres.join(" ")} ${track.moods.join(" ")}`.toLowerCase();
+            return normalized ? haystack.includes(normalized) : matchTrackMoodTheme(track, args);
+          })
+          .slice(0, limit);
 
   let netease: MusicSourceSong[] = [];
   if ((args.source ?? "all") !== "local" && query) {
@@ -670,7 +717,10 @@ function parseCuratorIntent(raw: string): ParsedIntent {
   const lower = text.toLowerCase();
   const radioIntent = parseRadioIntent(text, lower);
   if (radioIntent) return radioIntent;
-  const calm = /(安静|轻一点|柔和|放松|雨天|夜晚|深夜|慢一点|不吵|quiet|soft|calm|rain|rainy|late|tired|gentle)/i.test(text);
+  const calm =
+    /(安静|轻一点|柔和|放松|雨天|夜晚|深夜|慢一点|不吵|quiet|soft|calm|rain|rainy|late|tired|gentle)/i.test(
+      text,
+    );
   const theme = extractTheme(text);
   const language = /中文|华语|国语|mandarin|chinese/i.test(text) ? "zh" : undefined;
 
@@ -680,17 +730,29 @@ function parseCuratorIntent(raw: string): ParsedIntent {
   if (/(暂停|停一下|先停|pause|stop for a moment|hold it)/i.test(text)) {
     return { type: "pause" };
   }
-  if (/(继续|播放|开始|接着|resume|continue|play again|back on)/i.test(text) && !hasMusicQuery(text)) {
+  if (
+    /(继续|播放|开始|接着|resume|continue|play again|back on)/i.test(text) &&
+    !hasMusicQuery(text)
+  ) {
     return { type: "resume" };
   }
   if (/(上一首|上一曲|previous|go back|last track)/i.test(text)) {
     return { type: "previous" };
   }
   if (/(加入队列|排到后面|等下播放|queue|add to queue)/i.test(text)) {
-    return { type: "queue_song", query: cleanupMusicQuery(text), label: cleanupMusicQuery(text), language };
+    return {
+      type: "queue_song",
+      query: cleanupMusicQuery(text),
+      label: cleanupMusicQuery(text),
+      language,
+    };
   }
   if (/(下一首|换一首|切歌|next|change|skip)/i.test(text)) {
-    return { type: "next", mood: calm ? "calm" : undefined, scene: isRainy(text, lower) ? "rainy" : undefined };
+    return {
+      type: "next",
+      mood: calm ? "calm" : undefined,
+      scene: isRainy(text, lower) ? "rainy" : undefined,
+    };
   }
   if (/(大声|响一点|音量大|louder|volume up|turn it up)/i.test(text)) {
     return { type: "volume", volumeDirection: "up" };
@@ -702,25 +764,33 @@ function parseCuratorIntent(raw: string): ParsedIntent {
     return { type: "volume", volumeDirection: "mute" };
   }
 
-  if (/(歌单|一组|一套|安排|弄一些|做一个|playlist|set|mix)/i.test(text) && (theme || calm || hasMusicQuery(text))) {
+  if (
+    /(歌单|一组|一套|安排|弄一些|做一个|playlist|set|mix)/i.test(text) &&
+    (theme || calm || hasMusicQuery(text))
+  ) {
     return {
       type: "create_playlist",
       query: cleanupMusicQuery(text),
       theme: theme || (calm ? "quiet" : cleanupMusicQuery(text)),
       mood: calm ? "calm" : moodFromTheme(theme),
       scene: isRainy(text, lower) ? "rainy" : undefined,
-      language
+      language,
     };
   }
 
-  if (/(推荐|来点|放点|帮我放|给我放|放一首|随便放|recommend|suggest|play something|put on something)/i.test(text) && (calm || theme)) {
+  if (
+    /(推荐|来点|放点|帮我放|给我放|放一首|随便放|recommend|suggest|play something|put on something)/i.test(
+      text,
+    ) &&
+    (calm || theme)
+  ) {
     return {
       type: "recommend",
       query: cleanupMusicQuery(text),
       theme: theme || (calm ? "quiet" : undefined),
       mood: calm ? "calm" : moodFromTheme(theme),
       scene: isRainy(text, lower) ? "rainy" : undefined,
-      language
+      language,
     };
   }
 
@@ -730,7 +800,12 @@ function parseCuratorIntent(raw: string): ParsedIntent {
   }
 
   if (hasMusicQuery(text)) {
-    return { type: "play_song", query: cleanupMusicQuery(text), label: cleanupMusicQuery(text), language };
+    return {
+      type: "play_song",
+      query: cleanupMusicQuery(text),
+      label: cleanupMusicQuery(text),
+      language,
+    };
   }
 
   if (/(累|疲惫|焦虑|烦|难过|tired|anxious|worn out|drained|sad|blue)/i.test(text)) {
@@ -746,15 +821,35 @@ function parseRadioIntent(text: string, lower: string): ParsedIntent | null {
   const theme = extractTheme(text) || (kind ? themeFromRadioKind(kind) : undefined);
 
   if (wantsSofterRadio(text, lower)) {
-    return { type: "soften_radio", radioKind: "quietRoom", theme: "quiet", mood: "calm", scene: sceneFromRadioKind("quietRoom"), language };
+    return {
+      type: "soften_radio",
+      radioKind: "quietRoom",
+      theme: "quiet",
+      mood: "calm",
+      scene: sceneFromRadioKind("quietRoom"),
+      language,
+    };
   }
 
   if (wantsBrighterRadio(text, lower)) {
-    return { type: "brighten_radio", radioKind: "discovery", theme: "brighter room", mood: "energetic", scene: "A brighter room", language };
+    return {
+      type: "brighten_radio",
+      radioKind: "discovery",
+      theme: "brighter room",
+      mood: "energetic",
+      scene: "A brighter room",
+      language,
+    };
   }
 
   if (wantsFamiliarRadio(text, lower)) {
-    return { type: "switch_radio_theme", radioKind: "memory", theme: "familiar records", scene: sceneFromRadioKind("memory"), language };
+    return {
+      type: "switch_radio_theme",
+      radioKind: "memory",
+      theme: "familiar records",
+      scene: sceneFromRadioKind("memory"),
+      language,
+    };
   }
 
   if (kind && wantsRadio(text, lower)) {
@@ -764,46 +859,71 @@ function parseRadioIntent(text: string, lower: string): ParsedIntent | null {
       theme,
       mood: moodFromRadioKind(kind),
       scene: sceneFromRadioKind(kind),
-      language
+      language,
     };
   }
 
   if (wantsStartCurrentRadio(text, lower)) {
-    return { type: "start_radio", theme, mood: moodFromTheme(theme), scene: sceneFromRadioKind("daily"), language };
+    return {
+      type: "start_radio",
+      theme,
+      mood: moodFromTheme(theme),
+      scene: sceneFromRadioKind("daily"),
+      language,
+    };
   }
 
   return null;
 }
 
 function wantsRadio(text: string, lower: string): boolean {
-  return /radio|station|broadcast|on air/i.test(lower) || /电台|开播|放送|私人台|私人电台/.test(text);
+  return (
+    /radio|station|broadcast|on air/i.test(lower) || /电台|开播|放送|私人台|私人电台/.test(text)
+  );
 }
 
 function wantsStartCurrentRadio(text: string, lower: string): boolean {
-  return /(start|begin|go on air|turn on|play)\s+(the\s+)?(radio|station|broadcast)/i.test(lower) || /开始电台|开播|播放电台|打开电台/.test(text);
+  return (
+    /(start|begin|go on air|turn on|play)\s+(the\s+)?(radio|station|broadcast)/i.test(lower) ||
+    /开始电台|开播|播放电台|打开电台/.test(text)
+  );
 }
 
 function wantsSofterRadio(text: string, lower: string): boolean {
-  const mentionsVolume = /volume|sound|turn it down|lower the volume|音量|小声/.test(lower) || /音量|小声/.test(text);
+  const mentionsVolume =
+    /volume|sound|turn it down|lower the volume|音量|小声/.test(lower) || /音量|小声/.test(text);
   if (mentionsVolume) return false;
-  return /make it softer|soften|quieter records|quiet room|calmer|less loud|slow it down/i.test(lower) || /安静一点|安静点|柔和一点|柔和点|轻一点|轻点|慢一点|不吵|放松一点/.test(text);
+  return (
+    /make it softer|soften|quieter records|quiet room|calmer|less loud|slow it down/i.test(lower) ||
+    /安静一点|安静点|柔和一点|柔和点|轻一点|轻点|慢一点|不吵|放松一点/.test(text)
+  );
 }
 
 function wantsBrighterRadio(text: string, lower: string): boolean {
-  return /make it brighter|brighter|more light|more energy|lift it up/i.test(lower) || /亮一点|亮点|轻快一点|更轻快|精神一点|有活力一点/.test(text);
+  return (
+    /make it brighter|brighter|more light|more energy|lift it up/i.test(lower) ||
+    /亮一点|亮点|轻快一点|更轻快|精神一点|有活力一点/.test(text)
+  );
 }
 
 function wantsFamiliarRadio(text: string, lower: string): boolean {
-  return /more familiar|familiar records|old favorites|my usual|closer to home|memory radio/i.test(lower) || /更熟悉|熟悉一点|熟悉点|老歌|回忆电台|记忆电台|常听的/.test(text);
+  return (
+    /more familiar|familiar records|old favorites|my usual|closer to home|memory radio/i.test(
+      lower,
+    ) || /更熟悉|熟悉一点|熟悉点|老歌|回忆电台|记忆电台|常听的/.test(text)
+  );
 }
 
 function radioKindFromText(text: string, lower: string): RadioKind | undefined {
   if (/青春|少年|年轻/.test(text) || /youth|young|school days/i.test(lower)) return "youth";
   if (/雨天|下雨/.test(text) || /rain|rainy/i.test(lower)) return "rainyDay";
-  if (/深夜|夜晚|晚上|午夜/.test(text) || /late night|midnight|after dark|night radio/i.test(lower)) return "lateNight";
+  if (/深夜|夜晚|晚上|午夜/.test(text) || /late night|midnight|after dark|night radio/i.test(lower))
+    return "lateNight";
   if (/安静|柔和|放松|不吵/.test(text) || /quiet|soft|calm|gentle/i.test(lower)) return "quietRoom";
-  if (/探索|新鲜|没听过/.test(text) || /discovery|discover|surprise me|something new/i.test(lower)) return "discovery";
-  if (/回忆|记忆|熟悉|常听/.test(text) || /memory|familiar|old favorites/i.test(lower)) return "memory";
+  if (/探索|新鲜|没听过/.test(text) || /discovery|discover|surprise me|something new/i.test(lower))
+    return "discovery";
+  if (/回忆|记忆|熟悉|常听/.test(text) || /memory|familiar|old favorites/i.test(lower))
+    return "memory";
   if (wantsRadio(text, lower)) return "daily";
   return undefined;
 }
@@ -880,14 +1000,16 @@ function extractArtist(text: string): { query: string; label: string } | null {
     [/周杰伦|周杰倫|jay chou/i, "周杰伦", "Jay Chou"],
     [/陈奕迅|陳奕迅|eason/i, "陈奕迅", "Eason Chan"],
     [/王菲|faye wong/i, "王菲", "Faye Wong"],
-    [/孙燕姿|孫燕姿|stefanie sun/i, "孙燕姿", "Stefanie Sun"]
+    [/孙燕姿|孫燕姿|stefanie sun/i, "孙燕姿", "Stefanie Sun"],
   ];
 
   for (const [pattern, query, label] of knownAliases) {
     if (pattern.test(text)) return { query, label };
   }
 
-  const match = text.match(/(?:想听|聽|听|播放|放|来点|play|put on)\s*([A-Za-z0-9\u4e00-\u9fa5 .·-]{1,32})(?:的|音乐|歌|music|songs)?/i);
+  const match = text.match(
+    /(?:想听|聽|听|播放|放|来点|play|put on)\s*([A-Za-z0-9\u4e00-\u9fa5 .·-]{1,32})(?:的|音乐|歌|music|songs)?/i,
+  );
   const value = match?.[1]?.trim();
   return value ? { query: value, label: value } : null;
 }
@@ -899,7 +1021,7 @@ function extractTheme(text: string): string | undefined {
     [/深夜|夜晚|晚上|late night|night/i, "late night"],
     [/写作|写东西|writing/i, "writing"],
     [/安静|不吵|柔和|quiet|soft|gentle/i, "quiet"],
-    [/怀旧|nostalgic|old days/i, "nostalgia"]
+    [/怀旧|nostalgic|old days/i, "nostalgia"],
   ];
   return themes.find(([pattern]) => pattern.test(text))?.[1];
 }
@@ -913,11 +1035,16 @@ function moodFromTheme(theme?: string): TrackMood | undefined {
 }
 
 function cleanupMusicQuery(text: string): string {
-  return text
-    .replace(/我想听|想听|播放|给我放|帮我放|放一首|来点|放点|推荐|弄一些|做一个|搞一个|歌单|play|put on|recommend|music|songs|音乐|歌曲|的歌/gi, " ")
-    .replace(/加入队列|排到后面|等下播放|queue|add to queue/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim() || text;
+  return (
+    text
+      .replace(
+        /我想听|想听|播放|给我放|帮我放|放一首|来点|放点|推荐|弄一些|做一个|搞一个|歌单|play|put on|recommend|music|songs|音乐|歌曲|的歌/gi,
+        " ",
+      )
+      .replace(/加入队列|排到后面|等下播放|queue|add to queue/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim() || text
+  );
 }
 
 function hasMusicQuery(text: string): boolean {
@@ -938,7 +1065,8 @@ function rankLocalTracks(tracks: Track[], intent: ParsedIntent): Track[] {
 
 function scoreTrack(track: Track, intent: ParsedIntent): number {
   let score = 0;
-  const haystack = `${track.title} ${track.artist} ${track.album} ${track.genres.join(" ")} ${track.moods.join(" ")}`.toLowerCase();
+  const haystack =
+    `${track.title} ${track.artist} ${track.album} ${track.genres.join(" ")} ${track.moods.join(" ")}`.toLowerCase();
   const theme = intent.theme?.toLowerCase();
   const query = intent.query?.toLowerCase();
   const calmWords = ["calm", "dreamy", "romantic", "melancholy", "focused", "tired"];
@@ -946,7 +1074,8 @@ function scoreTrack(track: Track, intent: ParsedIntent): number {
   if (query && haystack.includes(query)) score += 4;
   if (intent.mood && track.moods.includes(intent.mood)) score += 5;
   if (intent.mood === "calm" && track.moods.some((mood) => calmWords.includes(mood))) score += 2;
-  if (intent.language && intent.language !== "unknown" && track.language === intent.language) score += 2;
+  if (intent.language && intent.language !== "unknown" && track.language === intent.language)
+    score += 2;
   if (theme && matchTheme(track, theme)) score += 4;
   if (track.liked) score += 1.5;
   score += Math.min(2, track.playCount * 0.12);
@@ -957,27 +1086,34 @@ function scoreTrack(track: Track, intent: ParsedIntent): number {
 function matchTrackMoodTheme(track: Track, args: SearchMusicArgs): boolean {
   return Boolean(
     (args.mood && track.moods.includes(args.mood)) ||
-      (args.theme && matchTheme(track, args.theme)) ||
-      (args.language && args.language !== "unknown" && track.language === args.language)
+    (args.theme && matchTheme(track, args.theme)) ||
+    (args.language && args.language !== "unknown" && track.language === args.language),
   );
 }
 
 function matchTheme(track: Track, theme: string): boolean {
-  const value = `${track.title} ${track.artist} ${track.album} ${track.genres.join(" ")} ${track.moods.join(" ")}`.toLowerCase();
+  const value =
+    `${track.title} ${track.artist} ${track.album} ${track.genres.join(" ")} ${track.moods.join(" ")}`.toLowerCase();
   if (theme === "youth") return /青春|少年|young|youth|sun|bright|dream|pop/.test(value);
-  if (theme === "rainy day") return /rain|雨|ambient|jazz|lo-fi|lofi|dream|melancholy|calm/.test(value);
+  if (theme === "rainy day")
+    return /rain|雨|ambient|jazz|lo-fi|lofi|dream|melancholy|calm/.test(value);
   if (theme === "late night") return /night|夜|jazz|ambient|lo-fi|lofi|calm|dream|soul/.test(value);
-  if (theme === "writing") return /ambient|piano|lo-fi|lofi|focus|calm|instrumental|jazz/.test(value);
+  if (theme === "writing")
+    return /ambient|piano|lo-fi|lofi|focus|calm|instrumental|jazz/.test(value);
   if (theme === "quiet") return /calm|quiet|soft|ambient|piano|ballad|jazz|acoustic/.test(value);
   if (theme === "nostalgia") return /old|memory|nostalgia|retro|melancholy|dream/.test(value);
   return value.includes(theme.toLowerCase());
 }
 
 function buildSearchQuery(intent: ParsedIntent): string {
-  if (intent.theme === "youth") return intent.language === "zh" ? "青春 华语" : "youth nostalgic pop";
-  if (intent.theme === "rainy day") return intent.language === "zh" ? "雨天 安静" : "rainy day soft";
-  if (intent.theme === "late night") return intent.language === "zh" ? "深夜 安静" : "late night soft";
-  if (intent.theme === "writing") return intent.language === "zh" ? "写作 安静 纯音乐" : "writing calm instrumental";
+  if (intent.theme === "youth")
+    return intent.language === "zh" ? "青春 华语" : "youth nostalgic pop";
+  if (intent.theme === "rainy day")
+    return intent.language === "zh" ? "雨天 安静" : "rainy day soft";
+  if (intent.theme === "late night")
+    return intent.language === "zh" ? "深夜 安静" : "late night soft";
+  if (intent.theme === "writing")
+    return intent.language === "zh" ? "写作 安静 纯音乐" : "writing calm instrumental";
   if (intent.theme === "quiet") return intent.language === "zh" ? "安静 华语" : "quiet soft";
   if (intent.query) return intent.query;
   return intent.mood === "calm" ? "安静" : "";
@@ -1078,16 +1214,17 @@ function createDebug(message: string, intent: ParsedIntent): CuratorAgentDebug {
     searchResultsCount: 0,
     playbackChanged: false,
     queueLength: 0,
-    finalReply: ""
+    finalReply: "",
   };
 }
 
 function finish(
   debug: CuratorAgentDebug,
-  result: Omit<CuratorAgentResult, "debug">
+  result: Omit<CuratorAgentResult, "debug">,
 ): CuratorAgentResult {
   debug.finalReply = result.reply;
   debug.playbackChanged = result.playbackChanged;
-  if (debug.plannedAction === "reply") debug.plannedAction = result.handled ? result.status : "reply";
+  if (debug.plannedAction === "reply")
+    debug.plannedAction = result.handled ? result.status : "reply";
   return { ...result, debug };
 }

@@ -1,11 +1,17 @@
-import type { MoodEntry, RecommendationContext, RecommendationItem, Track, UserMusicProfile } from "../../types/music";
+import type {
+  MoodEntry,
+  RecommendationContext,
+  RecommendationItem,
+  Track,
+  UserMusicProfile,
+} from "../../types/music";
 import type { WeatherContext } from "./weatherProvider";
 
 const timeLabel: Record<RecommendationContext["timeOfDay"], string> = {
   morning: "清晨",
   afternoon: "下午",
   evening: "晚上",
-  lateNight: "深夜"
+  lateNight: "深夜",
 };
 
 const weatherLabel: Record<WeatherContext["condition"], string> = {
@@ -13,7 +19,7 @@ const weatherLabel: Record<WeatherContext["condition"], string> = {
   rainy: "雨天",
   cloudy: "阴天",
   snowy: "雪天",
-  unknown: "此刻"
+  unknown: "此刻",
 };
 
 export interface ExplanationInput {
@@ -25,9 +31,21 @@ export interface ExplanationInput {
   moodEntry: MoodEntry;
 }
 
-export function generateRecommendationReason({ track, lane, context, weather, moodEntry }: ExplanationInput): string {
-  const hasCalmTone = track.moods.includes("calm") || track.moods.includes("dreamy") || track.moods.includes("romantic");
-  const hasBrightTone = track.moods.includes("energetic") || track.moods.includes("happy") || track.genres.some(isBrightGenre);
+export function generateRecommendationReason({
+  track,
+  lane,
+  context,
+  weather,
+  moodEntry,
+}: ExplanationInput): string {
+  const hasCalmTone =
+    track.moods.includes("calm") ||
+    track.moods.includes("dreamy") ||
+    track.moods.includes("romantic");
+  const hasBrightTone =
+    track.moods.includes("energetic") ||
+    track.moods.includes("happy") ||
+    track.genres.some(isBrightGenre);
 
   if (context.timeOfDay === "lateNight") {
     return hasCalmTone
@@ -102,5 +120,7 @@ export function timeDisplayName(timeOfDay: RecommendationContext["timeOfDay"]): 
 
 function isBrightGenre(genre: string): boolean {
   const value = genre.toLowerCase();
-  return ["dance", "funk", "indie", "pop", "rock", "synth"].some((keyword) => value.includes(keyword));
+  return ["dance", "funk", "indie", "pop", "rock", "synth"].some((keyword) =>
+    value.includes(keyword),
+  );
 }

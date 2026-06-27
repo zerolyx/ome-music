@@ -9,7 +9,13 @@ interface ArtworkImageProps {
   fallbackClassName?: string;
 }
 
-export function ArtworkImage({ src, alt, source, className, fallbackClassName }: ArtworkImageProps) {
+export function ArtworkImage({
+  src,
+  alt,
+  source,
+  className,
+  fallbackClassName,
+}: ArtworkImageProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const failed = !src || failedSrc === src;
 
@@ -23,7 +29,7 @@ export function ArtworkImage({ src, alt, source, className, fallbackClassName }:
         className={clsx(
           "artwork-fallback flex items-center justify-center overflow-hidden bg-[linear-gradient(145deg,#6f4432,#b88768_58%,#d4b39a)]",
           className,
-          fallbackClassName
+          fallbackClassName,
         )}
         role="img"
         aria-label={`${alt || "Track"} artwork unavailable`}

@@ -15,7 +15,8 @@ export interface CuratorLanguageGuardContext {
 
 const CJK_TEXT = /[\u3400-\u9fff]/;
 const CJK_CHARS = /[\u3400-\u9fff]+/g;
-export const FORBIDDEN_REPLY_WORDS = /\b(a\.?i\.?|assistant|algorithm|model|user profile|tool call)\b/gi;
+export const FORBIDDEN_REPLY_WORDS =
+  /\b(a\.?i\.?|assistant|algorithm|model|user profile|tool call)\b/gi;
 
 const TITLE_TRANSLATIONS: Record<string, string> = {
   蝴蝶: "Butterfly",
@@ -30,12 +31,17 @@ const TITLE_TRANSLATIONS: Record<string, string> = {
   江南: "River South",
   她说: "She Says",
   可惜没如果: "If Only",
-  修炼爱情: "Practice Love"
+  修炼爱情: "Practice Love",
 };
 
-export function guardCuratorReply(text: string, context: CuratorLanguageGuardContext = {}): CuratorReply {
+export function guardCuratorReply(
+  text: string,
+  context: CuratorLanguageGuardContext = {},
+): CuratorReply {
   const originalTrackTitle = context.originalTrackTitle || context.track?.title || undefined;
-  const translatedTrackTitle = originalTrackTitle ? translateTrackTitle(originalTrackTitle) : undefined;
+  const translatedTrackTitle = originalTrackTitle
+    ? translateTrackTitle(originalTrackTitle)
+    : undefined;
   const displayText = normalizeDisplayText(text, originalTrackTitle, translatedTrackTitle);
   const spokenText = normalizeSpokenText(displayText, originalTrackTitle, translatedTrackTitle);
 
@@ -44,7 +50,7 @@ export function guardCuratorReply(text: string, context: CuratorLanguageGuardCon
     spokenText,
     originalTrackTitle,
     translatedTrackTitle,
-    languageChecked: true
+    languageChecked: true,
   };
 }
 
@@ -59,15 +65,20 @@ export function englishTrackReference(track: Track | null): string {
   return track.title;
 }
 
-function normalizeDisplayText(text: string, originalTrackTitle?: string, translatedTrackTitle?: string): string {
+function normalizeDisplayText(
+  text: string,
+  originalTrackTitle?: string,
+  translatedTrackTitle?: string,
+): string {
   const cleaned = cleanCuratorText(text);
   if (!CJK_TEXT.test(cleaned)) return cleaned || fallbackLine(originalTrackTitle);
 
   let normalized = cleaned;
   if (originalTrackTitle && normalized.includes(originalTrackTitle)) {
-    const replacement = translatedTrackTitle && translatedTrackTitle !== originalTrackTitle
-      ? `${translatedTrackTitle}`
-      : "this Chinese track";
+    const replacement =
+      translatedTrackTitle && translatedTrackTitle !== originalTrackTitle
+        ? `${translatedTrackTitle}`
+        : "this Chinese track";
     normalized = normalized.split(originalTrackTitle).join(replacement);
   }
 
@@ -75,13 +86,18 @@ function normalizeDisplayText(text: string, originalTrackTitle?: string, transla
   return fallbackLine(originalTrackTitle);
 }
 
-function normalizeSpokenText(text: string, originalTrackTitle?: string, translatedTrackTitle?: string): string {
+function normalizeSpokenText(
+  text: string,
+  originalTrackTitle?: string,
+  translatedTrackTitle?: string,
+): string {
   let spoken = cleanCuratorText(text);
 
   if (originalTrackTitle) {
-    const replacement = translatedTrackTitle && translatedTrackTitle !== originalTrackTitle
-      ? translatedTrackTitle
-      : "this Chinese track";
+    const replacement =
+      translatedTrackTitle && translatedTrackTitle !== originalTrackTitle
+        ? translatedTrackTitle
+        : "this Chinese track";
     spoken = spoken.split(originalTrackTitle).join(replacement);
   }
 

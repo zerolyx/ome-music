@@ -17,7 +17,9 @@ export interface PlaylistAnalysisRun {
 
 const previewRuns = new Map<string, PlaylistAnalysisRun>();
 
-export async function savePlaylistAnalysisReport(report: PlaylistAnalysisReport): Promise<PlaylistAnalysisRun> {
+export async function savePlaylistAnalysisReport(
+  report: PlaylistAnalysisReport,
+): Promise<PlaylistAnalysisRun> {
   const payload = {
     playlistId: report.playlistId,
     playlistName: report.playlistName,
@@ -26,7 +28,7 @@ export async function savePlaylistAnalysisReport(report: PlaylistAnalysisReport)
     provider: report.provider,
     chunkResultsJson: JSON.stringify(report.layeredChunks),
     finalResultJson: JSON.stringify(report.finalInterpretation),
-    reportJson: JSON.stringify(report)
+    reportJson: JSON.stringify(report),
   };
 
   if (!isTauriRuntime()) {
@@ -40,7 +42,7 @@ export async function savePlaylistAnalysisReport(report: PlaylistAnalysisReport)
       chunkResultsJson: payload.chunkResultsJson,
       finalResultJson: payload.finalResultJson,
       reportJson: payload.reportJson,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
     previewRuns.set(payload.playlistId, run);
     return run;
@@ -49,10 +51,12 @@ export async function savePlaylistAnalysisReport(report: PlaylistAnalysisReport)
   return invoke<PlaylistAnalysisRun>("save_playlist_analysis_result", { payload });
 }
 
-export async function getLatestPlaylistAnalysisReport(playlistId: string): Promise<PlaylistAnalysisReport | null> {
+export async function getLatestPlaylistAnalysisReport(
+  playlistId: string,
+): Promise<PlaylistAnalysisReport | null> {
   const run = isTauriRuntime()
     ? await invoke<PlaylistAnalysisRun | null>("get_latest_playlist_analysis", { playlistId })
-    : previewRuns.get(playlistId) ?? null;
+    : (previewRuns.get(playlistId) ?? null);
 
   if (!run) {
     return null;

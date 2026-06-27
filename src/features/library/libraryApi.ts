@@ -1,8 +1,22 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { mockProfile, mockTracks } from "../../data/mockLibrary";
-import type { DesiredMusicVibe, JournalMood, MoodEntry, Track, TrackMood, UserMusicProfile } from "../../types/music";
+import type {
+  DesiredMusicVibe,
+  JournalMood,
+  MoodEntry,
+  Track,
+  TrackMood,
+  UserMusicProfile,
+} from "../../types/music";
 
-export type PlaybackEventType = "play" | "pause" | "skip" | "completed" | "liked" | "unliked" | "replayed";
+export type PlaybackEventType =
+  | "play"
+  | "pause"
+  | "skip"
+  | "completed"
+  | "liked"
+  | "unliked"
+  | "replayed";
 
 export interface ImportResult {
   directory: string | null;
@@ -72,7 +86,7 @@ export async function saveMoodEntry(payload: SaveMoodEntryPayload): Promise<Mood
       desiredVibe: payload.desiredVibe,
       privateTags: [payload.moodSignal],
       recommendedTrackIds: [],
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
   }
 
@@ -85,7 +99,7 @@ export async function importMusicFolder(): Promise<ImportResult> {
       directory: null,
       importedCount: mockTracks.length,
       skippedCount: 0,
-      tracks: mockTracks
+      tracks: mockTracks,
     };
   }
 
@@ -100,7 +114,11 @@ export async function recordPlaybackEvent(payload: PlaybackEventPayload): Promis
   await invoke("record_playback_event", { payload });
 }
 
-export async function setTrackLiked(trackId: string, liked: boolean, positionSeconds: number): Promise<Track[]> {
+export async function setTrackLiked(
+  trackId: string,
+  liked: boolean,
+  positionSeconds: number,
+): Promise<Track[]> {
   if (!isTauriRuntime()) {
     return mockTracks.map((track) => (track.id === trackId ? { ...track, liked } : track));
   }

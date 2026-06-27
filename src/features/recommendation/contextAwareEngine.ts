@@ -1,4 +1,10 @@
-import type { MoodEntry, RecommendationContext, RecommendationItem, Track, UserMusicProfile } from "../../types/music";
+import type {
+  MoodEntry,
+  RecommendationContext,
+  RecommendationItem,
+  Track,
+  UserMusicProfile,
+} from "../../types/music";
 import { generateRecommendationReason } from "./explanationGenerator";
 import type { WeatherContext } from "./weatherProvider";
 
@@ -20,15 +26,21 @@ interface ScoredTrack {
 
 const DEFAULT_LIMIT = 10;
 
-export function buildRecommendationContext(now: Date, weather: WeatherContext, moodEntry?: MoodEntry): RecommendationContext {
+export function buildRecommendationContext(
+  now: Date,
+  weather: WeatherContext,
+  moodEntry?: MoodEntry,
+): RecommendationContext {
   return {
     timeOfDay: getTimeOfDay(now),
     weather: weather.condition,
-    mood: moodEntry?.moodSignal
+    mood: moodEntry?.moodSignal,
   };
 }
 
-export function buildContextAwareRecommendations(input: RecommendationEngineInput): RecommendationItem[] {
+export function buildContextAwareRecommendations(
+  input: RecommendationEngineInput,
+): RecommendationItem[] {
   const limit = input.limit ?? DEFAULT_LIMIT;
   const context = buildRecommendationContext(input.now, input.weather, input.moodEntry);
   const scored = input.library.map((track) => scoreTrack(track, input, context));
@@ -48,7 +60,7 @@ export function buildContextAwareRecommendations(input: RecommendationEngineInpu
       ...scored
         .filter((item) => !selectedIds.has(item.track.id))
         .sort((a, b) => b.score - a.score)
-        .slice(0, limit - selected.length)
+        .slice(0, limit - selected.length),
     );
   }
 
@@ -65,22 +77,30 @@ export function buildContextAwareRecommendations(input: RecommendationEngineInpu
         context,
         weather: input.weather,
         profile: input.profile,
-        moodEntry: input.moodEntry
-      })
+        moodEntry: input.moodEntry,
+      }),
     }));
 }
 
-function scoreTrack(track: Track, input: RecommendationEngineInput, context: RecommendationContext): ScoredTrack {
+function scoreTrack(
+  track: Track,
+  input: RecommendationEngineInput,
+  context: RecommendationContext,
+): ScoredTrack {
   const lane = classifyLane(track, input);
-  const preferredGenres = new Set(input.profile.favoriteGenres.slice(0, 4).map((item) => item.label));
+  const preferredGenres = new Set(
+    input.profile.favoriteGenres.slice(0, 4).map((item) => item.label),
+  );
   const preferredMoods = new Set(input.profile.favoriteMoods.slice(0, 4).map((item) => item.label));
   const recentIds = new Set(input.recentTracks.map((recentTrack) => recentTrack.id));
   const hasPreferredGenre = track.genres.some((genre) => preferredGenres.has(genre));
   const hasPreferredMood = track.moods.some((mood) => preferredMoods.has(mood));
   const calmScore = track.moods.includes("calm") || track.genres.some(isCalmGenre) ? 1 : 0;
-  const energeticScore = track.moods.includes("energetic") || track.genres.some(isEnergeticGenre) ? 1 : 0;
+  const energeticScore =
+    track.moods.includes("energetic") || track.genres.some(isEnergeticGenre) ? 1 : 0;
   const familiarityScore = track.liked ? 1 : Math.min(1, track.playCount / 8);
-  const noveltyScore = track.playCount === 0 ? 1 : track.playCount < 3 ? 0.72 : track.playCount < 8 ? 0.42 : 0.12;
+  const noveltyScore =
+    track.playCount === 0 ? 1 : track.playCount < 3 ? 0.72 : track.playCount < 8 ? 0.42 : 0.12;
   let score = 0.15;
 
   score += hasPreferredGenre ? 0.16 : 0;
@@ -98,7 +118,9 @@ function scoreTrack(track: Track, input: RecommendationEngineInput, context: Rec
 
   if (input.weather.condition === "rainy") {
     score += calmScore * 0.18;
-    score += track.moods.some((mood) => ["melancholy", "dreamy", "romantic"].includes(mood)) ? 0.12 : 0;
+    score += track.moods.some((mood) => ["melancholy", "dreamy", "romantic"].includes(mood))
+      ? 0.12
+      : 0;
   } else if (input.weather.condition === "sunny") {
     score += energeticScore * 0.14;
     score += noveltyScore * 0.12;
@@ -125,14 +147,18 @@ function scoreTrack(track: Track, input: RecommendationEngineInput, context: Rec
   return {
     track,
     lane,
-    score: round3(Math.max(0, score))
+    score: round3(Math.max(0, score)),
   };
 }
 
 function classifyLane(track: Track, input: RecommendationEngineInput): RecommendationItem["lane"] {
-  const preferredGenres = new Set(input.profile.favoriteGenres.slice(0, 4).map((item) => item.label));
+  const preferredGenres = new Set(
+    input.profile.favoriteGenres.slice(0, 4).map((item) => item.label),
+  );
   const preferredMoods = new Set(input.profile.favoriteMoods.slice(0, 4).map((item) => item.label));
-  const similar = track.genres.some((genre) => preferredGenres.has(genre)) || track.moods.some((mood) => preferredMoods.has(mood));
+  const similar =
+    track.genres.some((genre) => preferredGenres.has(genre)) ||
+    track.moods.some((mood) => preferredMoods.has(mood));
 
   if (track.liked || track.playCount >= 5) {
     return "familiar";
@@ -147,7 +173,7 @@ function takeLane(
   items: ScoredTrack[],
   lane: RecommendationItem["lane"],
   count: number,
-  selected: ScoredTrack[]
+  selected: ScoredTrack[],
 ): ScoredTrack[] {
   const selectedIds = new Set(selected.map((item) => item.track.id));
   return items
@@ -166,16 +192,38 @@ function getTimeOfDay(now: Date): RecommendationContext["timeOfDay"] {
 
 function isCalmGenre(genre: string): boolean {
   const value = genre.toLowerCase();
-  return ["ambient", "acoustic", "ballad", "chill", "classical", "dream", "folk", "jazz", "lo-fi", "lofi", "piano", "soft"].some((keyword) =>
-    value.includes(keyword)
-  );
+  return [
+    "ambient",
+    "acoustic",
+    "ballad",
+    "chill",
+    "classical",
+    "dream",
+    "folk",
+    "jazz",
+    "lo-fi",
+    "lofi",
+    "piano",
+    "soft",
+  ].some((keyword) => value.includes(keyword));
 }
 
 function isEnergeticGenre(genre: string): boolean {
   const value = genre.toLowerCase();
-  return ["dance", "edm", "electronic", "funk", "hip-hop", "house", "metal", "pop", "punk", "rock", "techno", "trap"].some((keyword) =>
-    value.includes(keyword)
-  );
+  return [
+    "dance",
+    "edm",
+    "electronic",
+    "funk",
+    "hip-hop",
+    "house",
+    "metal",
+    "pop",
+    "punk",
+    "rock",
+    "techno",
+    "trap",
+  ].some((keyword) => value.includes(keyword));
 }
 
 function round3(value: number): number {

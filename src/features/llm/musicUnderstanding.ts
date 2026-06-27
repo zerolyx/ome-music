@@ -11,7 +11,10 @@ interface ReasonPatch {
   reason: string;
 }
 
-export async function refineRecommendationReasons({ tracks, recommendations }: RefineRecommendationInput): Promise<RecommendationItem[]> {
+export async function refineRecommendationReasons({
+  tracks,
+  recommendations,
+}: RefineRecommendationInput): Promise<RecommendationItem[]> {
   if (recommendations.length === 0) {
     return [];
   }
@@ -19,7 +22,7 @@ export async function refineRecommendationReasons({ tracks, recommendations }: R
   const trackById = new Map(tracks.map((track) => [track.id, track]));
   const fallbackPatches = recommendations.map((recommendation) => ({
     trackId: recommendation.trackId,
-    reason: recommendation.reason
+    reason: recommendation.reason,
   }));
   const compactTracks = recommendations.map((recommendation) => {
     const track = trackById.get(recommendation.trackId);
@@ -32,7 +35,7 @@ export async function refineRecommendationReasons({ tracks, recommendations }: R
       genres: track?.genres ?? [],
       moods: track?.moods ?? [],
       lane: recommendation.lane,
-      fallbackReason: recommendation.reason
+      fallbackReason: recommendation.reason,
     };
   });
 
@@ -43,12 +46,12 @@ export async function refineRecommendationReasons({ tracks, recommendations }: R
     userPrompt: [
       "请为下面每首歌各写一句推荐理由。",
       "要求：每句不超过 26 个汉字；像音乐编辑，不像机器人；只返回 JSON 数组。",
-      "格式：[{\"trackId\":\"...\",\"reason\":\"...\"}]",
-      JSON.stringify(compactTracks)
+      '格式：[{"trackId":"...","reason":"..."}]',
+      JSON.stringify(compactTracks),
     ].join("\n"),
     fallbackText: JSON.stringify(fallbackPatches),
     maxTokens: 360,
-    temperature: 0.72
+    temperature: 0.72,
   });
   const patches = parseReasonPatches(text);
 
@@ -59,7 +62,7 @@ export async function refineRecommendationReasons({ tracks, recommendations }: R
   const reasonById = new Map(patches.map((patch) => [patch.trackId, patch.reason.trim()]));
   return recommendations.map((recommendation) => ({
     ...recommendation,
-    reason: reasonById.get(recommendation.trackId) || recommendation.reason
+    reason: reasonById.get(recommendation.trackId) || recommendation.reason,
   }));
 }
 
@@ -81,12 +84,12 @@ export async function summarizeMusicPreference(profile: UserMusicProfile): Promi
         nightListeningPreference: profile.nightListeningPreference,
         calmMusicPreference: profile.calmMusicPreference,
         energeticMusicPreference: profile.energeticMusicPreference,
-        isLearning: profile.isLearning
-      })
+        isLearning: profile.isLearning,
+      }),
     ].join("\n"),
     fallbackText,
     maxTokens: 120,
-    temperature: 0.58
+    temperature: 0.58,
   });
 }
 
@@ -105,7 +108,7 @@ function parseReasonPatches(text: string): ReasonPatch[] {
     return value
       .map((item) => ({
         trackId: typeof item.trackId === "string" ? item.trackId : "",
-        reason: typeof item.reason === "string" ? item.reason : ""
+        reason: typeof item.reason === "string" ? item.reason : "",
       }))
       .filter((item) => item.trackId && item.reason);
   } catch {
@@ -129,7 +132,13 @@ function buildLocalPreferenceSummary(profile: UserMusicProfile): string {
   const genre = profile.favoriteGenres[0]?.label;
   const artist = profile.favoriteArtists[0]?.label;
 
-  return [mood ? `偏爱 ${mood}` : null, genre ? `常听 ${genre}` : null, artist ? `也常回到 ${artist}` : null]
-    .filter(Boolean)
-    .join("，") || "最近的音乐偏好正在变得清晰。";
+  return (
+    [
+      mood ? `偏爱 ${mood}` : null,
+      genre ? `常听 ${genre}` : null,
+      artist ? `也常回到 ${artist}` : null,
+    ]
+      .filter(Boolean)
+      .join("，") || "最近的音乐偏好正在变得清晰。"
+  );
 }

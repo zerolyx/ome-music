@@ -11,9 +11,16 @@ import {
   listLocalTracks,
   recordPlaybackEvent,
   toPlayableSrc,
-  type PlaybackEventType
+  type PlaybackEventType,
 } from "./features/library/libraryApi";
-import { getCurrentLyricIndex, importLyricsFile, parseLrc, resolveLyrics, saveLyricOffset, type LyricLine } from "./features/lyrics/lyricsResolver";
+import {
+  getCurrentLyricIndex,
+  importLyricsFile,
+  parseLrc,
+  resolveLyrics,
+  saveLyricOffset,
+  type LyricLine,
+} from "./features/lyrics/lyricsResolver";
 import {
   ensureNeteaseApiService,
   BilibiliMusicProvider,
@@ -26,7 +33,7 @@ import {
   type NetEasePlaybackDebug,
   type NetEaseServiceStatus,
   type PlayableUrlOptions,
-  type TasteNotes
+  type TasteNotes,
 } from "./features/musicSources/provider";
 import {
   buildOmeRadioSession,
@@ -36,19 +43,33 @@ import {
   updateRadioSessionPlayback,
   type RadioKind,
   type RadioSegment,
-  type RadioSession
+  type RadioSession,
 } from "./features/radio/omeRadio";
 import { getSpeechProviderConfig, speakCuratorText } from "./features/speech/provider";
-import { loadLastSessionSnapshot, saveLastSessionSnapshot, snapshotToTrack } from "./features/startup/lastSessionSnapshot";
+import {
+  loadLastSessionSnapshot,
+  saveLastSessionSnapshot,
+  snapshotToTrack,
+} from "./features/startup/lastSessionSnapshot";
 import { markStartup, noteStartupTask, reportStartup } from "./features/startup/startupDebug";
 import type { LoopMode, Track } from "./types/music";
 
 const neteaseProvider = new NetEaseMusicProvider();
 const neteaseAuthProvider = new NetEaseAccountSessionProvider();
 const bilibiliProvider = new BilibiliMusicProvider();
-const ProviderSettingsPanel = lazy(() => import("./components/ProviderSettingsPanel").then((module) => ({ default: module.ProviderSettingsPanel })));
-const DjCuratorPanel = lazy(() => import("./components/DjCuratorPanel").then((module) => ({ default: module.DjCuratorPanel })));
-const GlobalDanmakuAtmosphereLayer = lazy(() => import("./components/GlobalDanmakuAtmosphereLayer").then((module) => ({ default: module.GlobalDanmakuAtmosphereLayer })));
+const ProviderSettingsPanel = lazy(() =>
+  import("./components/ProviderSettingsPanel").then((module) => ({
+    default: module.ProviderSettingsPanel,
+  })),
+);
+const DjCuratorPanel = lazy(() =>
+  import("./components/DjCuratorPanel").then((module) => ({ default: module.DjCuratorPanel })),
+);
+const GlobalDanmakuAtmosphereLayer = lazy(() =>
+  import("./components/GlobalDanmakuAtmosphereLayer").then((module) => ({
+    default: module.GlobalDanmakuAtmosphereLayer,
+  })),
+);
 
 function nextLoopMode(loopMode: LoopMode): LoopMode {
   if (loopMode === "off") return "all";
@@ -70,12 +91,6 @@ function sourceIdForTrack(track: Track): string | null {
 function isRemoteTrack(track: Track): boolean {
   return track.source === "netease" || track.source === "bilibili";
 }
-
-function isRestoredOnlyTrack(track: Track): boolean {
-  return restoredOnlyPrefixPattern.test(track.filePath);
-}
-
-const restoredOnlyPrefixPattern = /^snapshot:/;
 
 function playbackReasonMessage(reason?: string | null): string {
   switch (reason) {
@@ -112,15 +127,26 @@ export default function App() {
   const bilibiliSelectionRef = useRef(0);
   const neteaseSelectionRef = useRef(0);
   const [startupSnapshot] = useState(() => loadLastSessionSnapshot());
-  const [restoredSnapshotTrack] = useState<Track | null>(() => (startupSnapshot ? snapshotToTrack(startupSnapshot) : null));
+  const [restoredSnapshotTrack] = useState<Track | null>(() =>
+    startupSnapshot ? snapshotToTrack(startupSnapshot) : null,
+  );
   const snapshotSaveTimerRef = useRef<number | null>(null);
-  const preparedPlayableRef = useRef<Map<string, { audioUrl: string; videoUrl?: string | null }>>(new Map());
+  const preparedPlayableRef = useRef<Map<string, { audioUrl: string; videoUrl?: string | null }>>(
+    new Map(),
+  );
   const progressSecondsRef = useRef(startupSnapshot?.position ?? 0);
   const currentTrackRef = useRef<Track | null>(null);
   const loopModeRef = useRef<LoopMode>("all");
-  const playableSrcForTrackIdRef = useRef<{ trackId: string; quality: NonNullable<PlayableUrlOptions["level"]> } | null>(null);
-  const [tracks, setTracks] = useState<Track[]>(() => (restoredSnapshotTrack ? [restoredSnapshotTrack] : []));
-  const [currentTrackId, setCurrentTrackId] = useState<string | null>(() => restoredSnapshotTrack?.id ?? null);
+  const playableSrcForTrackIdRef = useRef<{
+    trackId: string;
+    quality: NonNullable<PlayableUrlOptions["level"]>;
+  } | null>(null);
+  const [tracks, setTracks] = useState<Track[]>(() =>
+    restoredSnapshotTrack ? [restoredSnapshotTrack] : [],
+  );
+  const [currentTrackId, setCurrentTrackId] = useState<string | null>(
+    () => restoredSnapshotTrack?.id ?? null,
+  );
   const [agentQueue, setAgentQueue] = useState<Track[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progressSeconds, setProgressSeconds] = useState(() => startupSnapshot?.position ?? 0);
@@ -151,24 +177,30 @@ export default function App() {
   const radioSessionRef = useRef<RadioSession | null>(null);
   const spokenRadioSegmentsRef = useRef<Set<string>>(new Set());
   const radioTransitionRef = useRef(false);
-  const [playbackQuality, setPlaybackQuality] = useState<NonNullable<PlayableUrlOptions["level"]>>(() => {
-    const stored = window.localStorage.getItem("ome.playback.netease.quality");
-    return stored === "standard" || stored === "higher" || stored === "exhigh" || stored === "lossless" || stored === "hires"
-      ? stored
-      : "hires";
-  });
+  const [playbackQuality, setPlaybackQuality] = useState<NonNullable<PlayableUrlOptions["level"]>>(
+    () => {
+      const stored = window.localStorage.getItem("ome.playback.netease.quality");
+      return stored === "standard" ||
+        stored === "higher" ||
+        stored === "exhigh" ||
+        stored === "lossless" ||
+        stored === "hires"
+        ? stored
+        : "hires";
+    },
+  );
 
   const currentIndex = useMemo(
     () => tracks.findIndex((track) => track.id === currentTrackId),
-    [currentTrackId, tracks]
+    [currentTrackId, tracks],
   );
   const currentTrack = useMemo(
-    () => (currentIndex >= 0 ? tracks[currentIndex] ?? null : null),
-    [currentIndex, tracks]
+    () => (currentIndex >= 0 ? (tracks[currentIndex] ?? null) : null),
+    [currentIndex, tracks],
   );
   const currentLyricIndex = useMemo(
     () => getCurrentLyricIndex(lyrics, progressSeconds, lyricOffsetMs),
-    [lyrics, lyricOffsetMs, progressSeconds]
+    [lyrics, lyricOffsetMs, progressSeconds],
   );
 
   useEffect(() => {
@@ -194,20 +226,23 @@ export default function App() {
     };
   }, [currentTrack, progressSeconds, volume]);
 
-  const recordEvent = useCallback(async (eventType: PlaybackEventType, track: Track | null, position?: number) => {
-    if (!track) return;
-    const resolvedPosition = position ?? progressSecondsRef.current;
+  const recordEvent = useCallback(
+    async (eventType: PlaybackEventType, track: Track | null, position?: number) => {
+      if (!track) return;
+      const resolvedPosition = position ?? progressSecondsRef.current;
 
-    try {
-      await recordPlaybackEvent({
-        trackId: track.id,
-        eventType,
-        positionSeconds: Math.max(0, Math.floor(resolvedPosition))
-      });
-    } catch (error) {
-      console.error(`failed to record ${eventType}`, error);
-    }
-  }, []);
+      try {
+        await recordPlaybackEvent({
+          trackId: track.id,
+          eventType,
+          positionSeconds: Math.max(0, Math.floor(resolvedPosition)),
+        });
+      } catch (error) {
+        console.error(`failed to record ${eventType}`, error);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     markStartup("frontendMountedAt");
@@ -222,9 +257,10 @@ export default function App() {
         .then((loadedTracks) => {
           if (cancelled) return;
           const restoredTrack = restoredSnapshotTrack;
-          const mergedTracks = restoredTrack && !loadedTracks.some((track) => track.id === restoredTrack.id)
-            ? [restoredTrack, ...loadedTracks]
-            : loadedTracks;
+          const mergedTracks =
+            restoredTrack && !loadedTracks.some((track) => track.id === restoredTrack.id)
+              ? [restoredTrack, ...loadedTracks]
+              : loadedTracks;
           setTracks(mergedTracks);
           setCurrentTrackId((value) => value ?? mergedTracks[0]?.id ?? null);
           setEssentialRestoreDone(true);
@@ -264,7 +300,7 @@ export default function App() {
           })
           .catch(() => {
             if (!cancelled) setTasteNotes(null);
-          })
+          }),
       ]).finally(() => {
         if (!cancelled) {
           markStartup("providersReadyAt");
@@ -346,7 +382,9 @@ export default function App() {
       })
       .catch((error) => {
         if (lyricRequestRef.current !== requestId) return;
-        setLyricWarning(error instanceof Error ? error.message : "Could not import that lyrics file.");
+        setLyricWarning(
+          error instanceof Error ? error.message : "Could not import that lyrics file.",
+        );
       })
       .finally(() => {
         if (lyricRequestRef.current === requestId) setLyricsLoading(false);
@@ -377,7 +415,11 @@ export default function App() {
     }
 
     // If we already have a playable URL resolved for this track at the current quality, keep it across isPlaying toggles.
-    if (playableSrcForTrackIdRef.current?.trackId === currentTrack.id && playableSrcForTrackIdRef.current?.quality === playbackQuality) return;
+    if (
+      playableSrcForTrackIdRef.current?.trackId === currentTrack.id &&
+      playableSrcForTrackIdRef.current?.quality === playbackQuality
+    )
+      return;
 
     const requestId = playableRequestRef.current + 1;
     playableRequestRef.current = requestId;
@@ -405,7 +447,8 @@ export default function App() {
         return { audioUrl: result.url };
       }
 
-      const bilibiliSourceId = currentTrack.source === "bilibili" ? sourceIdForTrack(currentTrack) : null;
+      const bilibiliSourceId =
+        currentTrack.source === "bilibili" ? sourceIdForTrack(currentTrack) : null;
       if (bilibiliSourceId) {
         const result = await bilibiliProvider.getPlayableUrl(bilibiliSourceId);
         if (playableRequestRef.current === requestId) setPlaybackDebug(null);
@@ -481,7 +524,7 @@ export default function App() {
           parsedDanmakuCount: 0,
           firstDanmakuTime: null,
           fromCache: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         });
         setDanmakuItems([]);
       }
@@ -617,7 +660,7 @@ export default function App() {
       await speakCuratorText(segment.text, getSpeechProviderConfig(), {
         onStart: () => setVoiceDucking(true),
         onEnd: () => setVoiceDucking(false),
-        onError: () => setVoiceDucking(false)
+        onError: () => setVoiceDucking(false),
       }).catch(() => {
         setVoiceDucking(false);
         return false;
@@ -637,9 +680,9 @@ export default function App() {
           {
             id: `note-on-air-${Date.now()}`,
             text: trimmed,
-            createdAt: new Date().toISOString()
-          }
-        ]
+            createdAt: new Date().toISOString(),
+          },
+        ],
       };
       return nextSession;
     });
@@ -663,7 +706,11 @@ export default function App() {
     try {
       const firstTrack = session.tracks[0];
       if (!firstTrack) return;
-      const preparingSession: RadioSession = { ...session, status: "preparing", currentTrackIndex: 0 };
+      const preparingSession: RadioSession = {
+        ...session,
+        status: "preparing",
+        currentTrackIndex: 0,
+      };
       setActiveRadioSession(preparingSession);
       setAgentQueue(preparingSession.tracks.slice(1));
       await speakRadioSegments(getRadioSegmentsForTrackStart(preparingSession, 0));
@@ -675,7 +722,11 @@ export default function App() {
     }
   };
 
-  const playRadioTrackAtIndex = async (track: Track, trackIndex: number, remainingTracks: Track[]) => {
+  const playRadioTrackAtIndex = async (
+    track: Track,
+    trackIndex: number,
+    remainingTracks: Track[],
+  ) => {
     if (radioTransitionRef.current) return;
     radioTransitionRef.current = true;
 
@@ -693,9 +744,9 @@ export default function App() {
         {
           ...session,
           status: "playing",
-          currentTrackIndex: trackIndex
+          currentTrackIndex: trackIndex,
         },
-        trackIndex
+        trackIndex,
       );
       setActiveRadioSession({ ...refilled, status: "playing", currentTrackIndex: trackIndex });
       setAgentQueue(refilled.tracks.slice(trackIndex + 1));
@@ -708,7 +759,8 @@ export default function App() {
   const playNextQueuedTrack = (): boolean => {
     if (agentQueue.length === 0) return false;
     const [nextTrack, ...remainingTracks] = agentQueue;
-    const radioIndex = radioSessionRef.current?.tracks.findIndex((track) => track.id === nextTrack.id) ?? -1;
+    const radioIndex =
+      radioSessionRef.current?.tracks.findIndex((track) => track.id === nextTrack.id) ?? -1;
     if (radioIndex >= 0) {
       void playRadioTrackAtIndex(nextTrack, radioIndex, remainingTracks);
       return true;
@@ -718,7 +770,10 @@ export default function App() {
     return true;
   };
 
-  const playAdjacentTrack = (direction: "next" | "previous", options: { markSkip?: boolean } = {}) => {
+  const playAdjacentTrack = (
+    direction: "next" | "previous",
+    options: { markSkip?: boolean } = {},
+  ) => {
     if (tracks.length === 0 || currentIndex < 0) return;
     const { markSkip = true } = options;
 
@@ -752,7 +807,11 @@ export default function App() {
         setIsPlaying(true);
         return;
       }
-      setLibraryError(isTrackUnavailable(currentTrack) ? playbackReasonMessage(currentTrack.unavailableReason) : "Preparing this track.");
+      setLibraryError(
+        isTrackUnavailable(currentTrack)
+          ? playbackReasonMessage(currentTrack.unavailableReason)
+          : "Preparing this track.",
+      );
       setIsPlaying(false);
       return;
     }
@@ -818,7 +877,11 @@ export default function App() {
     playLocalTrack(firstTrack);
   };
 
-  const createRadioSession = (request: RadioKind | { kind?: RadioKind; theme?: string; mood?: Track["moods"][number]; scene?: string }): RadioSession | null => {
+  const createRadioSession = (
+    request:
+      | RadioKind
+      | { kind?: RadioKind; theme?: string; mood?: Track["moods"][number]; scene?: string },
+  ): RadioSession | null => {
     const options = typeof request === "string" ? { kind: request } : request;
     const session = buildOmeRadioSession({
       tracks,
@@ -828,7 +891,7 @@ export default function App() {
       mood: options.mood,
       scene: options.scene,
       source: tasteNotes ? "taste_notes" : "time_context",
-      trackCount: 12
+      trackCount: 12,
     });
     spokenRadioSegmentsRef.current = new Set();
     setActiveRadioSession(session);
@@ -840,12 +903,14 @@ export default function App() {
     if (sessionId && session?.id !== sessionId) {
       session = radioSession;
     }
-    session = session ?? buildOmeRadioSession({
-      tracks,
-      tasteNotes,
-      source: tasteNotes ? "taste_notes" : "time_context",
-      trackCount: 12
-    });
+    session =
+      session ??
+      buildOmeRadioSession({
+        tracks,
+        tasteNotes,
+        source: tasteNotes ? "taste_notes" : "time_context",
+        trackCount: 12,
+      });
 
     if (!session.tracks.length) {
       setLibraryError("The radio needs a few playable records before it can go on air.");
@@ -864,7 +929,7 @@ export default function App() {
       kind: "quietRoom",
       theme: "low light and gentle edges",
       mood: "calm",
-      scene: "A softer room"
+      scene: "A softer room",
     });
   };
 
@@ -873,7 +938,7 @@ export default function App() {
       kind: "discovery",
       theme: "brighter room",
       mood: "energetic",
-      scene: "A brighter room"
+      scene: "A brighter room",
     });
   };
 
@@ -893,21 +958,29 @@ export default function App() {
       if (neteaseSelectionRef.current !== requestId) return null;
       setPlaybackDebug(playable.debug ?? null);
       if (!playable.url || playable.unavailable) {
-        if (neteaseSelectionRef.current === requestId) setLibraryError(playbackReasonMessage(playable.reason));
+        if (neteaseSelectionRef.current === requestId)
+          setLibraryError(playbackReasonMessage(playable.reason));
         return null;
       }
       const updatedTracks = await neteaseProvider.importSong(song.id);
       if (neteaseSelectionRef.current !== requestId) return null;
       setTracks(updatedTracks);
-      const imported = updatedTracks.find((track) => track.source === "netease" && sourceIdForTrack(track) === song.id);
+      const imported = updatedTracks.find(
+        (track) => track.source === "netease" && sourceIdForTrack(track) === song.id,
+      );
       if (!imported) {
-        if (neteaseSelectionRef.current === requestId) setLibraryError("This track is unavailable from the current source.");
+        if (neteaseSelectionRef.current === requestId)
+          setLibraryError("This track is unavailable from the current source.");
         return null;
       }
       return imported;
     } catch (error) {
       if (neteaseSelectionRef.current !== requestId) return null;
-      setLibraryError(error instanceof Error ? error.message : "This track is unavailable from the current source.");
+      setLibraryError(
+        error instanceof Error
+          ? error.message
+          : "This track is unavailable from the current source.",
+      );
       return null;
     }
   };
@@ -935,7 +1008,11 @@ export default function App() {
       const imported = updatedTracks.find((track) => {
         if (track.source !== "bilibili") return false;
         const sourceId = sourceIdForTrack(track);
-        return sourceId === songId || sourceId === requestedBvid || sourceId?.startsWith(`${requestedBvid}:`);
+        return (
+          sourceId === songId ||
+          sourceId === requestedBvid ||
+          sourceId?.startsWith(`${requestedBvid}:`)
+        );
       });
       if (!imported) {
         setLibraryError("This Bilibili track is unavailable from the current source.");
@@ -953,20 +1030,26 @@ export default function App() {
         artist: imported.artist || song.uploader || song.artist,
         album: imported.album || song.album,
         durationSeconds: imported.durationSeconds || song.durationSeconds,
-        coverUrl: imported.coverUrl || song.coverUrl
+        coverUrl: imported.coverUrl || song.coverUrl,
       };
-      const hydratedTracks = updatedTracks.map((track) => (track.id === hydrated.id ? hydrated : track));
+      const hydratedTracks = updatedTracks.map((track) =>
+        track.id === hydrated.id ? hydrated : track,
+      );
       setTracks(hydratedTracks);
       if (importedResult.playback.url) {
         preparedPlayableRef.current.set(hydrated.id, {
           audioUrl: importedResult.playback.url,
-          videoUrl: importedResult.playback.videoUrl
+          videoUrl: importedResult.playback.videoUrl,
         });
       }
       return hydrated;
     } catch (error) {
       if (bilibiliSelectionRef.current !== requestId) return null;
-      setLibraryError(error instanceof Error ? error.message : "This Bilibili track is unavailable from the current source.");
+      setLibraryError(
+        error instanceof Error
+          ? error.message
+          : "This Bilibili track is unavailable from the current source.",
+      );
       return null;
     }
   };
@@ -993,12 +1076,19 @@ export default function App() {
           <div className="fixed inset-0 bg-[radial-gradient(circle_at_62%_45%,rgba(198,96,67,0.34),transparent_34%),radial-gradient(circle_at_28%_61%,rgba(82,86,83,0.42),transparent_38%),linear-gradient(105deg,rgba(190,193,186,0.86)_0%,rgba(207,190,176,0.74)_48%,rgba(225,168,148,0.58)_100%)]" />
         </>
       )}
-      {!currentTrack && <div className="fixed inset-0 bg-[linear-gradient(135deg,#bfc0ba,#ddc0ad)]" />}
+      {!currentTrack && (
+        <div className="fixed inset-0 bg-[linear-gradient(135deg,#bfc0ba,#ddc0ad)]" />
+      )}
       <div className="vintage-grain fixed inset-0" />
 
       <WindowTitlebar />
 
-      <TopSearch tracks={tracks} onPlayLocal={playLocalTrack} onPlayNetEase={playNetEaseSong} onPlayBilibili={playBilibiliSong} />
+      <TopSearch
+        tracks={tracks}
+        onPlayLocal={playLocalTrack}
+        onPlayNetEase={playNetEaseSong}
+        onPlayBilibili={playBilibiliSong}
+      />
 
       <LyricsSourceMenu
         track={currentTrack}
@@ -1116,12 +1206,18 @@ export default function App() {
             onPlaybackQualityChange={changePlaybackQuality}
             onClose={() => {
               setProviderSettingsOpen(false);
-              void neteaseAuthProvider.getLoginStatus().then(setSourceLoginStatus).catch(() => setSourceLoginStatus(null));
+              void neteaseAuthProvider
+                .getLoginStatus()
+                .then(setSourceLoginStatus)
+                .catch(() => setSourceLoginStatus(null));
             }}
             onLibraryChanged={(updatedTracks) => {
               setTracks(updatedTracks);
               setCurrentTrackId((value) => value ?? updatedTracks[0]?.id ?? null);
-              void neteaseProvider.getLatestTasteNotes().then(setTasteNotes).catch(() => setTasteNotes(null));
+              void neteaseProvider
+                .getLatestTasteNotes()
+                .then(setTasteNotes)
+                .catch(() => setTasteNotes(null));
             }}
           />
         </Suspense>
@@ -1141,7 +1237,10 @@ function AmbientDjDockFallback() {
 
 function SettingsPanelFallback() {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#120b08]/34 px-6 backdrop-blur-[6px]" aria-hidden="true">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#120b08]/34 px-6 backdrop-blur-[6px]"
+      aria-hidden="true"
+    >
       <div className="h-[min(80vh,720px)] w-[min(1080px,calc(100vw-3rem))] rounded-[28px] border border-white/[0.07] bg-[#1b1410]/82 shadow-[0_34px_110px_rgba(0,0,0,0.45)]" />
     </div>
   );
@@ -1150,7 +1249,7 @@ function SettingsPanelFallback() {
 function PlaybackNotice({
   message,
   reason,
-  onOpenSettings
+  onOpenSettings,
 }: {
   message: string;
   reason?: string | null;
@@ -1159,14 +1258,22 @@ function PlaybackNotice({
   const label = playbackNoticeLabel(reason);
 
   return (
-    <div data-danmaku-safe-zone="playback-notice" className="fixed left-1/2 top-[5.6rem] z-40 w-[min(520px,calc(100vw-3rem))] -translate-x-1/2 rounded-[24px] border border-[#4a2108]/[0.055] bg-[#dfd1c4]/45 px-4 py-3 text-[#4a2108] shadow-[0_18px_54px_rgba(74,33,8,0.13)] backdrop-blur-2xl">
+    <div
+      data-danmaku-safe-zone="playback-notice"
+      className="fixed left-1/2 top-[5.6rem] z-40 w-[min(520px,calc(100vw-3rem))] -translate-x-1/2 rounded-[24px] border border-[#4a2108]/[0.055] bg-[#dfd1c4]/45 px-4 py-3 text-[#4a2108] shadow-[0_18px_54px_rgba(74,33,8,0.13)] backdrop-blur-2xl"
+    >
       <div className="flex items-center gap-3">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#7a2d1c]/65 shadow-[0_0_22px_rgba(122,45,28,0.38)]" />
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#4a2108]/38">{label}</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#4a2108]/38">
+            {label}
+          </p>
           <p className="mt-0.5 truncate text-sm font-semibold text-[#4a2108]/68">{message}</p>
         </div>
-        {(reason === "not_logged_in" || reason === "cookie_missing" || reason === "cookie_expired" || reason === "vip_required") && (
+        {(reason === "not_logged_in" ||
+          reason === "cookie_missing" ||
+          reason === "cookie_expired" ||
+          reason === "vip_required") && (
           <button
             type="button"
             onClick={onOpenSettings}

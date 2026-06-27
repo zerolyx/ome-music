@@ -69,7 +69,7 @@ const RADIO_TITLES: Record<RadioKind, string> = {
   quietRoom: "Quiet Room",
   discovery: "Discovery Radio",
   artist: "Artist Radio",
-  memory: "Memory Radio"
+  memory: "Memory Radio",
 };
 
 export function buildOmeRadioSession({
@@ -80,9 +80,12 @@ export function buildOmeRadioSession({
   mood,
   scene,
   source = tasteNotes ? "taste_notes" : "time_context",
-  trackCount = 12
+  trackCount = 12,
 }: BuildRadioSessionInput): RadioSession {
-  const playableTracks = tracks.filter((track) => !track.filePath.startsWith("unavailable:") && track.unavailableReason !== "trial_only");
+  const playableTracks = tracks.filter(
+    (track) =>
+      !track.filePath.startsWith("unavailable:") && track.unavailableReason !== "trial_only",
+  );
   const resolvedTheme = theme || themeFromTaste(kind, tasteNotes);
   const resolvedMood = mood || moodFromKind(kind, tasteNotes);
   const resolvedScene = scene || sceneFromKind(kind);
@@ -95,7 +98,7 @@ export function buildOmeRadioSession({
     mood: resolvedMood,
     scene: resolvedScene,
     tracks: selectedTracks,
-    tasteNotes
+    tasteNotes,
   });
 
   return {
@@ -113,24 +116,33 @@ export function buildOmeRadioSession({
       {
         id: `note-${Date.now()}`,
         text: hostNoteFor(kind, tasteNotes, selectedTracks),
-        createdAt: now
-      }
+        createdAt: now,
+      },
     ],
     currentTrackIndex: 0,
-    status: selectedTracks.length ? "preparing" : "idle"
+    status: selectedTracks.length ? "preparing" : "idle",
   };
 }
 
-export function getRadioSegmentsForTrackStart(session: RadioSession, trackIndex: number): RadioSegment[] {
-  return session.segments.filter((segment) => segment.position === "before_track" && segment.trackIndex === trackIndex);
+export function getRadioSegmentsForTrackStart(
+  session: RadioSession,
+  trackIndex: number,
+): RadioSegment[] {
+  return session.segments.filter(
+    (segment) => segment.position === "before_track" && segment.trackIndex === trackIndex,
+  );
 }
 
-export function getRadioSegmentsBetweenTracks(session: RadioSession, afterTrackIndex: number, beforeTrackIndex: number): RadioSegment[] {
+export function getRadioSegmentsBetweenTracks(
+  session: RadioSession,
+  afterTrackIndex: number,
+  beforeTrackIndex: number,
+): RadioSegment[] {
   return session.segments.filter(
     (segment) =>
       segment.position === "between_tracks" &&
       segment.afterTrackIndex === afterTrackIndex &&
-      segment.beforeTrackIndex === beforeTrackIndex
+      segment.beforeTrackIndex === beforeTrackIndex,
   );
 }
 
@@ -138,11 +150,14 @@ export function refillOmeRadioSession(
   session: RadioSession,
   tracks: Track[],
   tasteNotes?: TasteNotes | null,
-  trackCount = 4
+  trackCount = 4,
 ): RadioSession {
   const existingIds = new Set(session.tracks.map((track) => track.id));
   const playableTracks = tracks.filter(
-    (track) => !existingIds.has(track.id) && !track.filePath.startsWith("unavailable:") && track.unavailableReason !== "trial_only"
+    (track) =>
+      !existingIds.has(track.id) &&
+      !track.filePath.startsWith("unavailable:") &&
+      track.unavailableReason !== "trial_only",
   );
   const newTracks = selectRadioTracks(playableTracks, session.kind, session.mood, trackCount);
   if (newTracks.length === 0) return session;
@@ -157,7 +172,7 @@ export function refillOmeRadioSession(
     tracks: newTracks,
     tasteNotes,
     startIndex: offset,
-    includeColdOpen: false
+    includeColdOpen: false,
   });
 
   return {
@@ -169,13 +184,17 @@ export function refillOmeRadioSession(
       {
         id: `note-refill-${Date.now()}`,
         text: "I have placed a few more records quietly behind the current one.",
-        createdAt: new Date().toISOString()
-      }
-    ]
+        createdAt: new Date().toISOString(),
+      },
+    ],
   };
 }
 
-export function updateRadioSessionPlayback(session: RadioSession | null, currentTrackId: string | null, isPlaying: boolean): RadioSession | null {
+export function updateRadioSessionPlayback(
+  session: RadioSession | null,
+  currentTrackId: string | null,
+  isPlaying: boolean,
+): RadioSession | null {
   if (!session) return null;
   const currentTrackIndex = session.tracks.findIndex((track) => track.id === currentTrackId);
   const hasCurrentTrack = currentTrackIndex >= 0;
@@ -183,7 +202,7 @@ export function updateRadioSessionPlayback(session: RadioSession | null, current
   return {
     ...session,
     currentTrackIndex: hasCurrentTrack ? currentTrackIndex : session.currentTrackIndex,
-    status: hasCurrentTrack ? (isPlaying ? "playing" : "paused") : session.status
+    status: hasCurrentTrack ? (isPlaying ? "playing" : "paused") : session.status,
   };
 }
 
@@ -217,7 +236,7 @@ function buildRadioSegments({
   tracks,
   tasteNotes,
   startIndex = 0,
-  includeColdOpen = true
+  includeColdOpen = true,
 }: {
   kind: RadioKind;
   title: string;
@@ -242,22 +261,22 @@ function buildRadioSegments({
         type: "cold_open",
         position: "before_track",
         trackIndex: startIndex,
-        text: coldOpenAnchor(kind, title, scene)
+        text: coldOpenAnchor(kind, title, scene),
       },
       {
         id: `segment-${now}-open-heart`,
         type: "cold_open",
         position: "before_track",
         trackIndex: startIndex,
-        text: coldOpenHeart(kind, first, favoriteArtist, theme, mood)
+        text: coldOpenHeart(kind, first, favoriteArtist, theme, mood),
       },
       {
         id: `segment-${now}-open-invitation`,
         type: "cold_open",
         position: "before_track",
         trackIndex: startIndex,
-        text: `We begin with ${formatTrack(first)}, and let the room find its temperature.`
-      }
+        text: `We begin with ${formatTrack(first)}, and let the room find its temperature.`,
+      },
     );
   } else {
     segments.push({
@@ -265,7 +284,7 @@ function buildRadioSegments({
       type: "quick_touch",
       position: "before_track",
       trackIndex: startIndex,
-      text: "I have found another small shelf nearby. We will keep moving without raising our voice."
+      text: "I have found another small shelf nearby. We will keep moving without raising our voice.",
     });
   }
 
@@ -282,7 +301,7 @@ function buildRadioSegments({
         position: "between_tracks",
         afterTrackIndex: absoluteAfter,
         beforeTrackIndex: absoluteBefore,
-        text: ""
+        text: "",
       });
       continue;
     }
@@ -293,7 +312,7 @@ function buildRadioSegments({
       position: "between_tracks",
       afterTrackIndex: absoluteAfter,
       beforeTrackIndex: absoluteBefore,
-      text: bridgeText(kind, after, before)
+      text: bridgeText(kind, after, before),
     });
   }
 
@@ -301,16 +320,28 @@ function buildRadioSegments({
 }
 
 function coldOpenAnchor(kind: RadioKind, title: string, scene: string): string {
-  if (kind === "lateNight") return "Good evening. The hour is low, and the station is taking its coat off slowly.";
-  if (kind === "rainyDay") return "There is rain at the window tonight, real or imagined, and the records know what to do with it.";
-  if (kind === "youth") return "We are opening a younger drawer tonight, the one with bright sleeves and slightly blurred photographs.";
-  if (kind === "memory") return "Tonight we stay close to the private archive, where familiar records still change shape in the dark.";
-  if (kind === "quietRoom") return "Let us lower the lamp and keep the needle close to the softer part of the room.";
-  if (kind === "discovery") return "I have left one hand on the familiar shelf, and opened a small side door beside it.";
+  if (kind === "lateNight")
+    return "Good evening. The hour is low, and the station is taking its coat off slowly.";
+  if (kind === "rainyDay")
+    return "There is rain at the window tonight, real or imagined, and the records know what to do with it.";
+  if (kind === "youth")
+    return "We are opening a younger drawer tonight, the one with bright sleeves and slightly blurred photographs.";
+  if (kind === "memory")
+    return "Tonight we stay close to the private archive, where familiar records still change shape in the dark.";
+  if (kind === "quietRoom")
+    return "Let us lower the lamp and keep the needle close to the softer part of the room.";
+  if (kind === "discovery")
+    return "I have left one hand on the familiar shelf, and opened a small side door beside it.";
   return `${title} is on the air from ${scene.toLowerCase()}, warm and unhurried.`;
 }
 
-function coldOpenHeart(kind: RadioKind, first: Track, favoriteArtist: string | undefined, theme: string, mood: string): string {
+function coldOpenHeart(
+  kind: RadioKind,
+  first: Track,
+  favoriteArtist: string | undefined,
+  theme: string,
+  mood: string,
+): string {
   if (kind === "memory" && favoriteArtist) {
     return `The first turn stays near ${favoriteArtist}, then lets ${formatTrack(first)} pull the thread a little further.`;
   }
@@ -347,7 +378,8 @@ function formatTrack(track: Track): string {
 }
 
 function scoreTrackForRadio(track: Track, kind: RadioKind, mood: string): number {
-  const text = `${track.title} ${track.artist} ${track.album} ${track.genres.join(" ")} ${track.moods.join(" ")}`.toLowerCase();
+  const text =
+    `${track.title} ${track.artist} ${track.album} ${track.genres.join(" ")} ${track.moods.join(" ")}`.toLowerCase();
   let score = 0;
 
   if (track.liked) score += 3;
@@ -359,7 +391,8 @@ function scoreTrackForRadio(track: Track, kind: RadioKind, mood: string): number
     score += track.playCount <= 2 ? 1.2 : 0;
   }
   if (kind === "quietRoom" || kind === "lateNight") {
-    if (hasAny(text, ["calm", "quiet", "soft", "jazz", "lofi", "ambient", "night", "晚", "夜"])) score += 2.6;
+    if (hasAny(text, ["calm", "quiet", "soft", "jazz", "lofi", "ambient", "night", "晚", "夜"]))
+      score += 2.6;
     if (hasAny(text, ["rock", "dance", "edm", "metal", "party"])) score -= 1.4;
   }
   if (kind === "rainyDay") {
@@ -420,7 +453,11 @@ function sceneFromKind(kind: RadioKind): string {
   }
 }
 
-function hostNoteFor(kind: RadioKind, tasteNotes: TasteNotes | null | undefined, tracks: Track[]): string {
+function hostNoteFor(
+  kind: RadioKind,
+  tasteNotes: TasteNotes | null | undefined,
+  tracks: Track[],
+): string {
   const firstArtist = tasteNotes?.favoriteArtists[0] || tracks[0]?.artist;
   if (tracks.length === 0) {
     return "The radio is waiting for a few records before it can go on air.";

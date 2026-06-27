@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { BilibiliDanmakuDebug, DanmakuItem } from "../features/musicSources/provider";
-import { getDanmakuSettings, type DanmakuMotionStyle, type DanmakuSettings } from "../features/danmaku/danmakuSettings";
+import {
+  getDanmakuSettings,
+  type DanmakuMotionStyle,
+  type DanmakuSettings,
+} from "../features/danmaku/danmakuSettings";
 
 interface DanmakuAtmosphereLayerProps {
   items: DanmakuItem[];
@@ -21,12 +25,25 @@ interface FloatingDanmaku {
   motion: Exclude<DanmakuMotionStyle, "mixed">;
 }
 
-export function DanmakuAtmosphereLayer({ items, currentTime, isPlaying, hasLyrics, trackId, debug }: DanmakuAtmosphereLayerProps) {
+export function DanmakuAtmosphereLayer({
+  items,
+  currentTime,
+  isPlaying,
+  hasLyrics,
+  trackId,
+  debug,
+}: DanmakuAtmosphereLayerProps) {
   const [settings, setSettings] = useState<DanmakuSettings>(() => getDanmakuSettings());
   const [floating, setFloating] = useState<FloatingDanmaku[]>([]);
   const [showDebug, setShowDebug] = useState(() => {
-    const isDevelopment = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
-    return isDevelopment && (new URLSearchParams(window.location.search).get("danmakuDebug") === "1" || window.localStorage.getItem("ome.debug.danmaku") === "1");
+    const isDevelopment = Boolean(
+      (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV,
+    );
+    return (
+      isDevelopment &&
+      (new URLSearchParams(window.location.search).get("danmakuDebug") === "1" ||
+        window.localStorage.getItem("ome.debug.danmaku") === "1")
+    );
   });
   const lastTimeRef = useRef(0);
   const lastSpawnTimeRef = useRef(-10);
@@ -46,7 +63,9 @@ export function DanmakuAtmosphereLayer({ items, currentTime, isPlaying, hasLyric
   }, []);
 
   useEffect(() => {
-    const isDevelopment = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
+    const isDevelopment = Boolean(
+      (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV,
+    );
     if (!isDevelopment) return;
     const toggleDebug = (event: KeyboardEvent) => {
       if (!(event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "d")) return;
@@ -81,7 +100,8 @@ export function DanmakuAtmosphereLayer({ items, currentTime, isPlaying, hasLyric
       lastSpawnTimeRef.current = currentTime - 10;
     }
 
-    const spawnInterval = settings.density === "high" ? 0.45 : settings.density === "medium" ? 0.9 : 1.6;
+    const spawnInterval =
+      settings.density === "high" ? 0.45 : settings.density === "medium" ? 0.9 : 1.6;
     const maxNewItems = settings.density === "high" ? 3 : settings.density === "medium" ? 2 : 1;
     const candidates = items
       .filter((item) => item.time > fromTime && item.time <= currentTime + 0.55)
@@ -96,9 +116,11 @@ export function DanmakuAtmosphereLayer({ items, currentTime, isPlaying, hasLyric
       const seed = stableNumber(`${trackId ?? "track"}:${item.id}`);
       const avoidCenter = settings.avoidLyricsArea && hasLyrics;
       const topBase = avoidCenter ? (seed % 2 === 0 ? 11 : 72) : 16 + (seed % 60);
-      const direction = settings.direction === "mixed" ? (seed % 2 === 0 ? "rtl" : "ltr") : settings.direction;
+      const direction =
+        settings.direction === "mixed" ? (seed % 2 === 0 ? "rtl" : "ltr") : settings.direction;
       const motion = resolveMotionStyle(settings.motionStyle, seed);
-      const durationBase = settings.speed === "fast" ? 7.6 : settings.speed === "normal" ? 10.5 : 14;
+      const durationBase =
+        settings.speed === "fast" ? 7.6 : settings.speed === "normal" ? 10.5 : 14;
       const duration = durationBase * motionDurationFactor(motion);
       return {
         key: item.id,
@@ -107,7 +129,7 @@ export function DanmakuAtmosphereLayer({ items, currentTime, isPlaying, hasLyric
         duration: duration + (seed % 4),
         delay: (seed % 40) / 100,
         direction,
-        motion
+        motion,
       };
     });
 
@@ -128,41 +150,74 @@ export function DanmakuAtmosphereLayer({ items, currentTime, isPlaying, hasLyric
       className="danmaku-layer pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-[22px]"
       aria-hidden="true"
     >
-      <div className="absolute inset-0" style={{ opacity: (hasLyrics ? Math.min(0.42, settings.opacity * 0.82) : Math.max(0.56, settings.opacity)) * intensityOpacity(settings.emotionalIntensity) }}>
+      <div
+        className="absolute inset-0"
+        style={{
+          opacity:
+            (hasLyrics
+              ? Math.min(0.42, settings.opacity * 0.82)
+              : Math.max(0.56, settings.opacity)) * intensityOpacity(settings.emotionalIntensity),
+        }}
+      >
         {floating.map((item) => (
           <span
             key={item.key}
             className={`danmaku-atmosphere-line danmaku-motion-${item.motion}`}
-            onAnimationEnd={() => setFloating((current) => current.filter((entry) => entry.key !== item.key))}
-            style={{
-              top: `${item.top}%`,
-              fontSize: fontSizeValue(settings.fontSize),
-              animationDuration: `${item.duration}s`,
-              animationDelay: `${item.delay}s`,
-              animationName: motionAnimationName(item.motion, item.direction, "danmaku"),
-              animationPlayState: isPlaying ? "running" : "paused",
-              "--danmaku-glow": intensityGlow(settings.emotionalIntensity)
-            } as CSSProperties}
+            onAnimationEnd={() =>
+              setFloating((current) => current.filter((entry) => entry.key !== item.key))
+            }
+            style={
+              {
+                top: `${item.top}%`,
+                fontSize: fontSizeValue(settings.fontSize),
+                animationDuration: `${item.duration}s`,
+                animationDelay: `${item.delay}s`,
+                animationName: motionAnimationName(item.motion, item.direction, "danmaku"),
+                animationPlayState: isPlaying ? "running" : "paused",
+                "--danmaku-glow": intensityGlow(settings.emotionalIntensity),
+              } as CSSProperties
+            }
           >
             <span
               className={`danmaku-entrance danmaku-entrance-${settings.entranceStyle}`}
-              style={{ animationDelay: `${item.delay}s`, animationPlayState: isPlaying ? "running" : "paused" }}
+              style={{
+                animationDelay: `${item.delay}s`,
+                animationPlayState: isPlaying ? "running" : "paused",
+              }}
             >
               {item.text}
             </span>
           </span>
         ))}
       </div>
-      {(showDebug || (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV && Boolean(debug?.error)) && (
+      {(showDebug ||
+        ((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV &&
+          Boolean(debug?.error))) && (
         <div className="absolute right-3 top-3 z-30 w-[min(310px,48%)] rounded-[12px] bg-black/62 p-3 font-mono text-[10px] leading-4 text-white/80 backdrop-blur-md">
           <p>bvid: {debug?.bvid || "-"}</p>
           <p>aid: {debug?.aid || "-"}</p>
           <p>cid: {debug?.cid || "-"}</p>
-          <p className="truncate" title={debug?.danmakuRequestUrl}>request: {debug?.danmakuRequestUrl || "-"}</p>
-          <p>raw: {String(Boolean(debug?.rawDanmakuLoaded))} / {debug?.rawDanmakuLength ?? 0} bytes</p>
-          <p>parsed: {debug?.parsedDanmakuCount ?? items.length} / first: {debug?.firstDanmakuTime?.toFixed(2) ?? "-"}s</p>
-          <p>current: {currentTime.toFixed(2)}s / active: {floating.length} / rendered: {floating.length}</p>
-          <p>enabled: {String(settings.enabled)} / visible: {String(layerVisible)} / z: 20 / opacity: {(hasLyrics ? Math.min(0.42, settings.opacity * 0.82) : Math.max(0.56, settings.opacity)).toFixed(2)}</p>
+          <p className="truncate" title={debug?.danmakuRequestUrl}>
+            request: {debug?.danmakuRequestUrl || "-"}
+          </p>
+          <p>
+            raw: {String(Boolean(debug?.rawDanmakuLoaded))} / {debug?.rawDanmakuLength ?? 0} bytes
+          </p>
+          <p>
+            parsed: {debug?.parsedDanmakuCount ?? items.length} / first:{" "}
+            {debug?.firstDanmakuTime?.toFixed(2) ?? "-"}s
+          </p>
+          <p>
+            current: {currentTime.toFixed(2)}s / active: {floating.length} / rendered:{" "}
+            {floating.length}
+          </p>
+          <p>
+            enabled: {String(settings.enabled)} / visible: {String(layerVisible)} / z: 20 / opacity:{" "}
+            {(hasLyrics
+              ? Math.min(0.42, settings.opacity * 0.82)
+              : Math.max(0.56, settings.opacity)
+            ).toFixed(2)}
+          </p>
           {debug?.error && <p className="mt-1 break-words text-[#ffc5b7]">error: {debug.error}</p>}
         </div>
       )}
@@ -170,12 +225,19 @@ export function DanmakuAtmosphereLayer({ items, currentTime, isPlaying, hasLyric
   );
 }
 
-function resolveMotionStyle(style: DanmakuMotionStyle, seed: number): Exclude<DanmakuMotionStyle, "mixed"> {
+function resolveMotionStyle(
+  style: DanmakuMotionStyle,
+  seed: number,
+): Exclude<DanmakuMotionStyle, "mixed"> {
   if (style !== "mixed") return style;
   return (["classic", "drift", "float", "pulse", "meteor"] as const)[seed % 5];
 }
 
-function motionAnimationName(motion: Exclude<DanmakuMotionStyle, "mixed">, direction: "rtl" | "ltr", prefix: "danmaku" | "ambient"): string {
+function motionAnimationName(
+  motion: Exclude<DanmakuMotionStyle, "mixed">,
+  direction: "rtl" | "ltr",
+  prefix: "danmaku" | "ambient",
+): string {
   if (motion === "float" || motion === "pulse") return `${prefix}-${motion}`;
   return `${prefix}-${motion}-${direction}`;
 }

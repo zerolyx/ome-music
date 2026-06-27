@@ -27,7 +27,7 @@ export function PlayerControls({
   onNext,
   onPrevious,
   onSetProgress,
-  onSetVolume
+  onSetVolume,
 }: PlayerControlsProps) {
   if (!track) {
     return null;
@@ -36,18 +36,40 @@ export function PlayerControls({
   const progress = Math.min(progressSeconds, track.durationSeconds);
 
   return (
-    <footer data-danmaku-safe-zone="controls" className="fixed inset-x-0 bottom-0 z-30 h-24 text-[#4a2108]">
+    <footer
+      data-danmaku-safe-zone="controls"
+      className="fixed inset-x-0 bottom-0 z-30 h-24 text-[#4a2108]"
+    >
       <div className="absolute inset-x-10 bottom-8 grid grid-cols-[1fr_auto_1fr] items-center">
         <div />
 
         <div className="flex items-center justify-center gap-7">
-          <button type="button" onClick={onPrevious} className="player-icon-button" aria-label="Previous track">
+          <button
+            type="button"
+            onClick={onPrevious}
+            className="player-icon-button"
+            aria-label="Previous track"
+          >
             <SkipBack className="h-[18px] w-[18px] fill-current" />
           </button>
-          <button type="button" onClick={onTogglePlay} className="player-main-button" aria-label={isPlaying ? "Pause" : "Play"}>
-            {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="ml-0.5 h-5 w-5 fill-current" />}
+          <button
+            type="button"
+            onClick={onTogglePlay}
+            className="player-main-button"
+            aria-label={isPlaying ? "Pause" : "Play"}
+          >
+            {isPlaying ? (
+              <Pause className="h-5 w-5 fill-current" />
+            ) : (
+              <Play className="ml-0.5 h-5 w-5 fill-current" />
+            )}
           </button>
-          <button type="button" onClick={onNext} className="player-icon-button" aria-label="Next track">
+          <button
+            type="button"
+            onClick={onNext}
+            className="player-icon-button"
+            aria-label="Next track"
+          >
             <SkipForward className="h-[18px] w-[18px] fill-current" />
           </button>
         </div>

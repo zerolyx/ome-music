@@ -29,7 +29,7 @@ export async function resolveLyrics(track: Track): Promise<ResolvedLyrics> {
       translatedLyrics: "",
       confidence: 0,
       warning: "No matched lyrics for this version.",
-      offsetMs: 0
+      offsetMs: 0,
     };
   }
 
@@ -45,7 +45,7 @@ export async function importLyricsFile(track: Track): Promise<ResolvedLyrics> {
       translatedLyrics: "",
       confidence: 0,
       warning: "No matched lyrics for this version.",
-      offsetMs: 0
+      offsetMs: 0,
     };
   }
 
@@ -73,7 +73,7 @@ export function parseLrc(rawLyrics: string): LyricLine[] {
       lines.push({
         id: `${rawIndex}-${tagIndex}-${minutes}-${seconds}-${millis}`,
         startTime: minutes * 60 + seconds + millis / 1000,
-        text
+        text,
       });
     });
   });
@@ -81,7 +81,11 @@ export function parseLrc(rawLyrics: string): LyricLine[] {
   return lines.sort((a, b) => a.startTime - b.startTime);
 }
 
-export function getCurrentLyricIndex(lines: LyricLine[], currentTimeSeconds: number, offsetMs: number): number {
+export function getCurrentLyricIndex(
+  lines: LyricLine[],
+  currentTimeSeconds: number,
+  offsetMs: number,
+): number {
   if (!lines.length) return -1;
   const adjustedTime = currentTimeSeconds + offsetMs / 1000;
   let low = 0;

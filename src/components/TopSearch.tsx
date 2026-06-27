@@ -6,7 +6,7 @@ import {
   getBilibiliSourceConfig,
   getNeteaseSourceConfig,
   NetEaseMusicProvider,
-  type MusicSourceSong
+  type MusicSourceSong,
 } from "../features/musicSources/provider";
 import type { Track } from "../types/music";
 import { ArtworkImage } from "./ArtworkImage";
@@ -41,7 +41,9 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
     const needle = query.trim().toLowerCase();
     if (!needle) return tracks.slice(0, 8);
     return tracks
-      .filter((track) => `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(needle))
+      .filter((track) =>
+        `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(needle),
+      )
       .slice(0, 8);
   }, [query, tracks]);
 
@@ -144,9 +146,12 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  useEffect(() => () => {
-    if (closeSoonTimerRef.current !== null) window.clearTimeout(closeSoonTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (closeSoonTimerRef.current !== null) window.clearTimeout(closeSoonTimerRef.current);
+    },
+    [],
+  );
 
   const closeSoon = () => {
     if (closeSoonTimerRef.current !== null) window.clearTimeout(closeSoonTimerRef.current);
@@ -157,7 +162,11 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
   };
 
   return (
-    <div ref={rootRef} data-danmaku-safe-zone="search" className="fixed left-1/2 top-5 z-40 w-[min(34vw,560px)] min-w-[300px] max-w-[calc(100vw-8rem)] -translate-x-1/2 max-md:left-6 max-md:right-20 max-md:w-auto max-md:min-w-0 max-md:max-w-none max-md:translate-x-0">
+    <div
+      ref={rootRef}
+      data-danmaku-safe-zone="search"
+      className="fixed left-1/2 top-5 z-40 w-[min(34vw,560px)] min-w-[300px] max-w-[calc(100vw-8rem)] -translate-x-1/2 max-md:left-6 max-md:right-20 max-md:w-auto max-md:min-w-0 max-md:max-w-none max-md:translate-x-0"
+    >
       <div className="search-glass flex h-10 items-center gap-2.5 rounded-full px-3.5">
         <Search className="h-3.5 w-3.5 shrink-0 text-[#4a2108]/28" />
         <input
@@ -165,8 +174,12 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
           onChange={(event) => setQuery(event.target.value)}
           onFocus={() => {
             setOpen(true);
-            void refreshSourceConfig().then((config) => setNeteaseEnabled(config.enabled)).catch(() => setNeteaseEnabled(false));
-            void getBilibiliSourceConfig().then((config) => setBilibiliEnabled(config.enabled)).catch(() => setBilibiliEnabled(false));
+            void refreshSourceConfig()
+              .then((config) => setNeteaseEnabled(config.enabled))
+              .catch(() => setNeteaseEnabled(false));
+            void getBilibiliSourceConfig()
+              .then((config) => setBilibiliEnabled(config.enabled))
+              .catch(() => setBilibiliEnabled(false));
           }}
           onBlur={closeSoon}
           placeholder="Find a song for this moment..."
@@ -190,7 +203,11 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
       </div>
 
       {isOpen && (query.trim() || localResults.length > 0) && (
-        <div data-testid="search-results" className="search-popover search-results-scroll mt-2.5 min-h-0 max-h-[min(62svh,calc(100svh-6.25rem),520px)] touch-pan-y overflow-y-auto overscroll-contain rounded-[24px] p-3 pr-2" onWheel={(event) => event.stopPropagation()}>
+        <div
+          data-testid="search-results"
+          className="search-popover search-results-scroll mt-2.5 min-h-0 max-h-[min(62svh,calc(100svh-6.25rem),520px)] touch-pan-y overflow-y-auto overscroll-contain rounded-[24px] p-3 pr-2"
+          onWheel={(event) => event.stopPropagation()}
+        >
           <SearchGroup title="Local Library">
             {localResults.length ? (
               localResults.map((track) => (
@@ -204,7 +221,12 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
                   }}
                   className="search-result-row"
                 >
-                  <ArtworkImage src={track.coverUrl} alt={track.album} source={track.source} className="h-10 w-10 shrink-0 rounded-[10px] object-cover shadow-[0_10px_24px_rgba(74,33,8,0.18)]" />
+                  <ArtworkImage
+                    src={track.coverUrl}
+                    alt={track.album}
+                    source={track.source}
+                    className="h-10 w-10 shrink-0 rounded-[10px] object-cover shadow-[0_10px_24px_rgba(74,33,8,0.18)]"
+                  />
                   <ResultText title={track.title} subtitle={track.artist} />
                 </button>
               ))
@@ -233,14 +255,23 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
                     className="search-result-row"
                   >
                     {song.coverUrl ? (
-                      <ArtworkImage src={song.coverUrl} alt={song.album} source="netease" className="h-10 w-10 shrink-0 rounded-[10px] object-cover shadow-[0_10px_24px_rgba(74,33,8,0.18)]" />
+                      <ArtworkImage
+                        src={song.coverUrl}
+                        alt={song.album}
+                        source="netease"
+                        className="h-10 w-10 shrink-0 rounded-[10px] object-cover shadow-[0_10px_24px_rgba(74,33,8,0.18)]"
+                      />
                     ) : (
                       <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#4a2108]/10 text-[#4a2108]/38">
                         <Music2 className="h-4 w-4" />
                       </div>
                     )}
                     <ResultText title={song.title} subtitle={`${song.artist} · ${song.album}`} />
-                    {song.unavailable && <span className="ml-auto text-xs font-semibold text-[#4a2108]/30">unavailable</span>}
+                    {song.unavailable && (
+                      <span className="ml-auto text-xs font-semibold text-[#4a2108]/30">
+                        unavailable
+                      </span>
+                    )}
                   </button>
                 ))
               ) : (
@@ -273,12 +304,22 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
                     }}
                     className="search-result-row"
                   >
-                    <ArtworkImage src={song.coverUrl} alt={song.title} source="bilibili" className="h-10 w-10 shrink-0 rounded-[10px] object-cover shadow-[0_10px_24px_rgba(74,33,8,0.18)]" />
-                    <ResultText title={song.title} subtitle={`${song.uploader ?? song.artist} · ${formatDuration(song.durationSeconds)}`} />
+                    <ArtworkImage
+                      src={song.coverUrl}
+                      alt={song.title}
+                      source="bilibili"
+                      className="h-10 w-10 shrink-0 rounded-[10px] object-cover shadow-[0_10px_24px_rgba(74,33,8,0.18)]"
+                    />
+                    <ResultText
+                      title={song.title}
+                      subtitle={`${song.uploader ?? song.artist} · ${formatDuration(song.durationSeconds)}`}
+                    />
                     {playingBilibiliId === song.id ? (
                       <Loader2 className="ml-auto h-3.5 w-3.5 shrink-0 animate-spin text-[#4a2108]/38" />
                     ) : typeof song.danmakuCount === "number" ? (
-                      <span className="ml-auto text-xs font-semibold text-[#4a2108]/30">{compactNumber(song.danmakuCount)} danmaku</span>
+                      <span className="ml-auto text-xs font-semibold text-[#4a2108]/30">
+                        {compactNumber(song.danmakuCount)} danmaku
+                      </span>
                     ) : null}
                   </button>
                 ))
@@ -296,7 +337,9 @@ export function TopSearch({ tracks, onPlayLocal, onPlayNetEase, onPlayBilibili }
 function formatDuration(seconds: number): string {
   if (!seconds) return "--:--";
   const minutes = Math.floor(seconds / 60);
-  const rest = Math.floor(seconds % 60).toString().padStart(2, "0");
+  const rest = Math.floor(seconds % 60)
+    .toString()
+    .padStart(2, "0");
   return `${minutes}:${rest}`;
 }
 
@@ -316,7 +359,9 @@ function readSourceError(error: unknown): string {
 function SearchGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="py-2">
-      <p className="px-2 pb-2 text-[11px] font-black uppercase tracking-[0.18em] text-[#4a2108]/28">{title}</p>
+      <p className="px-2 pb-2 text-[11px] font-black uppercase tracking-[0.18em] text-[#4a2108]/28">
+        {title}
+      </p>
       <div className="space-y-1">{children}</div>
     </div>
   );

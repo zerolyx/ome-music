@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { DanmakuItem } from "../features/musicSources/provider";
-import { getDanmakuSettings, type DanmakuMotionStyle, type DanmakuSettings } from "../features/danmaku/danmakuSettings";
+import {
+  getDanmakuSettings,
+  type DanmakuMotionStyle,
+  type DanmakuSettings,
+} from "../features/danmaku/danmakuSettings";
 
 interface GlobalDanmakuAtmosphereLayerProps {
   items: DanmakuItem[];
@@ -28,7 +32,12 @@ interface SafeCorridor {
   width: number;
 }
 
-export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, trackId }: GlobalDanmakuAtmosphereLayerProps) {
+export function GlobalDanmakuAtmosphereLayer({
+  items,
+  currentTime,
+  isPlaying,
+  trackId,
+}: GlobalDanmakuAtmosphereLayerProps) {
   const [settings, setSettings] = useState<DanmakuSettings>(() => getDanmakuSettings());
   const [lines, setLines] = useState<AmbientLine[]>([]);
   const linesRef = useRef<AmbientLine[]>([]);
@@ -68,11 +77,14 @@ export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, tr
       const safeRects = visibleSafeRects(settings.avoidLyricsArea);
       const unsafeKeys = new Set(
         Array.from(document.querySelectorAll<HTMLElement>("[data-ambient-danmaku-key]"))
-          .filter((element) => safeRects.some((rect) => rectanglesOverlap(element.getBoundingClientRect(), rect)))
+          .filter((element) =>
+            safeRects.some((rect) => rectanglesOverlap(element.getBoundingClientRect(), rect)),
+          )
           .map((element) => element.dataset.ambientDanmakuKey)
-          .filter((key): key is string => Boolean(key))
+          .filter((key): key is string => Boolean(key)),
       );
-      if (unsafeKeys.size > 0) setLines((current) => current.filter((line) => !unsafeKeys.has(line.key)));
+      if (unsafeKeys.size > 0)
+        setLines((current) => current.filter((line) => !unsafeKeys.has(line.key)));
     });
     return () => window.cancelAnimationFrame(frame);
   }, [currentTime, isAmbient, lines.length, settings.avoidLyricsArea]);
@@ -89,7 +101,8 @@ export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, tr
     }
     lastTimeRef.current = currentTime;
 
-    const spawnInterval = settings.density === "high" ? 0.75 : settings.density === "medium" ? 1.25 : 2;
+    const spawnInterval =
+      settings.density === "high" ? 0.75 : settings.density === "medium" ? 1.25 : 2;
     if (!didSeek && currentTime - lastSpawnTimeRef.current < spawnInterval) return;
 
     const visibleText = new Set(linesRef.current.map((line) => normalizeText(line.text)));
@@ -100,7 +113,10 @@ export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, tr
       .filter((item, index, all) => {
         if (!settings.filterRepeated) return true;
         const normalized = normalizeText(item.text);
-        return !visibleText.has(normalized) && all.findIndex((entry) => normalizeText(entry.text) === normalized) === index;
+        return (
+          !visibleText.has(normalized) &&
+          all.findIndex((entry) => normalizeText(entry.text) === normalized) === index
+        );
       })
       .slice(0, maxNewItems);
     if (!candidates.length) return;
@@ -112,9 +128,11 @@ export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, tr
     const additions = candidates.map((item, index): AmbientLine => {
       const seed = stableNumber(`${trackId ?? "track"}:${item.id}`);
       const corridor = corridors[(seed + index * 7) % corridors.length];
-      const direction = settings.direction === "mixed" ? (seed % 2 === 0 ? "rtl" : "ltr") : settings.direction;
+      const direction =
+        settings.direction === "mixed" ? (seed % 2 === 0 ? "rtl" : "ltr") : settings.direction;
       const motion = resolveMotionStyle(settings.motionStyle, seed);
-      const durationBase = settings.speed === "fast" ? 10.5 : settings.speed === "normal" ? 14 : 18.5;
+      const durationBase =
+        settings.speed === "fast" ? 10.5 : settings.speed === "normal" ? 14 : 18.5;
       return {
         key: `${item.id}:${currentTime.toFixed(2)}`,
         text: item.text,
@@ -125,7 +143,7 @@ export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, tr
         delay: (seed % 35) / 100,
         direction,
         depth: seed % 3,
-        motion
+        motion,
       };
     });
 
@@ -138,7 +156,10 @@ export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, tr
   if (!isAmbient) return null;
 
   return (
-    <div className="ambient-danmaku-layer pointer-events-none fixed inset-0 z-[22] overflow-hidden" aria-hidden="true">
+    <div
+      className="ambient-danmaku-layer pointer-events-none fixed inset-0 z-[22] overflow-hidden"
+      aria-hidden="true"
+    >
       {lines.map((line) => {
         const depthOpacity = line.depth === 0 ? 1 : line.depth === 1 ? 0.82 : 0.68;
         const style = {
@@ -154,24 +175,34 @@ export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, tr
           "--ambient-pulse-start": `${line.width * 0.5}px`,
           "--ambient-pulse-mid": `${line.width * 0.48}px`,
           "--ambient-pulse-end": `${line.width * 0.46}px`,
-          "--danmaku-glow": intensityGlow(settings.emotionalIntensity)
+          "--danmaku-glow": intensityGlow(settings.emotionalIntensity),
         } as CSSProperties;
         return (
-          <div key={line.key} data-ambient-danmaku-key={line.key} className="ambient-danmaku-corridor fixed overflow-hidden" style={style}>
+          <div
+            key={line.key}
+            data-ambient-danmaku-key={line.key}
+            className="ambient-danmaku-corridor fixed overflow-hidden"
+            style={style}
+          >
             <span
               className={`ambient-danmaku-line danmaku-motion-${line.motion}`}
-              onAnimationEnd={() => setLines((current) => current.filter((entry) => entry.key !== line.key))}
+              onAnimationEnd={() =>
+                setLines((current) => current.filter((entry) => entry.key !== line.key))
+              }
               style={{
                 animationDuration: `${line.duration}s`,
                 animationDelay: `${line.delay}s`,
                 animationName: motionAnimationName(line.motion, line.direction),
                 animationPlayState: isPlaying ? "running" : "paused",
-                fontSize: fontSizeValue(settings.fontSize)
+                fontSize: fontSizeValue(settings.fontSize),
               }}
             >
               <span
                 className={`danmaku-entrance danmaku-entrance-${settings.entranceStyle}`}
-                style={{ animationDelay: `${line.delay}s`, animationPlayState: isPlaying ? "running" : "paused" }}
+                style={{
+                  animationDelay: `${line.delay}s`,
+                  animationPlayState: isPlaying ? "running" : "paused",
+                }}
               >
                 {line.text}
               </span>
@@ -183,12 +214,18 @@ export function GlobalDanmakuAtmosphereLayer({ items, currentTime, isPlaying, tr
   );
 }
 
-function resolveMotionStyle(style: DanmakuMotionStyle, seed: number): Exclude<DanmakuMotionStyle, "mixed"> {
+function resolveMotionStyle(
+  style: DanmakuMotionStyle,
+  seed: number,
+): Exclude<DanmakuMotionStyle, "mixed"> {
   if (style !== "mixed") return style;
   return (["classic", "drift", "float", "pulse", "meteor"] as const)[seed % 5];
 }
 
-function motionAnimationName(motion: Exclude<DanmakuMotionStyle, "mixed">, direction: "rtl" | "ltr"): string {
+function motionAnimationName(
+  motion: Exclude<DanmakuMotionStyle, "mixed">,
+  direction: "rtl" | "ltr",
+): string {
   if (motion === "float" || motion === "pulse") return `ambient-${motion}`;
   return `ambient-${motion}-${direction}`;
 }
@@ -227,12 +264,19 @@ function measureSafeCorridors(avoidLyricsArea: boolean): SafeCorridor[] {
     const laneBottom = laneTop + 32;
     const blocked = safeRects
       .filter((rect) => rect.top - 14 < laneBottom && rect.bottom + 14 > laneTop)
-      .map((rect) => [Math.max(edge, rect.left - 18), Math.min(viewportWidth - edge, rect.right + 18)] as const)
+      .map(
+        (rect) =>
+          [
+            Math.max(edge, rect.left - 18),
+            Math.min(viewportWidth - edge, rect.right + 18),
+          ] as const,
+      )
       .sort((a, b) => a[0] - b[0]);
 
     let cursor = edge;
     for (const [start, end] of blocked) {
-      if (start - cursor >= minWidth) corridors.push({ top: laneTop, left: cursor, width: start - cursor });
+      if (start - cursor >= minWidth)
+        corridors.push({ top: laneTop, left: cursor, width: start - cursor });
       cursor = Math.max(cursor, end);
     }
     if (viewportWidth - edge - cursor >= minWidth) {
@@ -255,7 +299,9 @@ function visibleSafeRects(avoidLyricsArea: boolean): DOMRect[] {
 }
 
 function rectanglesOverlap(a: DOMRect, b: DOMRect): boolean {
-  return a.left < b.right + 14 && a.right > b.left - 14 && a.top < b.bottom + 10 && a.bottom > b.top - 10;
+  return (
+    a.left < b.right + 14 && a.right > b.left - 14 && a.top < b.bottom + 10 && a.bottom > b.top - 10
+  );
 }
 
 function normalizeText(value: string): string {

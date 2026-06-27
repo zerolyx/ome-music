@@ -11,9 +11,11 @@ export function MomentPickPanel({ tracks, recommendations }: MomentPickPanelProp
     .slice(0, 3)
     .map((recommendation) => ({
       recommendation,
-      track: trackById.get(recommendation.trackId)
+      track: trackById.get(recommendation.trackId),
     }))
-    .filter((item): item is { recommendation: RecommendationItem; track: Track } => Boolean(item.track));
+    .filter((item): item is { recommendation: RecommendationItem; track: Track } =>
+      Boolean(item.track),
+    );
   const primaryPick = picks[0];
   const heading = getMomentHeading();
 
@@ -34,9 +36,13 @@ export function MomentPickPanel({ tracks, recommendations }: MomentPickPanelProp
               className="app-transition h-16 w-16 shrink-0 rounded-[18px] object-cover shadow-[0_12px_32px_rgba(0,0,0,0.28)] group-hover:scale-[1.02]"
             />
             <div className="min-w-0 pt-1">
-              <h3 className="truncate text-sm font-semibold text-white">{primaryPick.track.title}</h3>
+              <h3 className="truncate text-sm font-semibold text-white">
+                {primaryPick.track.title}
+              </h3>
               <p className="mt-1 truncate text-xs text-white/45">{primaryPick.track.artist}</p>
-              <p className="mt-2 line-clamp-2 text-sm leading-5 text-white/52">{primaryPick.recommendation.reason}</p>
+              <p className="mt-2 line-clamp-2 text-sm leading-5 text-white/52">
+                {primaryPick.recommendation.reason}
+              </p>
             </div>
           </div>
         )}

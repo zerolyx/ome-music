@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import type React from "react";
-import { Clock3, Cloud, FileMusic, FolderOpen, Radio, RefreshCw, Settings2, SlidersHorizontal } from "lucide-react";
+import {
+  Clock3,
+  Cloud,
+  FileMusic,
+  FolderOpen,
+  Radio,
+  RefreshCw,
+  Settings2,
+  SlidersHorizontal,
+} from "lucide-react";
 import {
   BilibiliAccountSessionProvider,
   getBilibiliSourceConfig,
@@ -11,7 +20,7 @@ import {
   type NetEaseLoginStatus,
   type NetEasePlaybackDebug,
   type NetEaseServiceStatus,
-  type PlayableUrlOptions
+  type PlayableUrlOptions,
 } from "../features/musicSources/provider";
 import type { Track } from "../types/music";
 
@@ -36,7 +45,7 @@ const qualityOptions: Array<{ value: NonNullable<PlayableUrlOptions["level"]>; l
   { value: "lossless", label: "Lossless" },
   { value: "exhigh", label: "Extra High" },
   { value: "higher", label: "Higher" },
-  { value: "standard", label: "Standard" }
+  { value: "standard", label: "Standard" },
 ];
 
 const bilibiliAccount = new BilibiliAccountSessionProvider();
@@ -54,7 +63,7 @@ export function LyricsSourceMenu({
   onAdjustLyricOffset,
   onResetLyricOffset,
   onPlaybackQualityChange,
-  onOpenSettings
+  onOpenSettings,
 }: LyricsSourceMenuProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -83,7 +92,7 @@ export function LyricsSourceMenu({
     void Promise.allSettled([
       getNeteaseSourceConfig(),
       getBilibiliSourceConfig(),
-      bilibiliAccount.getLoginStatus()
+      bilibiliAccount.getLoginStatus(),
     ]).then(([netease, bilibili, status]) => {
       if (cancelled) return;
       if (netease.status === "fulfilled") setNeteaseConfig(netease.value);
@@ -96,9 +105,10 @@ export function LyricsSourceMenu({
   }, [open]);
 
   const currentSource = sourceLabel(track?.source);
-  const sourceReady = track?.source === "local"
-    || (track?.source === "netease" && Boolean(serviceStatus?.running || playbackDebug?.hasUrl))
-    || (track?.source === "bilibili" && Boolean(bilibiliConfig?.enabled));
+  const sourceReady =
+    track?.source === "local" ||
+    (track?.source === "netease" && Boolean(serviceStatus?.running || playbackDebug?.hasUrl)) ||
+    (track?.source === "bilibili" && Boolean(bilibiliConfig?.enabled));
 
   return (
     <div ref={rootRef} data-danmaku-safe-zone="settings" className="fixed right-8 top-8 z-50">
@@ -109,43 +119,86 @@ export function LyricsSourceMenu({
         aria-label="Quick Settings"
         aria-expanded={open}
       >
-        <span className={`absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full ${sourceReady ? "bg-[#638052]/70" : "bg-[#8b6f5d]/35"}`} />
+        <span
+          className={`absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full ${sourceReady ? "bg-[#638052]/70" : "bg-[#8b6f5d]/35"}`}
+        />
         <SlidersHorizontal className="h-4 w-4" />
       </button>
 
       {open && (
-        <div className="quick-settings-panel settings-scroll mt-3 max-h-[calc(100svh-6rem)] w-[min(360px,calc(100vw-3rem))] touch-pan-y overflow-y-auto overscroll-contain rounded-[26px] p-5" onWheel={(event) => event.stopPropagation()}>
+        <div
+          className="quick-settings-panel settings-scroll mt-3 max-h-[calc(100svh-6rem)] w-[min(360px,calc(100vw-3rem))] touch-pan-y overflow-y-auto overscroll-contain rounded-[26px] p-5"
+          onWheel={(event) => event.stopPropagation()}
+        >
           <header className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4a2108]/28">快捷设置 / Quick Settings</p>
-              <h2 className="mt-1.5 truncate text-[17px] font-bold text-[#4a2108]/82">{track?.title ?? "A quiet room"}</h2>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4a2108]/28">
+                快捷设置 / Quick Settings
+              </p>
+              <h2 className="mt-1.5 truncate text-[17px] font-bold text-[#4a2108]/82">
+                {track?.title ?? "A quiet room"}
+              </h2>
               <p className="mt-1 text-xs font-semibold text-[#4a2108]/34">{currentSource}</p>
             </div>
-            <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${sourceReady ? "bg-[#638052]/75 shadow-[0_0_14px_rgba(99,128,82,0.42)]" : "bg-[#8b6f5d]/35"}`} />
+            <span
+              className={`mt-1 h-2 w-2 shrink-0 rounded-full ${sourceReady ? "bg-[#638052]/75 shadow-[0_0_14px_rgba(99,128,82,0.42)]" : "bg-[#8b6f5d]/35"}`}
+            />
           </header>
 
           <QuickSection title="歌词 / Lyrics">
             <div className="grid grid-cols-2 gap-2">
-              <QuickAction icon={RefreshCw} label="重新匹配" sublabel="Search again" onClick={onReloadLyrics} />
-              <QuickAction icon={FileMusic} label="选择歌词" sublabel="Choose .lrc" onClick={onImportLyrics} />
+              <QuickAction
+                icon={RefreshCw}
+                label="重新匹配"
+                sublabel="Search again"
+                onClick={onReloadLyrics}
+              />
+              <QuickAction
+                icon={FileMusic}
+                label="选择歌词"
+                sublabel="Choose .lrc"
+                onClick={onImportLyrics}
+              />
             </div>
             <div className="mt-2.5 rounded-[16px] bg-[#4a2108]/[0.045] p-2">
               <div className="mb-2 flex items-center gap-2 px-1.5 text-[11px] font-bold text-[#4a2108]/38">
                 <Clock3 className="h-3.5 w-3.5" />
                 <span>歌词偏移 / Timing</span>
-                <span className="ml-auto tabular-nums">{lyricOffsetMs > 0 ? "+" : ""}{lyricOffsetMs}ms</span>
+                <span className="ml-auto tabular-nums">
+                  {lyricOffsetMs > 0 ? "+" : ""}
+                  {lyricOffsetMs}ms
+                </span>
               </div>
               <div className="grid grid-cols-3 gap-1.5">
-                <button type="button" onClick={() => onAdjustLyricOffset(-500)} className="quick-settings-pill">-500ms</button>
-                <button type="button" onClick={onResetLyricOffset} className="quick-settings-pill">Reset</button>
-                <button type="button" onClick={() => onAdjustLyricOffset(500)} className="quick-settings-pill">+500ms</button>
+                <button
+                  type="button"
+                  onClick={() => onAdjustLyricOffset(-500)}
+                  className="quick-settings-pill"
+                >
+                  -500ms
+                </button>
+                <button type="button" onClick={onResetLyricOffset} className="quick-settings-pill">
+                  Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onAdjustLyricOffset(500)}
+                  className="quick-settings-pill"
+                >
+                  +500ms
+                </button>
               </div>
             </div>
           </QuickSection>
 
           <QuickSection title="音乐来源 / Sources">
             <div className="space-y-1.5">
-              <SourceStatusRow icon={FolderOpen} name="本地音乐" status={`${localTrackCount} tracks`} ready />
+              <SourceStatusRow
+                icon={FolderOpen}
+                name="本地音乐"
+                status={`${localTrackCount} tracks`}
+                ready
+              />
               <SourceStatusRow
                 icon={Cloud}
                 name="网易云"
@@ -155,7 +208,13 @@ export function LyricsSourceMenu({
               <SourceStatusRow
                 icon={Radio}
                 name="Bilibili"
-                status={bilibiliStatus?.loggedIn ? "已连接" : bilibiliConfig?.enabled ? "公共内容可用" : "关闭"}
+                status={
+                  bilibiliStatus?.loggedIn
+                    ? "已连接"
+                    : bilibiliConfig?.enabled
+                      ? "公共内容可用"
+                      : "关闭"
+                }
                 ready={Boolean(bilibiliConfig?.enabled)}
               />
             </div>
@@ -166,10 +225,18 @@ export function LyricsSourceMenu({
               <span className="text-xs font-bold text-[#4a2108]/48">首选音质</span>
               <select
                 value={playbackQuality}
-                onChange={(event) => onPlaybackQualityChange(event.target.value as NonNullable<PlayableUrlOptions["level"]>)}
+                onChange={(event) =>
+                  onPlaybackQualityChange(
+                    event.target.value as NonNullable<PlayableUrlOptions["level"]>,
+                  )
+                }
                 className="rounded-full bg-[#4a2108]/[0.07] px-3 py-1.5 text-xs font-bold text-[#4a2108]/62 outline-none"
               >
-                {qualityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                {qualityOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
           </QuickSection>
@@ -194,15 +261,31 @@ export function LyricsSourceMenu({
 function QuickSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mt-4">
-      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-[#4a2108]/26">{title}</p>
+      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-[#4a2108]/26">
+        {title}
+      </p>
       {children}
     </section>
   );
 }
 
-function QuickAction({ icon: Icon, label, sublabel, onClick }: { icon: typeof RefreshCw; label: string; sublabel: string; onClick: () => void }) {
+function QuickAction({
+  icon: Icon,
+  label,
+  sublabel,
+  onClick,
+}: {
+  icon: typeof RefreshCw;
+  label: string;
+  sublabel: string;
+  onClick: () => void;
+}) {
   return (
-    <button type="button" onClick={onClick} className="app-transition flex items-center gap-2.5 rounded-[16px] bg-[#4a2108]/[0.045] px-3 py-2.5 text-left hover:bg-[#4a2108]/[0.085]">
+    <button
+      type="button"
+      onClick={onClick}
+      className="app-transition flex items-center gap-2.5 rounded-[16px] bg-[#4a2108]/[0.045] px-3 py-2.5 text-left hover:bg-[#4a2108]/[0.085]"
+    >
       <Icon className="h-4 w-4 shrink-0 text-[#4a2108]/42" />
       <span className="min-w-0">
         <span className="block text-xs font-bold text-[#4a2108]/62">{label}</span>
@@ -212,13 +295,25 @@ function QuickAction({ icon: Icon, label, sublabel, onClick }: { icon: typeof Re
   );
 }
 
-function SourceStatusRow({ icon: Icon, name, status, ready }: { icon: typeof Cloud; name: string; status: string; ready: boolean }) {
+function SourceStatusRow({
+  icon: Icon,
+  name,
+  status,
+  ready,
+}: {
+  icon: typeof Cloud;
+  name: string;
+  status: string;
+  ready: boolean;
+}) {
   return (
     <div className="flex items-center gap-3 rounded-[14px] px-2.5 py-2 text-[#4a2108]/54">
       <Icon className="h-4 w-4 shrink-0 opacity-60" />
       <span className="flex-1 text-xs font-bold">{name}</span>
       <span className="text-[10px] font-semibold text-[#4a2108]/32">{status}</span>
-      <span className={`h-1.5 w-1.5 rounded-full ${ready ? "bg-[#638052]/70" : "bg-[#8b6f5d]/28"}`} />
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${ready ? "bg-[#638052]/70" : "bg-[#8b6f5d]/28"}`}
+      />
     </div>
   );
 }

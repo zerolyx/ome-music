@@ -9,7 +9,7 @@ import type {
   PlaylistAnalysisReport,
   PlaylistChunkSummary,
   PlaylistFinalInterpretation,
-  PlaylistLayeredChunkResult
+  PlaylistLayeredChunkResult,
 } from "./types";
 
 type CountMap = Map<string, number>;
@@ -35,7 +35,10 @@ export class ConfiguredAnalyzer implements MusicAnalyzer {
     const localReport = buildLocalReport(input, this.provider);
 
     if (mode === "direct") {
-      const finalInterpretation = await requestFinalInterpretationFromTracks(input, localReport.finalInterpretation);
+      const finalInterpretation = await requestFinalInterpretationFromTracks(
+        input,
+        localReport.finalInterpretation,
+      );
       return { ...localReport, finalInterpretation };
     }
 
@@ -48,22 +51,32 @@ export class ConfiguredAnalyzer implements MusicAnalyzer {
       layeredChunks.push(interpretedChunk);
     }
 
-    const finalInterpretation = await requestFinalInterpretationFromChunks(input, layeredChunks, localReport.finalInterpretation);
+    const finalInterpretation = await requestFinalInterpretationFromChunks(
+      input,
+      layeredChunks,
+      localReport.finalInterpretation,
+    );
     return {
       ...localReport,
       layeredChunks,
       finalInterpretation,
-      chunkSummaries: layeredChunks.map(chunkResultToSummary)
+      chunkSummaries: layeredChunks.map(chunkResultToSummary),
     };
   }
 }
 
-function buildLocalReport(input: PlaylistAnalysisInput, provider: PlaylistAnalysisReport["provider"]): PlaylistAnalysisReport {
+function buildLocalReport(
+  input: PlaylistAnalysisInput,
+  provider: PlaylistAnalysisReport["provider"],
+): PlaylistAnalysisReport {
   const mode: PlaylistAnalysisMode = input.tracks.length <= CHUNK_SIZE ? "direct" : "layered";
   const aggregate = aggregateTracks(input.tracks);
-  const layeredChunks = mode === "layered"
-    ? chunkTracks(input.tracks, CHUNK_SIZE).map((tracks, index) => buildLocalLayeredChunk(tracks, index))
-    : [];
+  const layeredChunks =
+    mode === "layered"
+      ? chunkTracks(input.tracks, CHUNK_SIZE).map((tracks, index) =>
+          buildLocalLayeredChunk(tracks, index),
+        )
+      : [];
   const finalInterpretation = buildLocalFinalInterpretation(input.tracks, aggregate, layeredChunks);
 
   return {
@@ -80,16 +93,19 @@ function buildLocalReport(input: PlaylistAnalysisInput, provider: PlaylistAnalys
     possibleUserPreferences: inferPossiblePreferences(aggregate, input.tracks.length),
     diversityScore: calculateDiversity(input.tracks, aggregate),
     improvementSuggestions: buildImprovementSuggestions(input.tracks, aggregate),
-    chunkSummaries: mode === "layered" ? layeredChunks.map(chunkResultToSummary) : buildDirectChunkSummary(input.tracks),
+    chunkSummaries:
+      mode === "layered"
+        ? layeredChunks.map(chunkResultToSummary)
+        : buildDirectChunkSummary(input.tracks),
     layeredChunks,
-    finalInterpretation
+    finalInterpretation,
   };
 }
 
 async function requestChunkInterpretation(
   tracks: Track[],
   index: number,
-  fallbackChunk: PlaylistLayeredChunkResult
+  fallbackChunk: PlaylistLayeredChunkResult,
 ): Promise<PlaylistLayeredChunkResult> {
   const text = await requestMusicUnderstanding({
     purpose: "playlist_analysis",
@@ -99,11 +115,15 @@ async function requestChunkInterpretation(
       "分析这一段曲目，输出结构必须是：",
       '{"dominantGenres":[],"mainArtists":[],"moods":[],"listeningScenes":[],"notablePatterns":[],"possiblePreferences":[]}',
       "语气自然，像音乐鉴赏家。数组每项使用简短中文或原始音乐标签。",
-      JSON.stringify({ chunkIndex: index + 1, trackCount: tracks.length, tracks: compactTracks(tracks) })
+      JSON.stringify({
+        chunkIndex: index + 1,
+        trackCount: tracks.length,
+        tracks: compactTracks(tracks),
+      }),
     ].join("\n"),
     fallbackText: JSON.stringify(stripChunkIdentity(fallbackChunk)),
     maxTokens: 640,
-    temperature: 0.58
+    temperature: 0.58,
   });
   const parsed = parseObject<Partial<PlaylistLayeredChunkResult>>(text);
 
@@ -112,13 +132,13 @@ async function requestChunkInterpretation(
     ...parsed,
     id: fallbackChunk.id,
     index,
-    trackCount: tracks.length
+    trackCount: tracks.length,
   });
 }
 
 async function requestFinalInterpretationFromTracks(
   input: PlaylistAnalysisInput,
-  fallbackFinal: PlaylistFinalInterpretation
+  fallbackFinal: PlaylistFinalInterpretation,
 ): Promise<PlaylistFinalInterpretation> {
   const text = await requestMusicUnderstanding({
     purpose: "playlist_analysis",
@@ -128,20 +148,27 @@ async function requestFinalInterpretationFromTracks(
       "歌曲数量不超过 100，请直接完整解读。输出结构必须是：",
       '{"musicPersonality":"","favoriteMoods":[],"favoriteScenes":[],"artistPreferences":[],"genrePreferences":[],"hiddenPatterns":[],"recommendationStrategy":""}',
       "语气像音乐鉴赏家，克制、自然。",
-      JSON.stringify({ playlistName: input.name, trackCount: input.tracks.length, tracks: compactTracks(input.tracks) })
+      JSON.stringify({
+        playlistName: input.name,
+        trackCount: input.tracks.length,
+        tracks: compactTracks(input.tracks),
+      }),
     ].join("\n"),
     fallbackText: JSON.stringify(fallbackFinal),
     maxTokens: 720,
-    temperature: 0.62
+    temperature: 0.62,
   });
 
-  return normalizeFinalInterpretation(parseObject<Partial<PlaylistFinalInterpretation>>(text), fallbackFinal);
+  return normalizeFinalInterpretation(
+    parseObject<Partial<PlaylistFinalInterpretation>>(text),
+    fallbackFinal,
+  );
 }
 
 async function requestFinalInterpretationFromChunks(
   input: PlaylistAnalysisInput,
   chunks: PlaylistLayeredChunkResult[],
-  fallbackFinal: PlaylistFinalInterpretation
+  fallbackFinal: PlaylistFinalInterpretation,
 ): Promise<PlaylistFinalInterpretation> {
   const text = await requestMusicUnderstanding({
     purpose: "playlist_analysis",
@@ -151,14 +178,17 @@ async function requestFinalInterpretationFromChunks(
       "这些是每 100 首生成的分段摘要。请合并成歌单总解读。",
       "输出结构必须是：",
       '{"musicPersonality":"","favoriteMoods":[],"favoriteScenes":[],"artistPreferences":[],"genrePreferences":[],"hiddenPatterns":[],"recommendationStrategy":""}',
-      JSON.stringify({ playlistName: input.name, trackCount: input.tracks.length, chunks })
+      JSON.stringify({ playlistName: input.name, trackCount: input.tracks.length, chunks }),
     ].join("\n"),
     fallbackText: JSON.stringify(fallbackFinal),
     maxTokens: 820,
-    temperature: 0.62
+    temperature: 0.62,
   });
 
-  return normalizeFinalInterpretation(parseObject<Partial<PlaylistFinalInterpretation>>(text), fallbackFinal);
+  return normalizeFinalInterpretation(
+    parseObject<Partial<PlaylistFinalInterpretation>>(text),
+    fallbackFinal,
+  );
 }
 
 function buildLocalLayeredChunk(tracks: Track[], index: number): PlaylistLayeredChunkResult {
@@ -173,22 +203,23 @@ function buildLocalLayeredChunk(tracks: Track[], index: number): PlaylistLayered
     moods: topLabels(aggregate.moods, 5, UNKNOWN_MOOD),
     listeningScenes: inferScenes(aggregate),
     notablePatterns: buildNotablePatterns(tracks, aggregate),
-    possiblePreferences: inferPossiblePreferences(aggregate, tracks.length)
+    possiblePreferences: inferPossiblePreferences(aggregate, tracks.length),
   };
 }
 
 function buildLocalFinalInterpretation(
   tracks: Track[],
   aggregate: ReturnType<typeof aggregateTracks>,
-  chunks: PlaylistLayeredChunkResult[]
+  chunks: PlaylistLayeredChunkResult[],
 ): PlaylistFinalInterpretation {
   const topMood = topLabel(aggregate.moods, UNKNOWN_MOOD);
   const topGenre = topLabel(aggregate.genres, UNKNOWN_STYLE);
   const topArtist = topLabel(aggregate.artists, "Unknown Artist");
   const scenes = inferScenes(aggregate);
-  const hiddenPatterns = chunks.length > 0
-    ? chunks.flatMap((chunk) => chunk.notablePatterns).slice(0, 5)
-    : buildNotablePatterns(tracks, aggregate).slice(0, 5);
+  const hiddenPatterns =
+    chunks.length > 0
+      ? chunks.flatMap((chunk) => chunk.notablePatterns).slice(0, 5)
+      : buildNotablePatterns(tracks, aggregate).slice(0, 5);
 
   return {
     musicPersonality:
@@ -200,7 +231,7 @@ function buildLocalFinalInterpretation(
     artistPreferences: topLabels(aggregate.artists, 6, topArtist),
     genrePreferences: topLabels(aggregate.genres, 6, topGenre),
     hiddenPatterns,
-    recommendationStrategy: `围绕 ${topGenre} 与 ${topMood} 延展，保留熟悉歌手，同时加入少量相邻风格作为过渡。`
+    recommendationStrategy: `围绕 ${topGenre} 与 ${topMood} 延展，保留熟悉歌手，同时加入少量相邻风格作为过渡。`,
   };
 }
 
@@ -214,16 +245,19 @@ function normalizeChunkResult(value: PlaylistLayeredChunkResult): PlaylistLayere
     moods: asStringArray(value.moods),
     listeningScenes: asStringArray(value.listeningScenes),
     notablePatterns: asStringArray(value.notablePatterns),
-    possiblePreferences: asStringArray(value.possiblePreferences)
+    possiblePreferences: asStringArray(value.possiblePreferences),
   };
 }
 
 function normalizeFinalInterpretation(
   value: Partial<PlaylistFinalInterpretation> | null,
-  fallback: PlaylistFinalInterpretation
+  fallback: PlaylistFinalInterpretation,
 ): PlaylistFinalInterpretation {
   return {
-    musicPersonality: typeof value?.musicPersonality === "string" && value.musicPersonality.trim() ? value.musicPersonality : fallback.musicPersonality,
+    musicPersonality:
+      typeof value?.musicPersonality === "string" && value.musicPersonality.trim()
+        ? value.musicPersonality
+        : fallback.musicPersonality,
     favoriteMoods: asStringArray(value?.favoriteMoods, fallback.favoriteMoods),
     favoriteScenes: asStringArray(value?.favoriteScenes, fallback.favoriteScenes),
     artistPreferences: asStringArray(value?.artistPreferences, fallback.artistPreferences),
@@ -232,7 +266,7 @@ function normalizeFinalInterpretation(
     recommendationStrategy:
       typeof value?.recommendationStrategy === "string" && value.recommendationStrategy.trim()
         ? value.recommendationStrategy
-        : fallback.recommendationStrategy
+        : fallback.recommendationStrategy,
   };
 }
 
@@ -243,7 +277,8 @@ function chunkResultToSummary(chunk: PlaylistLayeredChunkResult): PlaylistChunkS
     basis: "genre",
     trackCount: chunk.trackCount,
     highlights: [...chunk.dominantGenres.slice(0, 2), ...chunk.moods.slice(0, 2)],
-    summary: chunk.notablePatterns[0] || chunk.possiblePreferences[0] || "这一段呈现出较稳定的聆听倾向。"
+    summary:
+      chunk.notablePatterns[0] || chunk.possiblePreferences[0] || "这一段呈现出较稳定的聆听倾向。",
   };
 }
 
@@ -262,10 +297,10 @@ function buildDirectChunkSummary(tracks: Track[]): PlaylistChunkSummary[] {
       highlights: [
         topLabel(aggregate.genres, UNKNOWN_STYLE),
         topLabel(aggregate.moods, UNKNOWN_MOOD),
-        topLabel(aggregate.artists, "Unknown Artist")
+        topLabel(aggregate.artists, "Unknown Artist"),
       ],
-      summary: "曲目数量适中，已直接基于全部曲目信息形成整体解读。"
-    }
+      summary: "曲目数量适中，已直接基于全部曲目信息形成整体解读。",
+    },
   ];
 }
 
@@ -301,7 +336,7 @@ function compactTracks(tracks: Track[]) {
     genres: track.genres,
     moods: track.moods,
     language: track.language,
-    year: track.year
+    year: track.year,
   }));
 }
 
@@ -312,14 +347,14 @@ function stripChunkIdentity(chunk: PlaylistLayeredChunkResult) {
     moods: chunk.moods,
     listeningScenes: chunk.listeningScenes,
     notablePatterns: chunk.notablePatterns,
-    possiblePreferences: chunk.possiblePreferences
+    possiblePreferences: chunk.possiblePreferences,
   };
 }
 
 function inferScenes(aggregate: ReturnType<typeof aggregateTracks>): string[] {
   const labels = new Set([
     ...Array.from(aggregate.genres.keys()).map((value) => value.toLowerCase()),
-    ...Array.from(aggregate.moods.keys()).map((value) => value.toLowerCase())
+    ...Array.from(aggregate.moods.keys()).map((value) => value.toLowerCase()),
   ]);
   const scenes = new Set<string>();
 
@@ -343,7 +378,10 @@ function inferScenes(aggregate: ReturnType<typeof aggregateTracks>): string[] {
   return Array.from(scenes).slice(0, 5);
 }
 
-function inferPossiblePreferences(aggregate: ReturnType<typeof aggregateTracks>, totalTracks: number): string[] {
+function inferPossiblePreferences(
+  aggregate: ReturnType<typeof aggregateTracks>,
+  totalTracks: number,
+): string[] {
   if (totalTracks === 0) {
     return ["导入歌曲后再形成偏好判断。"];
   }
@@ -351,18 +389,21 @@ function inferPossiblePreferences(aggregate: ReturnType<typeof aggregateTracks>,
   return [
     `可能偏好 ${topLabel(aggregate.genres, UNKNOWN_STYLE)} 的声音质感。`,
     `情绪上更接近 ${topLabel(aggregate.moods, UNKNOWN_MOOD)}。`,
-    `对 ${topLabel(aggregate.artists, "Unknown Artist")} 或相近创作者接受度较高。`
+    `对 ${topLabel(aggregate.artists, "Unknown Artist")} 或相近创作者接受度较高。`,
   ];
 }
 
-function buildNotablePatterns(tracks: Track[], aggregate: ReturnType<typeof aggregateTracks>): string[] {
+function buildNotablePatterns(
+  tracks: Track[],
+  aggregate: ReturnType<typeof aggregateTracks>,
+): string[] {
   if (tracks.length === 0) {
     return ["还没有足够曲目形成稳定脉络。"];
   }
 
   const patterns = [
     `${topLabel(aggregate.genres, UNKNOWN_STYLE)} 是这一段最明显的骨架。`,
-    `${topLabel(aggregate.moods, UNKNOWN_MOOD)} 情绪反复出现，形成了连续的听感。`
+    `${topLabel(aggregate.moods, UNKNOWN_MOOD)} 情绪反复出现，形成了连续的听感。`,
   ];
 
   if (aggregate.artists.size <= Math.max(2, Math.ceil(tracks.length * 0.18))) {
@@ -374,12 +415,15 @@ function buildNotablePatterns(tracks: Track[], aggregate: ReturnType<typeof aggr
   return patterns;
 }
 
-function calculateDiversity(tracks: Track[], aggregate: ReturnType<typeof aggregateTracks>): DiversityScore {
+function calculateDiversity(
+  tracks: Track[],
+  aggregate: ReturnType<typeof aggregateTracks>,
+): DiversityScore {
   if (tracks.length === 0) {
     return {
       score: 0,
       confidence: 0,
-      explanation: "暂无曲目，无法评估多样性。"
+      explanation: "暂无曲目，无法评估多样性。",
     };
   }
 
@@ -389,16 +433,30 @@ function calculateDiversity(tracks: Track[], aggregate: ReturnType<typeof aggreg
   const genreVariety = aggregate.genres.size / Math.max(total, 4);
   const moodVariety = aggregate.moods.size / Math.max(total, 4);
   const languageVariety = aggregate.languages.size / Math.max(total, 3);
-  const score = clamp01(artistVariety * 0.32 + albumVariety * 0.22 + genreVariety * 0.24 + moodVariety * 0.14 + languageVariety * 0.08);
+  const score = clamp01(
+    artistVariety * 0.32 +
+      albumVariety * 0.22 +
+      genreVariety * 0.24 +
+      moodVariety * 0.14 +
+      languageVariety * 0.08,
+  );
 
   return {
     score: round2(score),
     confidence: round2(clamp01(total / 24)),
-    explanation: score >= 0.7 ? "歌手、专辑与标签分布较分散。" : score >= 0.42 ? "有变化，但仍保留清晰的中心。" : "聚合度较高，适合做主题歌单。"
+    explanation:
+      score >= 0.7
+        ? "歌手、专辑与标签分布较分散。"
+        : score >= 0.42
+          ? "有变化，但仍保留清晰的中心。"
+          : "聚合度较高，适合做主题歌单。",
   };
 }
 
-function buildImprovementSuggestions(tracks: Track[], aggregate: ReturnType<typeof aggregateTracks>): string[] {
+function buildImprovementSuggestions(
+  tracks: Track[],
+  aggregate: ReturnType<typeof aggregateTracks>,
+): string[] {
   if (tracks.length === 0) {
     return ["先导入歌曲，再生成歌单解读。"];
   }
@@ -429,7 +487,7 @@ function toDistribution(map: CountMap, totalTracks: number, limit: number): Dist
       label,
       count,
       ratio: round2(count / Math.max(totalTracks, 1)),
-      confidence: round2(clamp01(count / Math.max(3, totalTracks * 0.28)))
+      confidence: round2(clamp01(count / Math.max(3, totalTracks * 0.28))),
     }));
 }
 

@@ -23,9 +23,10 @@ export class MockWeatherProvider implements WeatherProvider {
 
     return {
       condition,
-      temperatureCelsius: condition === "snowy" ? -2 : condition === "rainy" ? 18 : condition === "sunny" ? 26 : 21,
+      temperatureCelsius:
+        condition === "snowy" ? -2 : condition === "rainy" ? 18 : condition === "sunny" ? 26 : 21,
       locationLabel: "本地天气",
-      observedAt: now.toISOString()
+      observedAt: now.toISOString(),
     };
   }
 }

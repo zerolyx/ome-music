@@ -1,4 +1,4 @@
-﻿use std::{
+use std::{
     collections::{HashMap, HashSet},
     fs,
     io::Read,
@@ -777,7 +777,10 @@ fn get_app_version() -> &'static str {
 }
 
 #[tauri::command]
-fn get_storage_report(app: AppHandle, state: State<'_, AppState>) -> Result<StorageReportDto, String> {
+fn get_storage_report(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StorageReportDto, String> {
     build_storage_report(&app, &state)
 }
 
@@ -821,7 +824,10 @@ fn clear_storage_bucket(
 }
 
 #[tauri::command]
-fn export_storage_diagnostics(app: AppHandle, state: State<'_, AppState>) -> Result<String, String> {
+fn export_storage_diagnostics(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
     let report = build_storage_report(&app, &state)?;
     Ok(format!(
         "Ome Music Storage Diagnostics\nGenerated: {}\n\nApp cache: {}\nWebView cache: {}\nCover cache: {}\nLyrics cache: {}\nLogs: {}\nDatabase: {}\nTotal cache: {}\n\nNotes:\n- Local music files are referenced by path and are not copied into the app cache.\n- NetEase tracks are streamed by default.\n- SQLite is reserved for metadata, preferences, playback events, and small text caches.\n",
@@ -858,7 +864,10 @@ fn get_today_mood_entry(state: State<'_, AppState>) -> Result<Option<MoodEntryDt
 }
 
 #[tauri::command]
-fn list_mood_entries(state: State<'_, AppState>, limit: Option<u32>) -> Result<Vec<MoodEntryDto>, String> {
+fn list_mood_entries(
+    state: State<'_, AppState>,
+    limit: Option<u32>,
+) -> Result<Vec<MoodEntryDto>, String> {
     let db = state.db.lock().map_err(|error| error.to_string())?;
     load_mood_entries(&db, limit.unwrap_or(30))
 }
@@ -870,7 +879,8 @@ fn save_mood_entry(
 ) -> Result<MoodEntryDto, String> {
     let db = state.db.lock().map_err(|error| error.to_string())?;
     save_mood_entry_to_db(&db, payload)?;
-    load_today_mood_entry(&db)?.ok_or_else(|| "Could not read today's mood entry after saving.".to_string())
+    load_today_mood_entry(&db)?
+        .ok_or_else(|| "Could not read today's mood entry after saving.".to_string())
 }
 
 #[tauri::command]
@@ -965,7 +975,9 @@ fn save_netease_source_config(
 }
 
 #[tauri::command]
-fn get_bilibili_source_config(state: State<'_, AppState>) -> Result<BilibiliSourceConfigDto, String> {
+fn get_bilibili_source_config(
+    state: State<'_, AppState>,
+) -> Result<BilibiliSourceConfigDto, String> {
     let db = state.db.lock().map_err(|error| error.to_string())?;
     load_bilibili_source_config(&db)
 }
@@ -987,7 +999,11 @@ async fn test_bilibili_source_connection(
 ) -> Result<SourceConnectionDto, String> {
     let config = resolve_bilibili_source_config(&state, Some(payload))?;
     let value = request_bilibili_json(&config, "/x/web-interface/nav", &[]).await?;
-    let ok = value.get("code").and_then(|value| value.as_i64()).unwrap_or(-1) == 0;
+    let ok = value
+        .get("code")
+        .and_then(|value| value.as_i64())
+        .unwrap_or(-1)
+        == 0;
     Ok(SourceConnectionDto {
         ok,
         message: if ok {
@@ -1035,7 +1051,11 @@ async fn create_bilibili_qr_login() -> Result<NeteaseQrLoginDto, String> {
     let qr_url = json_text(data.get("url"))
         .filter(|value| !value.is_empty())
         .ok_or_else(|| "Could not create a Bilibili sign-in code.".to_string())?;
-    Ok(NeteaseQrLoginDto { key, qr_url, qr_img: String::new() })
+    Ok(NeteaseQrLoginDto {
+        key,
+        qr_url,
+        qr_img: String::new(),
+    })
 }
 
 #[tauri::command]
@@ -1059,7 +1079,10 @@ async fn check_bilibili_qr_login(
         .await
         .map_err(|_| "Could not read the Bilibili sign-in status.".to_string())?;
     let data = value.get("data").unwrap_or(&value);
-    let code = data.get("code").and_then(|value| value.as_i64()).unwrap_or(-1);
+    let code = data
+        .get("code")
+        .and_then(|value| value.as_i64())
+        .unwrap_or(-1);
     let status = match code {
         0 => "success",
         86090 => "confirmed",
@@ -1088,11 +1111,18 @@ async fn check_bilibili_qr_login(
         None
     };
 
-    Ok(BilibiliQrCheckDto { status, code, message, login_status })
+    Ok(BilibiliQrCheckDto {
+        status,
+        code,
+        message,
+        login_status,
+    })
 }
 
 #[tauri::command]
-async fn get_bilibili_login_status(state: State<'_, AppState>) -> Result<BilibiliLoginStatusDto, String> {
+async fn get_bilibili_login_status(
+    state: State<'_, AppState>,
+) -> Result<BilibiliLoginStatusDto, String> {
     let config = resolve_bilibili_source_config(&state, None)?;
     fetch_bilibili_login_status(&config).await
 }
@@ -1243,7 +1273,9 @@ fn clear_danmaku_cache(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn ensure_netease_api_service(state: State<'_, AppState>) -> Result<NeteaseServiceStatusDto, String> {
+async fn ensure_netease_api_service(
+    state: State<'_, AppState>,
+) -> Result<NeteaseServiceStatusDto, String> {
     let base_url = {
         let db = state.db.lock().map_err(|error| error.to_string())?;
         load_netease_source_config(&db)?.base_url
@@ -1270,7 +1302,11 @@ async fn create_netease_qr_login(state: State<'_, AppState>) -> Result<NeteaseQr
     let create_value = request_netease_json(
         &config,
         "/login/qr/create",
-        &[("key", key.as_str()), ("qrimg", "true"), ("timestamp", timestamp.as_str())],
+        &[
+            ("key", key.as_str()),
+            ("qrimg", "true"),
+            ("timestamp", timestamp.as_str()),
+        ],
     )
     .await?;
     let data = create_value
@@ -1302,11 +1338,18 @@ async fn check_netease_qr_login(
     let response = request_netease_json_response(
         &config,
         "/login/qr/check",
-        &[("key", payload.key.as_str()), ("timestamp", timestamp.as_str()), ("noCookie", "true")],
+        &[
+            ("key", payload.key.as_str()),
+            ("timestamp", timestamp.as_str()),
+            ("noCookie", "true"),
+        ],
     )
     .await?;
     let value = response.value;
-    let code = value.get("code").and_then(|value| value.as_i64()).unwrap_or(0);
+    let code = value
+        .get("code")
+        .and_then(|value| value.as_i64())
+        .unwrap_or(0);
     let message = json_text(value.get("message")).unwrap_or_default();
 
     let status = match code {
@@ -1368,15 +1411,26 @@ async fn login_netease_with_password(
         return Err("Account and password are required.".to_string());
     }
 
-    let country_code = payload.country_code.as_deref().map(str::trim).filter(|value| !value.is_empty()).unwrap_or("86");
+    let country_code = payload
+        .country_code
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("86");
     let login_type = payload.login_type.as_deref().unwrap_or("");
-    let looks_like_phone = account.chars().all(|character| character.is_ascii_digit() || character == '+');
+    let looks_like_phone = account
+        .chars()
+        .all(|character| character.is_ascii_digit() || character == '+');
 
     let response = if login_type == "email" || (!looks_like_phone && account.contains('@')) {
         request_netease_json_response(
             &config,
             "/login",
-            &[("email", account), ("password", password), ("noCookie", "true")],
+            &[
+                ("email", account),
+                ("password", password),
+                ("noCookie", "true"),
+            ],
         )
         .await?
     } else {
@@ -1406,14 +1460,25 @@ async fn request_netease_sms_code(
     if phone.is_empty() {
         return Err("Phone number is required.".to_string());
     }
-    let country_code = payload.country_code.as_deref().map(str::trim).filter(|value| !value.is_empty()).unwrap_or("86");
+    let country_code = payload
+        .country_code
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("86");
     let value = request_netease_json(
         &config,
         "/captcha/sent",
-        &[("phone", phone), ("ctcode", country_code.trim_start_matches('+'))],
+        &[
+            ("phone", phone),
+            ("ctcode", country_code.trim_start_matches('+')),
+        ],
     )
     .await?;
-    let code = value.get("code").and_then(|value| value.as_i64()).unwrap_or(0);
+    let code = value
+        .get("code")
+        .and_then(|value| value.as_i64())
+        .unwrap_or(0);
     if code == 200 {
         Ok(SourceConnectionDto {
             ok: true,
@@ -1435,7 +1500,12 @@ async fn login_netease_with_sms_code(
     if phone.is_empty() || code.is_empty() {
         return Err("Phone number and verification code are required.".to_string());
     }
-    let country_code = payload.country_code.as_deref().map(str::trim).filter(|value| !value.is_empty()).unwrap_or("86");
+    let country_code = payload
+        .country_code
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("86");
     let response = request_netease_json_response(
         &config,
         "/login/cellphone",
@@ -1462,18 +1532,23 @@ fn open_source_web_login(payload: SourceWebLoginPayload) -> Result<SourceConnect
     open_url_with_system(url)?;
     Ok(SourceConnectionDto {
         ok: true,
-        message: "Secure login page opened. Complete it there, then import Cookie if needed.".to_string(),
+        message: "Secure login page opened. Complete it there, then import Cookie if needed."
+            .to_string(),
     })
 }
 
 #[tauri::command]
-async fn get_netease_login_status(state: State<'_, AppState>) -> Result<NeteaseLoginStatusDto, String> {
+async fn get_netease_login_status(
+    state: State<'_, AppState>,
+) -> Result<NeteaseLoginStatusDto, String> {
     let config = resolve_netease_source_config(&state, None)?;
     fetch_netease_login_status(&config).await
 }
 
 #[tauri::command]
-async fn refresh_netease_login(state: State<'_, AppState>) -> Result<NeteaseLoginStatusDto, String> {
+async fn refresh_netease_login(
+    state: State<'_, AppState>,
+) -> Result<NeteaseLoginStatusDto, String> {
     let config = resolve_netease_source_config(&state, None)?;
     let _ = request_netease_json(&config, "/login/refresh", &[]).await;
     fetch_netease_login_status(&config).await
@@ -1504,7 +1579,9 @@ async fn get_netease_vip_status(state: State<'_, AppState>) -> Result<NeteaseVip
 }
 
 #[tauri::command]
-async fn get_netease_user_profile(state: State<'_, AppState>) -> Result<NeteaseUserProfileDto, String> {
+async fn get_netease_user_profile(
+    state: State<'_, AppState>,
+) -> Result<NeteaseUserProfileDto, String> {
     let config = resolve_netease_source_config(&state, None)?;
     let login = fetch_netease_login_status(&config).await?;
     let vip = if login.logged_in {
@@ -1528,7 +1605,12 @@ async fn test_netease_source_connection(
     payload: SaveNeteaseSourceConfigPayload,
 ) -> Result<SourceConnectionDto, String> {
     let config = resolve_netease_source_config(&state, Some(payload))?;
-    let value = request_netease_json(&config, "/search", &[("keywords", "test"), ("limit", "1"), ("type", "1")]).await?;
+    let value = request_netease_json(
+        &config,
+        "/search",
+        &[("keywords", "test"), ("limit", "1"), ("type", "1")],
+    )
+    .await?;
     let count = value
         .get("result")
         .and_then(|result| result.get("songs"))
@@ -1557,7 +1639,12 @@ async fn search_netease_songs(
     }
 
     let config = resolve_netease_source_config(&state, None)?;
-    let value = request_netease_json(&config, "/search", &[("keywords", query), ("limit", "20"), ("type", "1")]).await?;
+    let value = request_netease_json(
+        &config,
+        "/search",
+        &[("keywords", query), ("limit", "20"), ("type", "1")],
+    )
+    .await?;
     let songs = value
         .get("result")
         .and_then(|result| result.get("songs"))
@@ -1672,7 +1759,11 @@ async fn sync_netease_listening_memory(
                 .collect::<Vec<_>>(),
         };
 
-        for playlist_id in playlist_ids.into_iter().filter(|id| !id.trim().is_empty()).take(30) {
+        for playlist_id in playlist_ids
+            .into_iter()
+            .filter(|id| !id.trim().is_empty())
+            .take(30)
+        {
             let playlist = fetch_netease_playlist(&config, &playlist_id).await?;
             let db = state.db.lock().map_err(|error| error.to_string())?;
             import_source_playlist_to_db(&db, &playlist)?;
@@ -1696,7 +1787,10 @@ async fn sync_netease_listening_memory(
 }
 
 #[tauri::command]
-fn get_latest_taste_notes(state: State<'_, AppState>, source: Option<String>) -> Result<Option<TasteNotesDto>, String> {
+fn get_latest_taste_notes(
+    state: State<'_, AppState>,
+    source: Option<String>,
+) -> Result<Option<TasteNotesDto>, String> {
     let db = state.db.lock().map_err(|error| error.to_string())?;
     load_latest_taste_notes(&db, source.as_deref().unwrap_or("netease"))
 }
@@ -1725,7 +1819,8 @@ async fn get_netease_lyrics(
     payload: SourceSongPayload,
 ) -> Result<SourceLyricsDto, String> {
     let config = resolve_netease_source_config(&state, None)?;
-    let value = request_netease_json(&config, "/lyric", &[("id", payload.song_id.as_str())]).await?;
+    let value =
+        request_netease_json(&config, "/lyric", &[("id", payload.song_id.as_str())]).await?;
     let lyrics = value
         .get("lrc")
         .and_then(|lrc| lrc.get("lyric"))
@@ -1814,7 +1909,7 @@ async fn resolve_track_lyrics(
     };
 
     save_cached_lyrics(&state, &resolved)?;
-    Ok(with_saved_lyric_offset(&state, resolved)?)
+    with_saved_lyric_offset(&state, resolved)
 }
 
 #[tauri::command]
@@ -1969,7 +2064,9 @@ async fn fetch_llm_models(payload: FetchLlmModelsPayload) -> Result<LlmModelList
     let status = response.status();
 
     if !status.is_success() {
-        return Err(format!("Could not fetch models ({status}). Please check the Base URL and key."));
+        return Err(format!(
+            "Could not fetch models ({status}). Please check the Base URL and key."
+        ));
     }
 
     let value: serde_json::Value = response.json().await.map_err(|error| error.to_string())?;
@@ -2010,7 +2107,10 @@ async fn generate_llm_text(
     let api_key = read_llm_api_key()
         .ok_or_else(|| "Music understanding credential is missing.".to_string())?;
 
-    if config.provider_name.trim().is_empty() || config.base_url.trim().is_empty() || config.model.trim().is_empty() {
+    if config.provider_name.trim().is_empty()
+        || config.base_url.trim().is_empty()
+        || config.model.trim().is_empty()
+    {
         return Err("Music understanding provider is incomplete.".to_string());
     }
 
@@ -2037,7 +2137,9 @@ async fn generate_llm_text(
 
     if !status.is_success() {
         let details = response.text().await.unwrap_or_default();
-        return Err(format!("Music understanding request failed ({status}): {details}"));
+        return Err(format!(
+            "Music understanding request failed ({status}): {details}"
+        ));
     }
 
     let value: serde_json::Value = response.json().await.map_err(|error| error.to_string())?;
@@ -2054,7 +2156,9 @@ async fn generate_llm_text(
 
     {
         let db = state.db.lock().map_err(|error| error.to_string())?;
-        if let Err(error) = insert_llm_request_audit(&db, &config.provider_name, &payload.purpose, &text) {
+        if let Err(error) =
+            insert_llm_request_audit(&db, &config.provider_name, &payload.purpose, &text)
+        {
             eprintln!("llm audit log failed: {error}");
         }
     }
@@ -2076,8 +2180,8 @@ async fn transcribe_speech_audio(
         load_stored_llm_provider_config(&db)?
             .ok_or_else(|| "Curator source is not configured.".to_string())?
     };
-    let api_key = read_llm_api_key()
-        .ok_or_else(|| "Curator source credential is missing.".to_string())?;
+    let api_key =
+        read_llm_api_key().ok_or_else(|| "Curator source credential is missing.".to_string())?;
     let model = payload
         .model
         .as_deref()
@@ -2094,11 +2198,20 @@ async fn transcribe_speech_audio(
             "file",
             reqwest::multipart::Part::bytes(audio_bytes)
                 .file_name(file_name)
-                .mime_str(if mime_type.is_empty() { "audio/webm" } else { mime_type })
+                .mime_str(if mime_type.is_empty() {
+                    "audio/webm"
+                } else {
+                    mime_type
+                })
                 .map_err(|error| error.to_string())?,
         );
 
-    if let Some(language) = payload.language.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(language) = payload
+        .language
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         form = form.text("language", language.to_string());
     }
 
@@ -2113,7 +2226,9 @@ async fn transcribe_speech_audio(
 
     if !status.is_success() {
         let details = response.text().await.unwrap_or_default();
-        return Err(format!("The curator could not hear that ({status}). {details}"));
+        return Err(format!(
+            "The curator could not hear that ({status}). {details}"
+        ));
     }
 
     let value: serde_json::Value = response.json().await.map_err(|error| error.to_string())?;
@@ -2138,8 +2253,8 @@ async fn synthesize_curator_speech(
         load_stored_llm_provider_config(&db)?
             .ok_or_else(|| "Curator source is not configured.".to_string())?
     };
-    let api_key = read_llm_api_key()
-        .ok_or_else(|| "Curator source credential is missing.".to_string())?;
+    let api_key =
+        read_llm_api_key().ok_or_else(|| "Curator source credential is missing.".to_string())?;
     let input = payload.text.trim();
     if input.is_empty() {
         return Err("There is nothing for the curator to say.".to_string());
@@ -2183,12 +2298,17 @@ async fn synthesize_curator_speech(
 
     if !status.is_success() {
         let details = response.text().await.unwrap_or_default();
-        return Err(format!("The curator voice is unavailable ({status}). {details}"));
+        return Err(format!(
+            "The curator voice is unavailable ({status}). {details}"
+        ));
     }
 
     let bytes = response.bytes().await.map_err(|error| error.to_string())?;
     Ok(SpeechSynthesisResponse {
-        audio_data_url: format!("data:{mime_type};base64,{}", general_purpose::STANDARD.encode(bytes)),
+        audio_data_url: format!(
+            "data:{mime_type};base64,{}",
+            general_purpose::STANDARD.encode(bytes)
+        ),
         mime_type,
     })
 }
@@ -2232,7 +2352,9 @@ fn parse_track(path: &Path) -> Result<ParsedTrack, String> {
         .read()
         .map_err(|error| error.to_string())?;
 
-    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag());
     let file_stem = path
         .file_stem()
         .and_then(|value| value.to_str())
@@ -2256,7 +2378,8 @@ fn parse_track(path: &Path) -> Result<ParsedTrack, String> {
         .and_then(|tag| tag.genre())
         .map(|value| split_genres(&value))
         .unwrap_or_default();
-    let (moods, calm_score, energetic_score) = infer_song_features(&title, &artist, &album, &genres);
+    let (moods, calm_score, energetic_score) =
+        infer_song_features(&title, &artist, &album, &genres);
     let cover_url = tag.and_then(read_cover_data_url);
 
     Ok(ParsedTrack {
@@ -2532,7 +2655,10 @@ fn update_track_counters(db: &Connection, payload: &PlaybackEventPayload) -> Res
 }
 
 fn initialize_database(app: &tauri::App) -> Result<Connection, String> {
-    let app_data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
     fs::create_dir_all(&app_data_dir).map_err(|error| error.to_string())?;
     let db_path = app_data_dir.join("ome_music.sqlite3");
     let db = Connection::open(db_path).map_err(|error| error.to_string())?;
@@ -2571,13 +2697,19 @@ fn ensure_mood_entries_note_text(db: &Connection) -> Result<(), String> {
         )
         .map_err(|error| error.to_string())?;
     if has_old && !has_new {
-        db.execute("ALTER TABLE mood_entries RENAME COLUMN note_encrypted TO note_text", [])
-            .map_err(|error| error.to_string())?;
+        db.execute(
+            "ALTER TABLE mood_entries RENAME COLUMN note_encrypted TO note_text",
+            [],
+        )
+        .map_err(|error| error.to_string())?;
     }
     Ok(())
 }
 
-fn build_storage_report(app: &AppHandle, state: &State<'_, AppState>) -> Result<StorageReportDto, String> {
+fn build_storage_report(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+) -> Result<StorageReportDto, String> {
     let app_cache_bytes = sum_paths(&app_cache_paths(app)?);
     let webview_cache_bytes = sum_paths(&webview_cache_paths(app)?);
     let cover_cache_bytes = sum_paths(&cover_cache_paths(app)?);
@@ -2598,15 +2730,36 @@ fn build_storage_report(app: &AppHandle, state: &State<'_, AppState>) -> Result<
         .unwrap_or(0)
         .max(0) as u64
     };
-    let total_cache_bytes = app_cache_bytes + webview_cache_bytes + cover_cache_bytes + lyrics_cache_bytes + log_bytes;
+    let total_cache_bytes =
+        app_cache_bytes + webview_cache_bytes + cover_cache_bytes + lyrics_cache_bytes + log_bytes;
 
     Ok(StorageReportDto {
-        app_cache: storage_bucket("应用缓存 / App Cache", app_cache_bytes, app_cache_root(app)?),
-        webview_cache: storage_bucket("WebView 缓存 / WebView Cache", webview_cache_bytes, local_app_root()),
-        cover_cache: storage_bucket("封面缓存 / Cover Cache", cover_cache_bytes, cover_cache_root(app)?),
-        lyrics_cache: storage_bucket("歌词缓存 / Lyrics Cache", lyrics_cache_bytes, "SQLite: lyrics_cache".to_string()),
+        app_cache: storage_bucket(
+            "应用缓存 / App Cache",
+            app_cache_bytes,
+            app_cache_root(app)?,
+        ),
+        webview_cache: storage_bucket(
+            "WebView 缓存 / WebView Cache",
+            webview_cache_bytes,
+            local_app_root(),
+        ),
+        cover_cache: storage_bucket(
+            "封面缓存 / Cover Cache",
+            cover_cache_bytes,
+            cover_cache_root(app)?,
+        ),
+        lyrics_cache: storage_bucket(
+            "歌词缓存 / Lyrics Cache",
+            lyrics_cache_bytes,
+            "SQLite: lyrics_cache".to_string(),
+        ),
         logs: storage_bucket("日志 / Logs", log_bytes, log_root(app)?),
-        database: storage_bucket("数据库 / Database", database_bytes, database_path.to_string_lossy().to_string()),
+        database: storage_bucket(
+            "数据库 / Database",
+            database_bytes,
+            database_path.to_string_lossy().to_string(),
+        ),
         total_cache_bytes,
         total_cache_display_size: format_bytes(total_cache_bytes),
         generated_at: now_timestamp(),
@@ -2653,7 +2806,10 @@ fn log_root(app: &AppHandle) -> Result<String, String> {
 }
 
 fn app_cache_paths(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
-    let app_data = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
     Ok(["cache", "tmp", "temp"]
         .into_iter()
         .map(|name| app_data.join(name))
@@ -2661,7 +2817,10 @@ fn app_cache_paths(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
 }
 
 fn cover_cache_paths(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
-    let app_data = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
     Ok(["cover-cache", "covers", "image-cache", "artwork-cache"]
         .into_iter()
         .map(|name| app_data.join(name))
@@ -2669,12 +2828,18 @@ fn cover_cache_paths(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
 }
 
 fn log_paths(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
-    let app_data = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
     Ok(vec![app_data.join("logs")])
 }
 
 fn app_log_files(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
-    let app_data = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
     let mut files = Vec::new();
     if app_data.exists() {
         for entry in fs::read_dir(&app_data).map_err(|error| error.to_string())? {
@@ -2691,7 +2856,12 @@ fn webview_cache_paths(_app: &AppHandle) -> Result<Vec<PathBuf>, String> {
     let mut paths = Vec::new();
     if let Some(local_root) = env_child_path("LOCALAPPDATA", "com.ome.music") {
         paths.push(local_root.join("EBWebView").join("Default").join("Cache"));
-        paths.push(local_root.join("EBWebView").join("Default").join("Code Cache"));
+        paths.push(
+            local_root
+                .join("EBWebView")
+                .join("Default")
+                .join("Code Cache"),
+        );
         paths.push(local_root.join("EBWebView").join("GPUCache"));
         paths.push(local_root.join("EBWebView").join("GrShaderCache"));
         paths.push(local_root.join("EBWebView").join("DawnCache"));
@@ -2716,7 +2886,9 @@ fn local_app_root() -> String {
 }
 
 fn env_child_path(var_name: &str, child: &str) -> Option<PathBuf> {
-    std::env::var_os(var_name).map(PathBuf::from).map(|path| path.join(child))
+    std::env::var_os(var_name)
+        .map(PathBuf::from)
+        .map(|path| path.join(child))
 }
 
 fn sum_paths(paths: &[PathBuf]) -> u64 {
@@ -2740,7 +2912,9 @@ fn path_size(path: &Path) -> u64 {
 }
 
 fn file_size(path: &Path) -> u64 {
-    fs::metadata(path).map(|metadata| metadata.len()).unwrap_or(0)
+    fs::metadata(path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0)
 }
 
 fn clear_path_contents(path: &Path) -> Result<(), String> {
@@ -2808,8 +2982,11 @@ fn ensure_track_columns(db: &Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
 
         if exists.is_none() {
-            db.execute(&format!("ALTER TABLE tracks ADD COLUMN {name} {definition}"), [])
-                .map_err(|error| error.to_string())?;
+            db.execute(
+                &format!("ALTER TABLE tracks ADD COLUMN {name} {definition}"),
+                [],
+            )
+            .map_err(|error| error.to_string())?;
         }
     }
 
@@ -2927,7 +3104,10 @@ fn ensure_music_source_tables(db: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_danmaku_cache_updated_at ON danmaku_cache(updated_at);",
     )
     .map_err(|error| error.to_string())?;
-    let _ = db.execute("ALTER TABLE music_source_settings ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'", []);
+    let _ = db.execute(
+        "ALTER TABLE music_source_settings ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'",
+        [],
+    );
     Ok(())
 }
 
@@ -2956,7 +3136,11 @@ fn ensure_lyrics_tables(db: &Connection) -> Result<(), String> {
 fn load_llm_provider_config(db: &Connection) -> Result<LlmProviderConfigDto, String> {
     let stored = load_stored_llm_provider_config(db)?;
     let has_api_key = read_llm_api_key().is_some();
-    let masked_api_key = if has_api_key { "••••••••••••".to_string() } else { "".to_string() };
+    let masked_api_key = if has_api_key {
+        "••••••••••••".to_string()
+    } else {
+        "".to_string()
+    };
 
     Ok(match stored {
         Some(config) => {
@@ -2985,7 +3169,9 @@ fn load_llm_provider_config(db: &Connection) -> Result<LlmProviderConfigDto, Str
     })
 }
 
-fn load_stored_llm_provider_config(db: &Connection) -> Result<Option<StoredLlmProviderConfig>, String> {
+fn load_stored_llm_provider_config(
+    db: &Connection,
+) -> Result<Option<StoredLlmProviderConfig>, String> {
     db.query_row(
         "SELECT provider_name, base_url, model FROM llm_provider_settings WHERE id = 'local'",
         [],
@@ -3001,7 +3187,10 @@ fn load_stored_llm_provider_config(db: &Connection) -> Result<Option<StoredLlmPr
     .map_err(|error| error.to_string())
 }
 
-fn save_llm_provider_config_to_db(db: &Connection, payload: SaveLlmProviderConfigPayload) -> Result<(), String> {
+fn save_llm_provider_config_to_db(
+    db: &Connection,
+    payload: SaveLlmProviderConfigPayload,
+) -> Result<(), String> {
     let provider_name = payload.provider_name.trim();
     let base_url = payload.base_url.trim().trim_end_matches('/');
     let model = payload.model.trim();
@@ -3010,7 +3199,12 @@ fn save_llm_provider_config_to_db(db: &Connection, payload: SaveLlmProviderConfi
         return Err("Provider Name, Base URL and Model are required.".to_string());
     }
 
-    if let Some(api_key) = payload.api_key.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(api_key) = payload
+        .api_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         save_llm_api_key(api_key)?;
     }
 
@@ -3074,7 +3268,10 @@ fn llm_api_key_fallback_path() -> Option<PathBuf> {
     let candidates = [
         app_data.unwrap_or_else(|| current_dir.join("PersonalConfig")),
         current_dir.join("PersonalConfig"),
-        current_dir.parent().map(|parent| parent.join("PersonalConfig")).unwrap_or_else(|| current_dir.join("PersonalConfig")),
+        current_dir
+            .parent()
+            .map(|parent| parent.join("PersonalConfig"))
+            .unwrap_or_else(|| current_dir.join("PersonalConfig")),
     ];
     candidates
         .into_iter()
@@ -3100,7 +3297,11 @@ fn load_netease_source_config(db: &Connection) -> Result<NeteaseSourceConfigDto,
         .optional()
         .map_err(|error| error.to_string())?;
     let has_token = read_netease_token().is_some();
-    let masked_token = if has_token { "••••••••••••".to_string() } else { "".to_string() };
+    let masked_token = if has_token {
+        "••••••••••••".to_string()
+    } else {
+        "".to_string()
+    };
 
     Ok(match stored {
         Some((enabled, base_url)) => NeteaseSourceConfigDto {
@@ -3117,13 +3318,21 @@ fn load_netease_source_config(db: &Connection) -> Result<NeteaseSourceConfigDto,
         },
     })
 }
-fn save_netease_source_config_to_db(db: &Connection, payload: SaveNeteaseSourceConfigPayload) -> Result<(), String> {
+fn save_netease_source_config_to_db(
+    db: &Connection,
+    payload: SaveNeteaseSourceConfigPayload,
+) -> Result<(), String> {
     let base_url = payload.base_url.trim().trim_end_matches('/');
     if payload.enabled && base_url.is_empty() {
         return Err("API Base URL is required when NetEase Cloud Music is enabled.".to_string());
     }
 
-    if let Some(token) = payload.token.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(token) = payload
+        .token
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         save_netease_token(token)?;
     }
 
@@ -3223,7 +3432,10 @@ fn netease_token_fallback_path() -> Option<PathBuf> {
     let current_dir = std::env::current_dir().ok()?;
     let candidates = [
         current_dir.join("PersonalConfig"),
-        current_dir.parent().map(|parent| parent.join("PersonalConfig")).unwrap_or_else(|| current_dir.join("PersonalConfig")),
+        current_dir
+            .parent()
+            .map(|parent| parent.join("PersonalConfig"))
+            .unwrap_or_else(|| current_dir.join("PersonalConfig")),
     ];
     candidates
         .into_iter()
@@ -3248,12 +3460,20 @@ fn load_bilibili_source_config(db: &Connection) -> Result<BilibiliSourceConfigDt
         .optional()
         .map_err(|error| error.to_string())?;
     let has_token = read_bilibili_token().is_some();
-    let masked_token = if has_token { "••••••••••••".to_string() } else { "".to_string() };
+    let masked_token = if has_token {
+        "••••••••••••".to_string()
+    } else {
+        "".to_string()
+    };
 
     Ok(match stored {
         Some((enabled, base_url, metadata_json)) => BilibiliSourceConfigDto {
             enabled,
-            base_url: if base_url.trim().is_empty() { BILIBILI_DEFAULT_BASE_URL.to_string() } else { base_url },
+            base_url: if base_url.trim().is_empty() {
+                BILIBILI_DEFAULT_BASE_URL.to_string()
+            } else {
+                base_url
+            },
             has_token,
             masked_token,
             search_scope: bilibili_search_scope_from_metadata(&metadata_json),
@@ -3268,7 +3488,10 @@ fn load_bilibili_source_config(db: &Connection) -> Result<BilibiliSourceConfigDt
     })
 }
 
-fn save_bilibili_source_config_to_db(db: &Connection, payload: SaveBilibiliSourceConfigPayload) -> Result<(), String> {
+fn save_bilibili_source_config_to_db(
+    db: &Connection,
+    payload: SaveBilibiliSourceConfigPayload,
+) -> Result<(), String> {
     let base_url = payload
         .base_url
         .as_deref()
@@ -3281,7 +3504,12 @@ fn save_bilibili_source_config_to_db(db: &Connection, payload: SaveBilibiliSourc
         return Err("API Base URL is not valid.".to_string());
     }
 
-    if let Some(token) = payload.token.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(token) = payload
+        .token
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         save_bilibili_token(token)?;
     }
 
@@ -3388,7 +3616,10 @@ fn bilibili_token_fallback_path() -> Option<PathBuf> {
     let current_dir = std::env::current_dir().ok()?;
     let candidates = [
         current_dir.join("PersonalConfig"),
-        current_dir.parent().map(|parent| parent.join("PersonalConfig")).unwrap_or_else(|| current_dir.join("PersonalConfig")),
+        current_dir
+            .parent()
+            .map(|parent| parent.join("PersonalConfig"))
+            .unwrap_or_else(|| current_dir.join("PersonalConfig")),
     ];
     candidates
         .into_iter()
@@ -3400,7 +3631,12 @@ fn bilibili_token_fallback_path() -> Option<PathBuf> {
 fn bilibili_search_scope_from_metadata(metadata_json: &str) -> String {
     serde_json::from_str::<serde_json::Value>(metadata_json)
         .ok()
-        .and_then(|value| value.get("searchScope").and_then(|scope| scope.as_str()).map(ToString::to_string))
+        .and_then(|value| {
+            value
+                .get("searchScope")
+                .and_then(|scope| scope.as_str())
+                .map(ToString::to_string)
+        })
         .map(|value| normalize_bilibili_search_scope(Some(&value)))
         .unwrap_or_else(|| "music".to_string())
 }
@@ -3422,7 +3658,8 @@ async fn request_bilibili_json(
     query: &[(&str, &str)],
 ) -> Result<serde_json::Value, String> {
     let text = request_bilibili_text(config, path, query).await?;
-    serde_json::from_str::<serde_json::Value>(&text).map_err(|_| "The source is quiet tonight.".to_string())
+    serde_json::from_str::<serde_json::Value>(&text)
+        .map_err(|_| "The source is quiet tonight.".to_string())
 }
 
 fn cookie_header_from_response(response: &reqwest::Response) -> Option<String> {
@@ -3436,11 +3673,21 @@ fn cookie_header_from_response(response: &reqwest::Response) -> Option<String> {
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
         .collect::<Vec<_>>();
-    if cookies.is_empty() { None } else { Some(cookies.join("; ")) }
+    if cookies.is_empty() {
+        None
+    } else {
+        Some(cookies.join("; "))
+    }
 }
 
 fn bilibili_cookie_from_login_url(url: &str) -> Option<String> {
-    const COOKIE_NAMES: &[&str] = &["SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid"];
+    const COOKIE_NAMES: &[&str] = &[
+        "SESSDATA",
+        "bili_jct",
+        "DedeUserID",
+        "DedeUserID__ckMd5",
+        "sid",
+    ];
     let query = url.split_once('?')?.1;
     let cookies = query
         .split('&')
@@ -3448,7 +3695,11 @@ fn bilibili_cookie_from_login_url(url: &str) -> Option<String> {
         .filter(|(name, value)| COOKIE_NAMES.contains(name) && !value.is_empty())
         .map(|(name, value)| format!("{name}={value}"))
         .collect::<Vec<_>>();
-    if cookies.is_empty() { None } else { Some(cookies.join("; ")) }
+    if cookies.is_empty() {
+        None
+    } else {
+        Some(cookies.join("; "))
+    }
 }
 
 async fn request_bilibili_text(
@@ -3487,7 +3738,11 @@ async fn request_bilibili_text(
             .header("Sec-Fetch-Site", "same-site");
     }
 
-    if let Some(cookie) = request_cookie.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(cookie) = request_cookie
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         request = request.header("Cookie", cookie);
     }
 
@@ -3497,7 +3752,9 @@ async fn request_bilibili_text(
         .map_err(|error| format!("The source is quiet tonight. {error}"))?;
     let status = response.status();
     if status.as_u16() == 412 {
-        return Err("Bilibili paused this search request. Please wait a moment and try again.".to_string());
+        return Err(
+            "Bilibili paused this search request. Please wait a moment and try again.".to_string(),
+        );
     }
     if !status.is_success() {
         return Err(format!("Bilibili is unavailable just now ({status})."));
@@ -3505,14 +3762,23 @@ async fn request_bilibili_text(
     let text = response.text().await.map_err(|error| error.to_string())?;
     let trimmed = text.trim_start();
     if trimmed.starts_with("<!DOCTYPE") || trimmed.starts_with("<html") {
-        return Err("Bilibili asked for web verification. Please wait a moment and search again.".to_string());
+        return Err(
+            "Bilibili asked for web verification. Please wait a moment and search again."
+                .to_string(),
+        );
     }
     Ok(text)
 }
 
 async fn resolve_bilibili_request_cookie(config: &ResolvedBilibiliSourceConfig) -> Option<String> {
-    let existing = config.token.as_deref().map(str::trim).filter(|value| !value.is_empty());
-    if existing.is_some_and(|cookie| has_cookie_name(cookie, "buvid3") && has_cookie_name(cookie, "buvid4")) {
+    let existing = config
+        .token
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if existing.is_some_and(|cookie| {
+        has_cookie_name(cookie, "buvid3") && has_cookie_name(cookie, "buvid4")
+    }) {
         return existing.map(ToString::to_string);
     }
 
@@ -3551,13 +3817,22 @@ async fn fetch_bilibili_device_cookie() -> Option<String> {
 fn merge_bilibili_cookies(existing: Option<&str>, additional: Option<&str>) -> Option<String> {
     let mut values = Vec::<(String, String)>::new();
     for cookie in [existing, additional].into_iter().flatten() {
-        for pair in cookie.split(';').map(str::trim).filter(|value| !value.is_empty()) {
-            let Some((name, value)) = pair.split_once('=') else { continue };
+        for pair in cookie
+            .split(';')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            let Some((name, value)) = pair.split_once('=') else {
+                continue;
+            };
             let name = name.trim();
             if name.is_empty() || value.trim().is_empty() {
                 continue;
             }
-            if let Some(found) = values.iter_mut().find(|(stored_name, _)| stored_name.eq_ignore_ascii_case(name)) {
+            if let Some(found) = values
+                .iter_mut()
+                .find(|(stored_name, _)| stored_name.eq_ignore_ascii_case(name))
+            {
                 found.1 = value.trim().to_string();
             } else {
                 values.push((name.to_string(), value.trim().to_string()));
@@ -3567,7 +3842,13 @@ fn merge_bilibili_cookies(existing: Option<&str>, additional: Option<&str>) -> O
     if values.is_empty() {
         None
     } else {
-        Some(values.into_iter().map(|(name, value)| format!("{name}={value}")).collect::<Vec<_>>().join("; "))
+        Some(
+            values
+                .into_iter()
+                .map(|(name, value)| format!("{name}={value}"))
+                .collect::<Vec<_>>()
+                .join("; "),
+        )
     }
 }
 
@@ -3578,21 +3859,30 @@ fn has_cookie_name(cookie: &str, expected: &str) -> bool {
         .any(|(name, _)| name.trim().eq_ignore_ascii_case(expected))
 }
 
-async fn fetch_bilibili_login_status(config: &ResolvedBilibiliSourceConfig) -> Result<BilibiliLoginStatusDto, String> {
+async fn fetch_bilibili_login_status(
+    config: &ResolvedBilibiliSourceConfig,
+) -> Result<BilibiliLoginStatusDto, String> {
     if config.token.is_none() {
         return Ok(BilibiliLoginStatusDto {
             logged_in: false,
             expired: false,
             nickname: None,
             user_id: None,
-            message: "Bilibili is available for public content. Import Cookie for private access.".to_string(),
+            message: "Bilibili is available for public content. Import Cookie for private access."
+                .to_string(),
         });
     }
 
     let value = request_bilibili_json(config, "/x/web-interface/nav", &[]).await?;
     let data = value.get("data").unwrap_or(&value);
-    let logged_in = data.get("isLogin").and_then(|value| value.as_bool()).unwrap_or(false);
-    let nickname = data.get("uname").and_then(|value| value.as_str()).map(ToString::to_string);
+    let logged_in = data
+        .get("isLogin")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+    let nickname = data
+        .get("uname")
+        .and_then(|value| value.as_str())
+        .map(ToString::to_string);
     let user_id = Some(json_id(data.get("mid"))).filter(|value| !value.is_empty() && value != "0");
 
     Ok(BilibiliLoginStatusDto {
@@ -3600,20 +3890,34 @@ async fn fetch_bilibili_login_status(config: &ResolvedBilibiliSourceConfig) -> R
         expired: !logged_in,
         nickname,
         user_id,
-        message: if logged_in { "Connected to Bilibili.".to_string() } else { "Reconnect Bilibili to try again.".to_string() },
+        message: if logged_in {
+            "Connected to Bilibili.".to_string()
+        } else {
+            "Reconnect Bilibili to try again.".to_string()
+        },
     })
 }
 
-async fn search_bilibili_videos(config: &ResolvedBilibiliSourceConfig, query: &str) -> Result<Vec<SourceSongDto>, String> {
+async fn search_bilibili_videos(
+    config: &ResolvedBilibiliSourceConfig,
+    query: &str,
+) -> Result<Vec<SourceSongDto>, String> {
     if let Some(id) = extract_bilibili_id(query) {
-        return fetch_bilibili_video_metadata(config, &id).await.map(|song| vec![song]);
+        return fetch_bilibili_video_metadata(config, &id)
+            .await
+            .map(|song| vec![song]);
     }
 
     let scoped_query = bilibili_scoped_query(query, &config.search_scope);
     let value = match request_bilibili_json(
         config,
         "/x/web-interface/search/type",
-        &[("search_type", "video"), ("keyword", scoped_query.as_str()), ("page", "1"), ("page_size", "12")],
+        &[
+            ("search_type", "video"),
+            ("keyword", scoped_query.as_str()),
+            ("page", "1"),
+            ("page_size", "12"),
+        ],
     )
     .await
     {
@@ -3623,10 +3927,16 @@ async fn search_bilibili_videos(config: &ResolvedBilibiliSourceConfig, query: &s
             .map_err(|fallback_error| format!("{primary_error} {fallback_error}"))?,
     };
 
-    let code = value.get("code").and_then(|value| value.as_i64()).unwrap_or(-1);
+    let code = value
+        .get("code")
+        .and_then(|value| value.as_i64())
+        .unwrap_or(-1);
     if code != 0 {
-        let message = json_text(value.get("message")).unwrap_or_else(|| "Please try again in a moment.".to_string());
-        return Err(format!("Bilibili search is unavailable just now. {message}"));
+        let message = json_text(value.get("message"))
+            .unwrap_or_else(|| "Please try again in a moment.".to_string());
+        return Err(format!(
+            "Bilibili search is unavailable just now. {message}"
+        ));
     }
     let results = value
         .get("data")
@@ -3635,7 +3945,10 @@ async fn search_bilibili_videos(config: &ResolvedBilibiliSourceConfig, query: &s
         .cloned()
         .unwrap_or_default();
 
-    Ok(results.iter().map(source_song_from_bilibili_search_json).collect())
+    Ok(results
+        .iter()
+        .map(source_song_from_bilibili_search_json)
+        .collect())
 }
 
 async fn request_bilibili_wbi_search(
@@ -3660,13 +3973,13 @@ async fn request_bilibili_wbi_search(
         wts
     );
     let w_rid = format!("{:x}", md5::compute(format!("{query}{mixin_key}")));
-    let url = format!("https://api.bilibili.com/x/web-interface/wbi/search/type?{query}&w_rid={w_rid}");
+    let url =
+        format!("https://api.bilibili.com/x/web-interface/wbi/search/type?{query}&w_rid={w_rid}");
     request_bilibili_json(config, &url, &[]).await
 }
 
 fn wbi_key_from_url(url: Option<&str>) -> Option<String> {
-    url?
-        .rsplit('/')
+    url?.rsplit('/')
         .next()?
         .split('.')
         .next()
@@ -3676,9 +3989,9 @@ fn wbi_key_from_url(url: Option<&str>) -> Option<String> {
 
 fn bilibili_mixin_key(raw_key: &str) -> String {
     const MIXIN_KEY_ENC_TAB: &[usize] = &[
-        46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29, 28,
-        14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21,
-        56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
+        46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19,
+        29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4,
+        22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
     ];
     let chars = raw_key.chars().collect::<Vec<_>>();
     MIXIN_KEY_ENC_TAB
@@ -3712,27 +4025,50 @@ fn bilibili_scoped_query(query: &str, scope: &str) -> String {
     format!("{query}{extra}")
 }
 
-async fn fetch_bilibili_video_metadata(config: &ResolvedBilibiliSourceConfig, bvid_or_aid: &str) -> Result<SourceSongDto, String> {
-    let clean_id = extract_bilibili_id(bvid_or_aid).unwrap_or_else(|| bvid_or_aid.trim().to_string());
+async fn fetch_bilibili_video_metadata(
+    config: &ResolvedBilibiliSourceConfig,
+    bvid_or_aid: &str,
+) -> Result<SourceSongDto, String> {
+    let clean_id =
+        extract_bilibili_id(bvid_or_aid).unwrap_or_else(|| bvid_or_aid.trim().to_string());
     let (bvid_part, cid_hint) = bilibili_song_id_parts(&clean_id);
     let mut query = Vec::new();
     if bvid_part.to_lowercase().starts_with("av") {
-        query.push(("aid", bvid_part.trim_start_matches("av").trim_start_matches("AV").to_string()));
+        query.push((
+            "aid",
+            bvid_part
+                .trim_start_matches("av")
+                .trim_start_matches("AV")
+                .to_string(),
+        ));
     } else if bvid_part.chars().all(|ch| ch.is_ascii_digit()) {
         query.push(("aid", bvid_part.clone()));
     } else {
         query.push(("bvid", bvid_part.clone()));
     }
-    let query_refs = query.iter().map(|(key, value)| (*key, value.as_str())).collect::<Vec<_>>();
+    let query_refs = query
+        .iter()
+        .map(|(key, value)| (*key, value.as_str()))
+        .collect::<Vec<_>>();
     let value = request_bilibili_json(config, "/x/web-interface/view", &query_refs).await?;
-    if value.get("code").and_then(|value| value.as_i64()).unwrap_or(-1) != 0 {
+    if value
+        .get("code")
+        .and_then(|value| value.as_i64())
+        .unwrap_or(-1)
+        != 0
+    {
         return Err("This Bilibili track is unavailable from the current source.".to_string());
     }
-    let data = value.get("data").ok_or_else(|| "This Bilibili track is unavailable from the current source.".to_string())?;
+    let data = value
+        .get("data")
+        .ok_or_else(|| "This Bilibili track is unavailable from the current source.".to_string())?;
     Ok(source_song_from_bilibili_view_json(data, cid_hint))
 }
 
-async fn fetch_bilibili_playable_url(config: &ResolvedBilibiliSourceConfig, song_id: &str) -> Result<PlayableUrlDto, String> {
+async fn fetch_bilibili_playable_url(
+    config: &ResolvedBilibiliSourceConfig,
+    song_id: &str,
+) -> Result<PlayableUrlDto, String> {
     let metadata = fetch_bilibili_video_metadata(config, song_id).await?;
     let bvid = metadata.bvid.clone().unwrap_or_else(|| song_id.to_string());
     let cid = metadata
@@ -3742,21 +4078,38 @@ async fn fetch_bilibili_playable_url(config: &ResolvedBilibiliSourceConfig, song
     let value = request_bilibili_json(
         config,
         "/x/player/playurl",
-        &[("bvid", bvid.as_str()), ("cid", cid.as_str()), ("fnval", "4048"), ("fourk", "1")],
+        &[
+            ("bvid", bvid.as_str()),
+            ("cid", cid.as_str()),
+            ("fnval", "4048"),
+            ("fourk", "1"),
+        ],
     )
     .await
     .map_err(|_| "playurl_failed".to_string())?;
 
-    let code = value.get("code").and_then(|value| value.as_i64()).unwrap_or(-1);
+    let code = value
+        .get("code")
+        .and_then(|value| value.as_i64())
+        .unwrap_or(-1);
     if code != 0 {
-        return Ok(bilibili_unavailable_playable(song_id, classify_bilibili_playurl_reason(&value)));
+        return Ok(bilibili_unavailable_playable(
+            song_id,
+            classify_bilibili_playurl_reason(&value),
+        ));
     }
     let data = value.get("data").unwrap_or(&value);
     let audio_candidates = data
         .get("dash")
         .and_then(|dash| dash.get("audio"))
         .and_then(|audio| audio.as_array())
-        .and_then(|audio| audio.iter().max_by_key(|item| item.get("bandwidth").and_then(|value| value.as_u64()).unwrap_or(0)))
+        .and_then(|audio| {
+            audio.iter().max_by_key(|item| {
+                item.get("bandwidth")
+                    .and_then(|value| value.as_u64())
+                    .unwrap_or(0)
+            })
+        })
         .map(bilibili_media_url_candidates)
         .or_else(|| {
             data.get("durl")
@@ -3776,13 +4129,31 @@ async fn fetch_bilibili_playable_url(config: &ResolvedBilibiliSourceConfig, song
             video
                 .iter()
                 .filter(|item| item.get("codecid").and_then(|value| value.as_u64()) == Some(7))
-                .filter(|item| item.get("height").and_then(|value| value.as_u64()).unwrap_or(0) <= 720)
-                .max_by_key(|item| item.get("bandwidth").and_then(|value| value.as_u64()).unwrap_or(0))
+                .filter(|item| {
+                    item.get("height")
+                        .and_then(|value| value.as_u64())
+                        .unwrap_or(0)
+                        <= 720
+                })
+                .max_by_key(|item| {
+                    item.get("bandwidth")
+                        .and_then(|value| value.as_u64())
+                        .unwrap_or(0)
+                })
                 .or_else(|| {
                     video
                         .iter()
-                        .filter(|item| item.get("height").and_then(|value| value.as_u64()).unwrap_or(0) <= 720)
-                        .min_by_key(|item| item.get("bandwidth").and_then(|value| value.as_u64()).unwrap_or(u64::MAX))
+                        .filter(|item| {
+                            item.get("height")
+                                .and_then(|value| value.as_u64())
+                                .unwrap_or(0)
+                                <= 720
+                        })
+                        .min_by_key(|item| {
+                            item.get("bandwidth")
+                                .and_then(|value| value.as_u64())
+                                .unwrap_or(u64::MAX)
+                        })
                 })
         })
         .map(bilibili_media_url_candidates)
@@ -3799,7 +4170,10 @@ async fn fetch_bilibili_playable_url(config: &ResolvedBilibiliSourceConfig, song
             audio_candidates,
             video_candidates,
         }),
-        _ => Ok(bilibili_unavailable_playable(song_id, "audio_stream_missing")),
+        _ => Ok(bilibili_unavailable_playable(
+            song_id,
+            "audio_stream_missing",
+        )),
     }
 }
 
@@ -3817,12 +4191,21 @@ fn bilibili_media_url_candidates(item: &serde_json::Value) -> Vec<String> {
         .or_else(|| item.get("backup_url"))
         .and_then(|value| value.as_array())
     {
-        urls.extend(backups.iter().filter_map(|value| value.as_str()).map(ToString::to_string));
+        urls.extend(
+            backups
+                .iter()
+                .filter_map(|value| value.as_str())
+                .map(ToString::to_string),
+        );
     }
     urls.retain(|url| !url.trim().is_empty());
     urls.sort_by_key(|url| {
         let lower = url.to_ascii_lowercase();
-        if lower.contains("mcdn") || lower.contains("akamaized") { 1 } else { 0 }
+        if lower.contains("mcdn") || lower.contains("akamaized") {
+            1
+        } else {
+            0
+        }
     });
     urls.dedup();
     urls
@@ -3869,8 +4252,14 @@ struct BilibiliDanmakuFetch {
     raw_length: usize,
 }
 
-async fn fetch_bilibili_danmaku_items(config: &ResolvedBilibiliSourceConfig, cid: &str) -> Result<BilibiliDanmakuFetch, String> {
-    let primary_url = format!("{}/x/v1/dm/list.so?oid={cid}", config.base_url.trim_end_matches('/'));
+async fn fetch_bilibili_danmaku_items(
+    config: &ResolvedBilibiliSourceConfig,
+    cid: &str,
+) -> Result<BilibiliDanmakuFetch, String> {
+    let primary_url = format!(
+        "{}/x/v1/dm/list.so?oid={cid}",
+        config.base_url.trim_end_matches('/')
+    );
     if let Ok(xml) = request_bilibili_danmaku_xml(config, &primary_url).await {
         let items = parse_bilibili_danmaku_xml(cid, &xml);
         if !items.is_empty() {
@@ -3921,10 +4310,15 @@ async fn request_bilibili_danmaku_xml(
         request = request.header("Cookie", cookie);
     }
 
-    let response = request.send().await.map_err(|error| format!("Danmaku is quiet tonight. {error}"))?;
+    let response = request
+        .send()
+        .await
+        .map_err(|error| format!("Danmaku is quiet tonight. {error}"))?;
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("Bilibili danmaku is unavailable just now ({status})."));
+        return Err(format!(
+            "Bilibili danmaku is unavailable just now ({status})."
+        ));
     }
     let encoding = response
         .headers()
@@ -3951,7 +4345,8 @@ fn decode_deflate_payload(bytes: &[u8]) -> Result<Vec<u8>, String> {
 
     let mut zlib = flate2::read::ZlibDecoder::new(bytes);
     let mut decoded = Vec::new();
-    zlib.read_to_end(&mut decoded).map_err(|error| format!("Could not decode danmaku: {error}"))?;
+    zlib.read_to_end(&mut decoded)
+        .map_err(|error| format!("Could not decode danmaku: {error}"))?;
     Ok(decoded)
 }
 
@@ -3960,10 +4355,14 @@ fn parse_bilibili_danmaku_xml(cid: &str, xml: &str) -> Vec<DanmakuItemDto> {
     let mut cursor = 0_usize;
     while let Some(start_rel) = xml[cursor..].find("<d p=\"") {
         let start = cursor + start_rel + 6;
-        let Some(end_attr_rel) = xml[start..].find('"') else { break };
+        let Some(end_attr_rel) = xml[start..].find('"') else {
+            break;
+        };
         let attr = &xml[start..start + end_attr_rel];
         let text_start = start + end_attr_rel + 2;
-        let Some(text_end_rel) = xml[text_start..].find("</d>") else { break };
+        let Some(text_end_rel) = xml[text_start..].find("</d>") else {
+            break;
+        };
         let raw_text = &xml[text_start..text_start + text_end_rel];
         cursor = text_start + text_end_rel + 4;
 
@@ -3972,7 +4371,10 @@ fn parse_bilibili_danmaku_xml(cid: &str, xml: &str) -> Vec<DanmakuItemDto> {
         if text.trim().is_empty() || text.chars().count() > 42 {
             continue;
         }
-        let time = parts.first().and_then(|value| value.parse::<f64>().ok()).unwrap_or(0.0);
+        let time = parts
+            .first()
+            .and_then(|value| value.parse::<f64>().ok())
+            .unwrap_or(0.0);
         let mode = parts.get(1).copied().unwrap_or("").to_string();
         let font_size = parts.get(2).copied().unwrap_or("").to_string();
         let color = parts.get(3).copied().unwrap_or("").to_string();
@@ -3993,7 +4395,11 @@ fn parse_bilibili_danmaku_xml(cid: &str, xml: &str) -> Vec<DanmakuItemDto> {
             weight: 1.0,
         });
     }
-    items.sort_by(|left, right| left.time.partial_cmp(&right.time).unwrap_or(std::cmp::Ordering::Equal));
+    items.sort_by(|left, right| {
+        left.time
+            .partial_cmp(&right.time)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     dedupe_danmaku(items)
 }
 
@@ -4024,7 +4430,10 @@ fn danmaku_cache_key(source: &str, cid: &str) -> String {
     format!("{}:{}:danmaku", source.trim().to_lowercase(), cid.trim())
 }
 
-fn load_cached_danmaku(state: &State<'_, AppState>, cache_key: &str) -> Result<Option<Vec<DanmakuItemDto>>, String> {
+fn load_cached_danmaku(
+    state: &State<'_, AppState>,
+    cache_key: &str,
+) -> Result<Option<Vec<DanmakuItemDto>>, String> {
     let db = state.db.lock().map_err(|error| error.to_string())?;
     let raw = db
         .query_row(
@@ -4065,7 +4474,11 @@ fn prune_danmaku_cache(state: &State<'_, AppState>) -> Result<(), String> {
     const DANMAKU_CACHE_LIMIT_BYTES: i64 = 50 * 1024 * 1024;
     let db = state.db.lock().map_err(|error| error.to_string())?;
     let total: i64 = db
-        .query_row("SELECT COALESCE(SUM(bytes), 0) FROM danmaku_cache", [], |row| row.get(0))
+        .query_row(
+            "SELECT COALESCE(SUM(bytes), 0) FROM danmaku_cache",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(0);
     if total <= DANMAKU_CACHE_LIMIT_BYTES {
         return Ok(());
@@ -4085,9 +4498,14 @@ fn prune_danmaku_cache(state: &State<'_, AppState>) -> Result<(), String> {
 
 fn extract_bilibili_id(value: &str) -> Option<String> {
     let trimmed = value.trim();
-    for token in trimmed.split(|ch: char| ch.is_whitespace() || ch == '/' || ch == '?' || ch == '&') {
+    for token in trimmed.split(|ch: char| ch.is_whitespace() || ch == '/' || ch == '?' || ch == '&')
+    {
         if token.starts_with("BV") && token.len() >= 10 {
-            return Some(token.trim_matches(|ch: char| !ch.is_ascii_alphanumeric()).to_string());
+            return Some(
+                token
+                    .trim_matches(|ch: char| !ch.is_ascii_alphanumeric())
+                    .to_string(),
+            );
         }
         if token.starts_with("av") && token[2..].chars().all(|ch| ch.is_ascii_digit()) {
             return Some(token.to_string());
@@ -4106,7 +4524,9 @@ fn bilibili_song_id_parts(song_id: &str) -> (String, Option<String>) {
 
 fn source_song_from_bilibili_search_json(value: &serde_json::Value) -> SourceSongDto {
     let bvid = json_text(value.get("bvid")).unwrap_or_else(|| json_id(value.get("aid")));
-    let title = clean_bilibili_title(&json_text(value.get("title")).unwrap_or_else(|| "Bilibili Track".to_string()));
+    let title = clean_bilibili_title(
+        &json_text(value.get("title")).unwrap_or_else(|| "Bilibili Track".to_string()),
+    );
     let uploader = json_text(value.get("author")).unwrap_or_else(|| "Bilibili".to_string());
     let (artist, album) = infer_bilibili_artist_album(&title, &uploader);
     let cover_url = normalize_bilibili_image_url(json_text(value.get("pic")).unwrap_or_default());
@@ -4125,14 +4545,20 @@ fn source_song_from_bilibili_search_json(value: &serde_json::Value) -> SourceSon
         aid: Some(json_id(value.get("aid"))).filter(|value| !value.is_empty()),
         cid: None,
         uploader: Some(uploader),
-        danmaku_count: value.get("danmaku").or_else(|| value.get("video_review")).and_then(|value| value.as_u64()),
+        danmaku_count: value
+            .get("danmaku")
+            .or_else(|| value.get("video_review"))
+            .and_then(|value| value.as_u64()),
         play_count: value.get("play").and_then(|value| value.as_u64()),
         page_index: Some(0),
         source_url: json_text(value.get("arcurl")),
     }
 }
 
-fn source_song_from_bilibili_view_json(value: &serde_json::Value, cid_hint: Option<String>) -> SourceSongDto {
+fn source_song_from_bilibili_view_json(
+    value: &serde_json::Value,
+    cid_hint: Option<String>,
+) -> SourceSongDto {
     let bvid = json_text(value.get("bvid")).unwrap_or_else(|| json_id(value.get("aid")));
     let page = value
         .get("pages")
@@ -4143,8 +4569,12 @@ fn source_song_from_bilibili_view_json(value: &serde_json::Value, cid_hint: Opti
                 .and_then(|cid| pages.iter().find(|page| json_id(page.get("cid")) == *cid))
                 .or_else(|| pages.first())
         });
-    let cid = cid_hint.or_else(|| page.map(|page| json_id(page.get("cid")))).filter(|value| !value.is_empty());
-    let title = clean_bilibili_title(&json_text(value.get("title")).unwrap_or_else(|| "Bilibili Track".to_string()));
+    let cid = cid_hint
+        .or_else(|| page.map(|page| json_id(page.get("cid"))))
+        .filter(|value| !value.is_empty());
+    let title = clean_bilibili_title(
+        &json_text(value.get("title")).unwrap_or_else(|| "Bilibili Track".to_string()),
+    );
     let uploader = value
         .get("owner")
         .and_then(|owner| owner.get("name"))
@@ -4174,9 +4604,18 @@ fn source_song_from_bilibili_view_json(value: &serde_json::Value, cid_hint: Opti
         aid: Some(json_id(value.get("aid"))).filter(|value| !value.is_empty()),
         cid,
         uploader: Some(uploader),
-        danmaku_count: value.get("stat").and_then(|stat| stat.get("danmaku")).and_then(|value| value.as_u64()),
-        play_count: value.get("stat").and_then(|stat| stat.get("view")).and_then(|value| value.as_u64()),
-        page_index: page.and_then(|page| page.get("page")).and_then(|value| value.as_u64()).map(|value| value.saturating_sub(1) as u32),
+        danmaku_count: value
+            .get("stat")
+            .and_then(|stat| stat.get("danmaku"))
+            .and_then(|value| value.as_u64()),
+        play_count: value
+            .get("stat")
+            .and_then(|stat| stat.get("view"))
+            .and_then(|value| value.as_u64()),
+        page_index: page
+            .and_then(|page| page.get("page"))
+            .and_then(|value| value.as_u64())
+            .map(|value| value.saturating_sub(1) as u32),
         source_url: Some(format!("https://www.bilibili.com/video/{bvid}")),
     }
 }
@@ -4192,7 +4631,7 @@ fn clean_bilibili_title(title: &str) -> String {
 }
 
 fn infer_bilibili_artist_album(title: &str, uploader: &str) -> (String, String) {
-    let normalized = title.replace('《', " - ").replace('》', " - ");
+    let normalized = title.replace(['《', '》'], " - ");
     let separators = [" - ", "-", "—", "|", "｜"];
     for separator in separators {
         if let Some((left, right)) = normalized.split_once(separator) {
@@ -4220,30 +4659,45 @@ fn normalize_bilibili_image_url(value: String) -> String {
     }
 }
 
-fn proxy_bilibili_song_cover(state: &State<'_, AppState>, song: &mut SourceSongDto) -> Result<(), String> {
+fn proxy_bilibili_song_cover(
+    state: &State<'_, AppState>,
+    song: &mut SourceSongDto,
+) -> Result<(), String> {
     if !song.cover_url.trim().is_empty() {
         song.cover_url = register_media_proxy(state.inner(), &song.cover_url, "image")?;
     }
     Ok(())
 }
 
-fn proxy_bilibili_song_covers(state: &State<'_, AppState>, songs: &mut [SourceSongDto]) -> Result<(), String> {
+fn proxy_bilibili_song_covers(
+    state: &State<'_, AppState>,
+    songs: &mut [SourceSongDto],
+) -> Result<(), String> {
     for song in songs {
         proxy_bilibili_song_cover(state, song)?;
     }
     Ok(())
 }
 
-fn proxy_bilibili_track_covers(state: &State<'_, AppState>, tracks: &mut [TrackDto]) -> Result<(), String> {
+fn proxy_bilibili_track_covers(
+    state: &State<'_, AppState>,
+    tracks: &mut [TrackDto],
+) -> Result<(), String> {
     for track in tracks.iter_mut().filter(|track| track.source == "bilibili") {
-        if !track.cover_url.trim().is_empty() && !track.cover_url.contains("ome-media.localhost") && !track.cover_url.starts_with("ome-media:") {
+        if !track.cover_url.trim().is_empty()
+            && !track.cover_url.contains("ome-media.localhost")
+            && !track.cover_url.starts_with("ome-media:")
+        {
             track.cover_url = register_media_proxy(state.inner(), &track.cover_url, "image")?;
         }
     }
     Ok(())
 }
 
-fn proxy_bilibili_playback(state: &State<'_, AppState>, playback: &mut PlayableUrlDto) -> Result<(), String> {
+fn proxy_bilibili_playback(
+    state: &State<'_, AppState>,
+    playback: &mut PlayableUrlDto,
+) -> Result<(), String> {
     if !playback.audio_candidates.is_empty() {
         playback.url = Some(register_media_proxy_candidates(
             state.inner(),
@@ -4288,7 +4742,10 @@ fn register_media_proxy_candidates(
         .unwrap_or(0);
     let token = stable_id(&format!("{kind}:{nonce}:{salt}:{}", urls.join("|")));
 
-    let mut registry = state.media_proxy.lock().map_err(|error| error.to_string())?;
+    let mut registry = state
+        .media_proxy
+        .lock()
+        .map_err(|error| error.to_string())?;
     // Evict expired entries and enforce a soft LRU cap.
     let now = std::time::SystemTime::now();
     registry.retain(|_, entry| now < entry.expires_at);
@@ -4302,11 +4759,14 @@ fn register_media_proxy_candidates(
             registry.remove(&key);
         }
     }
-    registry.insert(token.clone(), MediaProxyEntry {
-        urls,
-        kind,
-        expires_at: now + MEDIA_PROXY_TTL,
-    });
+    registry.insert(
+        token.clone(),
+        MediaProxyEntry {
+            urls,
+            kind,
+            expires_at: now + MEDIA_PROXY_TTL,
+        },
+    );
 
     #[cfg(target_os = "windows")]
     return Ok(format!("http://ome-media.localhost/{token}"));
@@ -4314,7 +4774,10 @@ fn register_media_proxy_candidates(
     return Ok(format!("ome-media://localhost/{token}"));
 }
 
-async fn respond_bilibili_media(app: AppHandle, request: tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+async fn respond_bilibili_media(
+    app: AppHandle,
+    request: tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
     let token = request.uri().path().trim_start_matches('/');
     let entry = app
         .state::<AppState>()
@@ -4327,9 +4790,17 @@ async fn respond_bilibili_media(app: AppHandle, request: tauri::http::Request<Ve
         return media_proxy_error(tauri::http::StatusCode::NOT_FOUND, "Media link expired.");
     };
 
-    let client = match reqwest::Client::builder().redirect(reqwest::redirect::Policy::limited(6)).build() {
+    let client = match reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(6))
+        .build()
+    {
         Ok(client) => client,
-        Err(_) => return media_proxy_error(tauri::http::StatusCode::BAD_GATEWAY, "Could not open media source."),
+        Err(_) => {
+            return media_proxy_error(
+                tauri::http::StatusCode::BAD_GATEWAY,
+                "Could not open media source.",
+            )
+        }
     };
     let is_head = request.method() == tauri::http::Method::HEAD;
     // Bilibili media CDNs commonly reject HEAD even though ranged GET is supported.
@@ -4359,30 +4830,62 @@ async fn respond_bilibili_media(app: AppHandle, request: tauri::http::Request<Ve
         }
     }
     let Some(response) = response else {
-        return media_proxy_error(tauri::http::StatusCode::BAD_GATEWAY, "Media source is unavailable.");
+        return media_proxy_error(
+            tauri::http::StatusCode::BAD_GATEWAY,
+            "Media source is unavailable.",
+        );
     };
-    let status = tauri::http::StatusCode::from_u16(response.status().as_u16()).unwrap_or(tauri::http::StatusCode::BAD_GATEWAY);
-    let content_type = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|value| value.to_str().ok()).map(ToString::to_string);
-    let content_range = response.headers().get(reqwest::header::CONTENT_RANGE).and_then(|value| value.to_str().ok()).map(ToString::to_string);
-    let accept_ranges = response.headers().get(reqwest::header::ACCEPT_RANGES).and_then(|value| value.to_str().ok()).map(ToString::to_string);
+    let status = tauri::http::StatusCode::from_u16(response.status().as_u16())
+        .unwrap_or(tauri::http::StatusCode::BAD_GATEWAY);
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(ToString::to_string);
+    let content_range = response
+        .headers()
+        .get(reqwest::header::CONTENT_RANGE)
+        .and_then(|value| value.to_str().ok())
+        .map(ToString::to_string);
+    let accept_ranges = response
+        .headers()
+        .get(reqwest::header::ACCEPT_RANGES)
+        .and_then(|value| value.to_str().ok())
+        .map(ToString::to_string);
     let remote_content_length = response.content_length();
     let body = if is_head {
         Vec::new()
     } else {
         match response.bytes().await {
             Ok(bytes) => bytes.to_vec(),
-            Err(_) => return media_proxy_error(tauri::http::StatusCode::BAD_GATEWAY, "Media stream was interrupted."),
+            Err(_) => {
+                return media_proxy_error(
+                    tauri::http::StatusCode::BAD_GATEWAY,
+                    "Media stream was interrupted.",
+                )
+            }
         }
     };
 
-    let content_length = if is_head { remote_content_length.unwrap_or(0) as usize } else { body.len() };
+    let content_length = if is_head {
+        remote_content_length.unwrap_or(0) as usize
+    } else {
+        body.len()
+    };
     let mut builder = tauri::http::Response::builder()
         .status(status)
         .header(tauri::http::header::CACHE_CONTROL, "private, max-age=300")
-        .header(tauri::http::header::CONTENT_LENGTH, content_length.to_string());
+        .header(
+            tauri::http::header::CONTENT_LENGTH,
+            content_length.to_string(),
+        );
     let resolved_content_type = match content_type.as_deref() {
-        None | Some("application/octet-stream") if entry.kind == "video" => Some("video/mp4".to_string()),
-        None | Some("application/octet-stream") if entry.kind == "audio" => Some("audio/mp4".to_string()),
+        None | Some("application/octet-stream") if entry.kind == "video" => {
+            Some("video/mp4".to_string())
+        }
+        None | Some("application/octet-stream") if entry.kind == "audio" => {
+            Some("audio/mp4".to_string())
+        }
         _ => content_type,
     };
     if let Some(value) = resolved_content_type {
@@ -4394,13 +4897,24 @@ async fn respond_bilibili_media(app: AppHandle, request: tauri::http::Request<Ve
     if let Some(value) = accept_ranges {
         builder = builder.header(tauri::http::header::ACCEPT_RANGES, value);
     }
-    builder.body(body).unwrap_or_else(|_| media_proxy_error(tauri::http::StatusCode::BAD_GATEWAY, "Media response failed."))
+    builder.body(body).unwrap_or_else(|_| {
+        media_proxy_error(
+            tauri::http::StatusCode::BAD_GATEWAY,
+            "Media response failed.",
+        )
+    })
 }
 
-fn media_proxy_error(status: tauri::http::StatusCode, message: &str) -> tauri::http::Response<Vec<u8>> {
+fn media_proxy_error(
+    status: tauri::http::StatusCode,
+    message: &str,
+) -> tauri::http::Response<Vec<u8>> {
     tauri::http::Response::builder()
         .status(status)
-        .header(tauri::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")
+        .header(
+            tauri::http::header::CONTENT_TYPE,
+            "text/plain; charset=utf-8",
+        )
         .body(message.as_bytes().to_vec())
         .unwrap_or_else(|_| {
             tauri::http::Response::builder()
@@ -4414,7 +4928,10 @@ fn parse_bilibili_duration(value: Option<&serde_json::Value>) -> Option<u64> {
     match value? {
         serde_json::Value::Number(number) => number.as_u64(),
         serde_json::Value::String(text) => {
-            let parts = text.split(':').filter_map(|part| part.parse::<u64>().ok()).collect::<Vec<_>>();
+            let parts = text
+                .split(':')
+                .filter_map(|part| part.parse::<u64>().ok())
+                .collect::<Vec<_>>();
             match parts.as_slice() {
                 [minutes, seconds] => Some(minutes * 60 + seconds),
                 [hours, minutes, seconds] => Some(hours * 3600 + minutes * 60 + seconds),
@@ -4425,7 +4942,9 @@ fn parse_bilibili_duration(value: Option<&serde_json::Value>) -> Option<u64> {
     }
 }
 
-async fn ensure_local_netease_api_service(base_url: &str) -> Result<NeteaseServiceStatusDto, String> {
+async fn ensure_local_netease_api_service(
+    base_url: &str,
+) -> Result<NeteaseServiceStatusDto, String> {
     let base_url = normalize_netease_base_url(base_url);
     if !is_local_netease_base_url(&base_url) {
         return Ok(NeteaseServiceStatusDto {
@@ -4445,8 +4964,9 @@ async fn ensure_local_netease_api_service(base_url: &str) -> Result<NeteaseServi
         });
     }
 
-    let app_js = find_netease_api_entry()
-        .ok_or_else(|| "NetEase Cloud Music source package was not found. Run npm install first.".to_string())?;
+    let app_js = find_netease_api_entry().ok_or_else(|| {
+        "NetEase Cloud Music source package was not found. Run npm install first.".to_string()
+    })?;
     let working_dir = app_js
         .parent()
         .map(Path::to_path_buf)
@@ -4493,7 +5013,11 @@ async fn ensure_local_netease_api_service(base_url: &str) -> Result<NeteaseServi
 }
 
 async fn is_netease_api_reachable(base_url: &str) -> bool {
-    let endpoint = format!("{}/login/status?timestamp={}", base_url.trim_end_matches('/'), current_timestamp_ms());
+    let endpoint = format!(
+        "{}/login/status?timestamp={}",
+        base_url.trim_end_matches('/'),
+        current_timestamp_ms()
+    );
     reqwest::Client::new()
         .get(endpoint)
         .timeout(std::time::Duration::from_secs(2))
@@ -4551,8 +5075,13 @@ fn find_netease_api_entry() -> Option<PathBuf> {
         .into_iter()
         .flat_map(|root| {
             [
-                root.join("node_modules").join("NeteaseCloudMusicApi").join("app.js"),
-                root.join("..").join("node_modules").join("NeteaseCloudMusicApi").join("app.js"),
+                root.join("node_modules")
+                    .join("NeteaseCloudMusicApi")
+                    .join("app.js"),
+                root.join("..")
+                    .join("node_modules")
+                    .join("NeteaseCloudMusicApi")
+                    .join("app.js"),
             ]
         })
         .find(|path| path.exists())
@@ -4616,7 +5145,11 @@ async fn request_netease_json_response(
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join("; ");
-    let set_cookie = if set_cookie.trim().is_empty() { None } else { Some(set_cookie) };
+    let set_cookie = if set_cookie.trim().is_empty() {
+        None
+    } else {
+        Some(set_cookie)
+    };
     let text = response.text().await.map_err(|error| error.to_string())?;
     let value = serde_json::from_str::<serde_json::Value>(&text)
         .map_err(|_| format!("NetEase Cloud Music responded with {status}."))?;
@@ -4636,7 +5169,10 @@ async fn complete_netease_session_from_response(
     response: NeteaseJsonResponse,
 ) -> Result<NeteaseLoginStatusDto, String> {
     let value = response.value;
-    let code = value.get("code").and_then(|value| value.as_i64()).unwrap_or(200);
+    let code = value
+        .get("code")
+        .and_then(|value| value.as_i64())
+        .unwrap_or(200);
     if code != 200 && code != 803 {
         return Err(friendly_netease_login_error(&value));
     }
@@ -4647,7 +5183,9 @@ async fn complete_netease_session_from_response(
         .or(response.set_cookie.as_deref())
         .map(str::trim)
         .filter(|cookie| !cookie.is_empty())
-        .ok_or_else(|| "Additional verification is required. Try scan login or secure web login.".to_string())?;
+        .ok_or_else(|| {
+            "Additional verification is required. Try scan login or secure web login.".to_string()
+        })?;
     save_netease_token(cookie)?;
 
     let refreshed_config = resolve_netease_source_config(state, None)?;
@@ -4655,7 +5193,10 @@ async fn complete_netease_session_from_response(
 }
 
 fn friendly_netease_login_error(value: &serde_json::Value) -> String {
-    let code = value.get("code").and_then(|value| value.as_i64()).unwrap_or(0);
+    let code = value
+        .get("code")
+        .and_then(|value| value.as_i64())
+        .unwrap_or(0);
     let message = json_text(value.get("message"))
         .or_else(|| json_text(value.get("msg")))
         .unwrap_or_default();
@@ -4715,8 +5256,11 @@ async fn fetch_netease_playlist(
     playlist_id: &str,
 ) -> Result<SourcePlaylistDto, String> {
     let value = request_netease_json(config, "/playlist/detail", &[("id", playlist_id)]).await?;
-    let playlist = value.get("playlist").ok_or_else(|| "Playlist was not found.".to_string())?;
-    let name = json_text(playlist.get("name")).unwrap_or_else(|| format!("NetEase Playlist {playlist_id}"));
+    let playlist = value
+        .get("playlist")
+        .ok_or_else(|| "Playlist was not found.".to_string())?;
+    let name = json_text(playlist.get("name"))
+        .unwrap_or_else(|| format!("NetEase Playlist {playlist_id}"));
     let description = json_text(playlist.get("description")).unwrap_or_default();
     let tracks_json = playlist
         .get("tracks")
@@ -4784,7 +5328,8 @@ async fn fetch_netease_songs_by_ids(
         }
 
         let ids_json = format!("[{}]", chunk.join(","));
-        let value = request_netease_json(config, "/song/detail", &[("ids", ids_json.as_str())]).await?;
+        let value =
+            request_netease_json(config, "/song/detail", &[("ids", ids_json.as_str())]).await?;
         let chunk_songs = value
             .get("songs")
             .and_then(|items| items.as_array())
@@ -4801,14 +5346,22 @@ async fn fetch_netease_user_playlists(
     config: &ResolvedNeteaseSourceConfig,
     user_id: &str,
 ) -> Result<Vec<NeteaseUserPlaylistDto>, String> {
-    let value = request_netease_json(config, "/user/playlist", &[("uid", user_id), ("limit", "1000")]).await?;
+    let value = request_netease_json(
+        config,
+        "/user/playlist",
+        &[("uid", user_id), ("limit", "1000")],
+    )
+    .await?;
     let playlists = value
         .get("playlist")
         .and_then(|items| items.as_array())
         .cloned()
         .unwrap_or_default();
 
-    Ok(playlists.iter().map(netease_user_playlist_from_json).collect())
+    Ok(playlists
+        .iter()
+        .map(netease_user_playlist_from_json)
+        .collect())
 }
 
 async fn fetch_netease_song_metadata(
@@ -4854,7 +5407,13 @@ async fn fetch_netease_playable_url_with_level(
     let requested_level = requested_level
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| if config.token.is_some() { "hires" } else { "standard" });
+        .unwrap_or_else(|| {
+            if config.token.is_some() {
+                "hires"
+            } else {
+                "standard"
+            }
+        });
     let is_logged_in = match fetch_netease_login_status(config).await {
         Ok(status) => status.logged_in && !status.expired,
         Err(_) => false,
@@ -4875,15 +5434,27 @@ async fn fetch_netease_playable_url_with_level(
         song_id,
         requested_level,
         is_logged_in,
-        user_profile.as_ref().and_then(|status| status.user_id.clone()),
-        vip_status
+        user_profile
             .as_ref()
-            .map(|status| if status.is_member { status.level.clone().unwrap_or_else(|| "active".to_string()) } else { "inactive".to_string() }),
+            .and_then(|status| status.user_id.clone()),
+        vip_status.as_ref().map(|status| {
+            if status.is_member {
+                status.level.clone().unwrap_or_else(|| "active".to_string())
+            } else {
+                "inactive".to_string()
+            }
+        }),
     );
 
     for level in levels {
         let endpoint = "/song/url/v1";
-        let value = match request_netease_json(config, endpoint, &[("id", song_id), ("level", level.as_str())]).await {
+        let value = match request_netease_json(
+            config,
+            endpoint,
+            &[("id", song_id), ("level", level.as_str())],
+        )
+        .await
+        {
             Ok(value) => value,
             Err(error) => {
                 let attempt = NeteasePlaybackAttemptDto {
@@ -4957,7 +5528,14 @@ async fn fetch_netease_playable_url_with_level(
     }
 
     if final_debug.reason.is_none() {
-        final_debug.reason = Some(if config.token.is_none() { "not_logged_in" } else { "url_null" }.to_string());
+        final_debug.reason = Some(
+            if config.token.is_none() {
+                "not_logged_in"
+            } else {
+                "url_null"
+            }
+            .to_string(),
+        );
     }
     final_debug.attempts = attempts;
 
@@ -4973,7 +5551,9 @@ async fn fetch_netease_playable_url_with_level(
     })
 }
 
-async fn fetch_netease_login_status(config: &ResolvedNeteaseSourceConfig) -> Result<NeteaseLoginStatusDto, String> {
+async fn fetch_netease_login_status(
+    config: &ResolvedNeteaseSourceConfig,
+) -> Result<NeteaseLoginStatusDto, String> {
     if config.token.is_none() {
         return Ok(NeteaseLoginStatusDto {
             logged_in: false,
@@ -5031,7 +5611,11 @@ fn default_netease_playback_debug(
     NeteasePlaybackDebugDto {
         is_logged_in,
         has_cookie: config.token.is_some(),
-        masked_cookie: config.token.as_deref().map(mask_netease_cookie).unwrap_or_default(),
+        masked_cookie: config
+            .token
+            .as_deref()
+            .map(mask_netease_cookie)
+            .unwrap_or_default(),
         user_id,
         vip_status,
         requested_song_id: song_id.to_string(),
@@ -5085,7 +5669,9 @@ fn playback_url_from_item(item: &serde_json::Value) -> Option<String> {
 }
 
 fn is_netease_trial_only(item: &serde_json::Value) -> bool {
-    let has_trial_info = item.get("freeTrialInfo").is_some_and(|value| !value.is_null());
+    let has_trial_info = item
+        .get("freeTrialInfo")
+        .is_some_and(|value| !value.is_null());
     let free_trial_privilege = item.get("freeTrialPrivilege");
     let listen_type = free_trial_privilege
         .and_then(|value| value.get("listenType"))
@@ -5128,14 +5714,18 @@ fn mask_netease_cookie(cookie: &str) -> String {
         .filter(|value| !value.is_empty());
 
     match music_u {
-        Some(value) if value.len() > 8 => format!("MUSIC_U={}****{}", &value[..4], &value[value.len() - 4..]),
+        Some(value) if value.len() > 8 => {
+            format!("MUSIC_U={}****{}", &value[..4], &value[value.len() - 4..])
+        }
         Some(_) => "MUSIC_U=****".to_string(),
         None if cookie.len() > 8 => format!("{}****{}", &cookie[..4], &cookie[cookie.len() - 4..]),
         None => "****".to_string(),
     }
 }
 
-async fn fetch_netease_vip_status(config: &ResolvedNeteaseSourceConfig) -> Result<NeteaseVipStatusDto, String> {
+async fn fetch_netease_vip_status(
+    config: &ResolvedNeteaseSourceConfig,
+) -> Result<NeteaseVipStatusDto, String> {
     if config.token.is_none() {
         return Ok(NeteaseVipStatusDto {
             is_member: false,
@@ -5163,7 +5753,11 @@ async fn fetch_netease_vip_status(config: &ResolvedNeteaseSourceConfig) -> Resul
                 .unwrap_or(vip_type > 0);
             Ok(NeteaseVipStatusDto {
                 is_member,
-                level: if vip_type > 0 { Some(vip_type.to_string()) } else { None },
+                level: if vip_type > 0 {
+                    Some(vip_type.to_string())
+                } else {
+                    None
+                },
                 message: if is_member {
                     "Membership is active.".to_string()
                 } else {
@@ -5194,7 +5788,10 @@ fn classify_netease_unavailable_reason(
         .or_else(|| value.get("code"))
         .and_then(|value| value.as_i64())
         .unwrap_or(0);
-    let fee = item.get("fee").and_then(|value| value.as_i64()).unwrap_or(0);
+    let fee = item
+        .get("fee")
+        .and_then(|value| value.as_i64())
+        .unwrap_or(0);
 
     if config.token.is_none()
         && (message.contains("vip")
@@ -5209,7 +5806,10 @@ fn classify_netease_unavailable_reason(
     if message.contains("expired")
         || message.contains("session")
         || message.contains("失效")
-        || (config.token.is_some() && (message.contains("login") || message.contains("cookie") || message.contains("登录")))
+        || (config.token.is_some()
+            && (message.contains("login")
+                || message.contains("cookie")
+                || message.contains("登录")))
         || code == 301
     {
         return "cookie_expired".to_string();
@@ -5304,7 +5904,10 @@ fn load_cached_lyrics(
     .map_err(|error| error.to_string())
 }
 
-fn save_cached_lyrics(state: &State<'_, AppState>, resolved: &ResolvedLyricsDto) -> Result<(), String> {
+fn save_cached_lyrics(
+    state: &State<'_, AppState>,
+    resolved: &ResolvedLyricsDto,
+) -> Result<(), String> {
     let mut parts = resolved.cache_key.splitn(3, ':');
     let source = parts.next().unwrap_or(&resolved.source);
     let source_id = parts.next().unwrap_or("");
@@ -5415,7 +6018,9 @@ fn read_embedded_lrc_lyrics(file_path: &str) -> Option<String> {
         return None;
     }
     let tagged_file = Probe::open(file_path).ok()?.read().ok()?;
-    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag())?;
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag())?;
     let lyrics = tag
         .get_string(ItemKey::Lyrics)
         .or_else(|| tag.get_string(ItemKey::UnsyncLyrics))?
@@ -5450,7 +6055,12 @@ fn find_fuzzy_lrc_for_track(track: &TrackDto) -> Option<(String, f64)> {
             .and_then(|value| value.to_str())
             .unwrap_or_default();
         let score = lyric_match_confidence(stem, track);
-        if score >= 0.68 && best.as_ref().map(|(_, best_score)| score > *best_score).unwrap_or(true) {
+        if score >= 0.68
+            && best
+                .as_ref()
+                .map(|(_, best_score)| score > *best_score)
+                .unwrap_or(true)
+        {
             best = Some((candidate, score));
         }
     }
@@ -5483,7 +6093,13 @@ fn normalize_match_text(value: &str) -> String {
     value
         .to_lowercase()
         .chars()
-        .map(|ch| if ch.is_alphanumeric() || ch.is_whitespace() { ch } else { ' ' })
+        .map(|ch| {
+            if ch.is_alphanumeric() || ch.is_whitespace() {
+                ch
+            } else {
+                ' '
+            }
+        })
         .collect::<String>()
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -5518,7 +6134,10 @@ fn sidecar_lrc_path(file_path: &str) -> Option<PathBuf> {
     None
 }
 
-fn import_source_playlist_to_db(db: &Connection, playlist: &SourcePlaylistDto) -> Result<(), String> {
+fn import_source_playlist_to_db(
+    db: &Connection,
+    playlist: &SourcePlaylistDto,
+) -> Result<(), String> {
     let playlist_db_id = stable_id(&format!("source:{}:{}", playlist.source, playlist.id));
 
     db.execute(
@@ -5532,8 +6151,11 @@ fn import_source_playlist_to_db(db: &Connection, playlist: &SourcePlaylistDto) -
     )
     .map_err(|error| error.to_string())?;
 
-    db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?1", params![&playlist_db_id])
-        .map_err(|error| error.to_string())?;
+    db.execute(
+        "DELETE FROM playlist_tracks WHERE playlist_id = ?1",
+        params![&playlist_db_id],
+    )
+    .map_err(|error| error.to_string())?;
 
     for (index, song) in playlist.tracks.iter().enumerate() {
         let track = parsed_track_from_source_song(song);
@@ -5574,7 +6196,11 @@ fn parsed_track_from_source_song(song: &SourceSongDto) -> ParsedTrack {
         source: source.to_string(),
         source_id: Some(source_id),
         unavailable_reason: song.unavailable_reason.clone(),
-        cover_url: if song.cover_url.is_empty() { None } else { Some(song.cover_url.clone()) },
+        cover_url: if song.cover_url.is_empty() {
+            None
+        } else {
+            Some(song.cover_url.clone())
+        },
         genres: Vec::new(),
         moods: Vec::new(),
         calm_score: 0.45,
@@ -5737,7 +6363,9 @@ fn json_id(value: Option<&serde_json::Value>) -> String {
 }
 
 fn json_text(value: Option<&serde_json::Value>) -> Option<String> {
-    value.and_then(|value| value.as_str()).map(ToString::to_string)
+    value
+        .and_then(|value| value.as_str())
+        .map(ToString::to_string)
 }
 
 fn openai_compatible_completion_endpoint(base_url: &str) -> String {
@@ -5801,7 +6429,12 @@ fn audio_extension_from_mime(mime_type: &str) -> &'static str {
     }
 }
 
-fn insert_llm_request_audit(db: &Connection, provider: &str, purpose: &str, response_summary: &str) -> Result<(), String> {
+fn insert_llm_request_audit(
+    db: &Connection,
+    provider: &str,
+    purpose: &str,
+    response_summary: &str,
+) -> Result<(), String> {
     let normalized_purpose = match purpose {
         "playlist_analysis" => "playlist_analysis",
         "mood_recommendation" => "mood_recommendation",
@@ -5892,7 +6525,9 @@ fn load_playlist_analysis_run_by_id(
     .map_err(|error| error.to_string())
 }
 
-fn playlist_analysis_run_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PlaylistAnalysisRunDto> {
+fn playlist_analysis_run_from_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<PlaylistAnalysisRunDto> {
     let track_count: i64 = row.get(3)?;
 
     Ok(PlaylistAnalysisRunDto {
@@ -6006,12 +6641,16 @@ fn build_taste_notes(source: &str, tracks: &[TrackDto], playlist_count: u32) -> 
         vec!["Your listening memory is waiting for the first records to arrive.".to_string()]
     } else {
         vec![
-            format!("You tend to return to {top_artist} when the room asks for something familiar."),
+            format!(
+                "You tend to return to {top_artist} when the room asks for something familiar."
+            ),
             format!("The collection leans toward {top_mood}, with room for a few brighter turns."),
             if playlist_count > 1 {
-                "Several playlists point to a taste built by scenes rather than strict genres.".to_string()
+                "Several playlists point to a taste built by scenes rather than strict genres."
+                    .to_string()
             } else {
-                "The first layer is clear enough; more playlists will make the memory warmer.".to_string()
+                "The first layer is clear enough; more playlists will make the memory warmer."
+                    .to_string()
             },
         ]
     };
@@ -6052,7 +6691,11 @@ where
         if value.is_empty() || value == "Unknown Artist" || value == "Unknown Album" {
             continue;
         }
-        let weight = if track.liked { 2.5 } else { 1.0 + (track.play_count as f64 * 0.18) };
+        let weight = if track.liked {
+            2.5
+        } else {
+            1.0 + (track.play_count as f64 * 0.18)
+        };
         *counts.entry(value).or_insert(0.0) += weight;
     }
 
@@ -6085,16 +6728,26 @@ fn infer_moods_from_track(track: &TrackDto) -> Vec<String> {
     let text = format!("{} {} {}", track.title, track.artist, track.album).to_lowercase();
     let mut moods = Vec::new();
 
-    if text.contains("夜") || text.contains("晚") || text.contains("moon") || text.contains("night") {
+    if text.contains("夜") || text.contains("晚") || text.contains("moon") || text.contains("night")
+    {
         moods.push("late-night calm".to_string());
     }
-    if text.contains("雨") || text.contains("泪") || text.contains("sad") || text.contains("blue") || text.contains("lonely") {
+    if text.contains("雨")
+        || text.contains("泪")
+        || text.contains("sad")
+        || text.contains("blue")
+        || text.contains("lonely")
+    {
         moods.push("rainy melancholy".to_string());
     }
     if text.contains("爱") || text.contains("love") || text.contains("romance") {
         moods.push("warm romance".to_string());
     }
-    if text.contains("舞") || text.contains("dance") || text.contains("party") || text.contains("快乐") {
+    if text.contains("舞")
+        || text.contains("dance")
+        || text.contains("party")
+        || text.contains("快乐")
+    {
         moods.push("bright motion".to_string());
     }
 
@@ -6115,7 +6768,10 @@ fn inferred_language_label(track: &TrackDto) -> String {
     }
 
     let text = format!("{} {} {}", track.title, track.artist, track.album);
-    if text.chars().any(|ch| ('\u{4e00}'..='\u{9fff}').contains(&ch)) {
+    if text
+        .chars()
+        .any(|ch| ('\u{4e00}'..='\u{9fff}').contains(&ch))
+    {
         "Mandarin / Chinese".to_string()
     } else if text.is_ascii() {
         "English / International".to_string()
@@ -6207,7 +6863,7 @@ fn load_mood_entries(db: &Connection, limit: u32) -> Result<Vec<MoodEntryDto>, S
     load_mood_entries_by_where(
         db,
         "ORDER BY entry_date DESC LIMIT ?1",
-        params![limit.max(1).min(120) as i64],
+        params![limit.clamp(1, 120) as i64],
         limit,
     )
 }
@@ -6328,10 +6984,7 @@ fn load_profile_events(db: &Connection) -> Result<Vec<ProfileEvent>, String> {
 
 fn compute_user_profile(events: &[ProfileEvent]) -> UserProfileDto {
     let event_count = events.len() as u32;
-    let positive_events = events
-        .iter()
-        .filter(|event| event.weight > 0.0)
-        .count() as u32;
+    let positive_events = events.iter().filter(|event| event.weight > 0.0).count() as u32;
     let confidence = confidence_from_count(event_count, 16);
     let is_learning = event_count < 6 || positive_events < 3;
 
@@ -6342,13 +6995,25 @@ fn compute_user_profile(events: &[ProfileEvent]) -> UserProfileDto {
             favorite_genres: Vec::new(),
             favorite_moods: Vec::new(),
             preferred_listening_hours: Vec::new(),
-            night_listening_preference: ScoreConfidence { score: 0.0, confidence },
+            night_listening_preference: ScoreConfidence {
+                score: 0.0,
+                confidence,
+            },
             skip_patterns: Vec::new(),
             repeat_patterns: Vec::new(),
             liked_song_patterns: Vec::new(),
-            exploration_score: ScoreConfidence { score: 0.0, confidence },
-            calm_music_preference: ScoreConfidence { score: 0.0, confidence },
-            energetic_music_preference: ScoreConfidence { score: 0.0, confidence },
+            exploration_score: ScoreConfidence {
+                score: 0.0,
+                confidence,
+            },
+            calm_music_preference: ScoreConfidence {
+                score: 0.0,
+                confidence,
+            },
+            energetic_music_preference: ScoreConfidence {
+                score: 0.0,
+                confidence,
+            },
             event_count,
             confidence,
             is_learning,
@@ -6452,9 +7117,21 @@ fn compute_user_profile(events: &[ProfileEvent]) -> UserProfileDto {
             score: clamp01(night_score),
             confidence: confidence_from_count(time_events, 12),
         },
-        skip_patterns: top_profile_ranks(&skip_scores, 4, confidence_from_count(skip_scores.len() as u32, 3)),
-        repeat_patterns: top_profile_ranks(&repeat_scores, 4, confidence_from_count(repeat_scores.len() as u32, 3)),
-        liked_song_patterns: top_profile_ranks(&liked_scores, 4, confidence_from_count(liked_scores.len() as u32, 3)),
+        skip_patterns: top_profile_ranks(
+            &skip_scores,
+            4,
+            confidence_from_count(skip_scores.len() as u32, 3),
+        ),
+        repeat_patterns: top_profile_ranks(
+            &repeat_scores,
+            4,
+            confidence_from_count(repeat_scores.len() as u32, 3),
+        ),
+        liked_song_patterns: top_profile_ranks(
+            &liked_scores,
+            4,
+            confidence_from_count(liked_scores.len() as u32, 3),
+        ),
         exploration_score: ScoreConfidence {
             score: clamp01(exploration_score),
             confidence: confidence_from_count(play_event_count, 8),
@@ -6622,14 +7299,22 @@ fn add_score(map: &mut HashMap<String, f64>, key: &str, score: f64) {
     *map.entry(key.to_string()).or_insert(0.0) += score;
 }
 
-fn top_profile_ranks(map: &HashMap<String, f64>, limit: usize, global_confidence: f64) -> Vec<ProfileRank> {
+fn top_profile_ranks(
+    map: &HashMap<String, f64>,
+    limit: usize,
+    global_confidence: f64,
+) -> Vec<ProfileRank> {
     let mut values = map
         .iter()
         .filter(|(_, score)| **score > 0.0)
         .map(|(label, score)| (label.clone(), *score))
         .collect::<Vec<_>>();
     values.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    let max_score = values.first().map(|(_, score)| *score).unwrap_or(1.0).max(1.0);
+    let max_score = values
+        .first()
+        .map(|(_, score)| *score)
+        .unwrap_or(1.0)
+        .max(1.0);
 
     values
         .into_iter()
@@ -6647,9 +7332,16 @@ fn top_hour_preferences(
     limit: usize,
     global_confidence: f64,
 ) -> Vec<HourPreference> {
-    let mut values = map.iter().map(|(hour, score)| (*hour, *score)).collect::<Vec<_>>();
+    let mut values = map
+        .iter()
+        .map(|(hour, score)| (*hour, *score))
+        .collect::<Vec<_>>();
     values.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    let max_score = values.first().map(|(_, score)| *score).unwrap_or(1.0).max(1.0);
+    let max_score = values
+        .first()
+        .map(|(_, score)| *score)
+        .unwrap_or(1.0)
+        .max(1.0);
 
     values
         .into_iter()
@@ -6711,8 +7403,10 @@ fn local_date_string() -> String {
     let db = Connection::open_in_memory();
     db.ok()
         .and_then(|db| {
-            db.query_row("SELECT date('now', 'localtime')", [], |row| row.get::<_, String>(0))
-                .ok()
+            db.query_row("SELECT date('now', 'localtime')", [], |row| {
+                row.get::<_, String>(0)
+            })
+            .ok()
         })
         .unwrap_or_else(|| "1970-01-01".to_string())
 }
@@ -6733,7 +7427,8 @@ fn current_timestamp_ms() -> u128 {
 
 fn fallback_cover_url(seed: &str) -> String {
     let colors = ["ff4778", "5be7ff", "adff6b", "ff775c"];
-    let color = colors[seed.as_bytes().first().copied().unwrap_or_default() as usize % colors.len()];
+    let color =
+        colors[seed.as_bytes().first().copied().unwrap_or_default() as usize % colors.len()];
     let svg = format!(
         "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%2308090d'/><circle cx='160' cy='170' r='150' fill='%23{color}' opacity='.75'/><circle cx='360' cy='350' r='190' fill='%235be7ff' opacity='.28'/><path d='M168 338c88 54 195 27 236-56' stroke='white' stroke-opacity='.72' stroke-width='26' fill='none' stroke-linecap='round'/></svg>"
     );
@@ -6748,7 +7443,7 @@ mod tests {
     use super::{
         bilibili_cookie_from_login_url, bilibili_mixin_key, encode_url_component, has_cookie_name,
         merge_bilibili_cookies, normalize_bilibili_image_url, parse_bilibili_danmaku_xml,
-        request_bilibili_danmaku_xml, ResolvedBilibiliSourceConfig, wbi_key_from_url,
+        request_bilibili_danmaku_xml, wbi_key_from_url, ResolvedBilibiliSourceConfig,
     };
 
     #[test]
@@ -6758,8 +7453,7 @@ mod tests {
         let login_url = format!(
             "https://www.bilibili.com/?DedeUserID=42&{session_key}=abc%2Cdef&{csrf_key}=csrf&refresh_token=private"
         );
-        let cookie = bilibili_cookie_from_login_url(&login_url)
-        .expect("session cookie");
+        let cookie = bilibili_cookie_from_login_url(&login_url).expect("session cookie");
 
         assert!(cookie.contains("DedeUserID=42"));
         assert!(cookie.contains(&format!("{session_key}=abc%2Cdef")));
@@ -6769,7 +7463,10 @@ mod tests {
 
     #[test]
     fn rejects_login_url_without_session_values() {
-        assert!(bilibili_cookie_from_login_url("https://www.bilibili.com/?refresh_token=private").is_none());
+        assert!(
+            bilibili_cookie_from_login_url("https://www.bilibili.com/?refresh_token=private")
+                .is_none()
+        );
     }
 
     #[test]
@@ -6793,8 +7490,16 @@ mod tests {
             wbi_key_from_url(Some("https://i0.hdslb.com/bfs/wbi/abc123.png")).as_deref(),
             Some("abc123")
         );
-        assert_eq!(encode_url_component("反乌托邦 音乐"), "%E5%8F%8D%E4%B9%8C%E6%89%98%E9%82%A6%20%E9%9F%B3%E4%B9%90");
-        assert_eq!(bilibili_mixin_key("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_=").chars().count(), 32);
+        assert_eq!(
+            encode_url_component("反乌托邦 音乐"),
+            "%E5%8F%8D%E4%B9%8C%E6%89%98%E9%82%A6%20%E9%9F%B3%E4%B9%90"
+        );
+        assert_eq!(
+            bilibili_mixin_key("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_=")
+                .chars()
+                .count(),
+            32
+        );
     }
 
     #[test]
@@ -6834,7 +7539,11 @@ mod tests {
         ))
         .expect("live danmaku response");
         let items = parse_bilibili_danmaku_xml("38240650238", &xml);
-        assert!(!items.is_empty(), "received {} bytes but parsed no items", xml.len());
+        assert!(
+            !items.is_empty(),
+            "received {} bytes but parsed no items",
+            xml.len()
+        );
     }
 }
 
@@ -6856,8 +7565,7 @@ fn run_inner() -> Result<(), Box<dyn std::error::Error>> {
             });
         })
         .setup(|app| {
-            let db = initialize_database(app)
-                .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            let db = initialize_database(app).map_err(std::io::Error::other)?;
             app.manage(AppState {
                 db: Mutex::new(db),
                 media_proxy: Mutex::new(HashMap::new()),
@@ -6934,4 +7642,3 @@ fn run_inner() -> Result<(), Box<dyn std::error::Error>> {
         .run(tauri::generate_context!())?;
     Ok(())
 }
-

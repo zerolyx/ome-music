@@ -340,7 +340,7 @@ const emptyConfig: MusicSourceConfig = {
   enabled: false,
   baseUrl: "",
   hasToken: false,
-  maskedToken: ""
+  maskedToken: "",
 };
 
 export async function getNeteaseSourceConfig(): Promise<MusicSourceConfig> {
@@ -357,20 +357,24 @@ export async function ensureNeteaseApiService(): Promise<NetEaseServiceStatus> {
       running: true,
       started: false,
       baseUrl: "http://127.0.0.1:3000",
-      message: "Music source is awake."
+      message: "Music source is awake.",
     };
   }
 
   return invoke<NetEaseServiceStatus>("ensure_netease_api_service");
 }
 
-export async function saveNeteaseSourceConfig(payload: SaveMusicSourceConfigPayload): Promise<MusicSourceConfig> {
+export async function saveNeteaseSourceConfig(
+  payload: SaveMusicSourceConfigPayload,
+): Promise<MusicSourceConfig> {
   if (!isTauriRuntime()) {
     const nextConfig = {
       enabled: payload.enabled,
       baseUrl: payload.baseUrl,
       hasToken: Boolean(payload.token) || readPreviewConfig().hasToken,
-      maskedToken: payload.token ? maskTokenPreview(payload.token) : readPreviewConfig().maskedToken
+      maskedToken: payload.token
+        ? maskTokenPreview(payload.token)
+        : readPreviewConfig().maskedToken,
     };
     window.localStorage.setItem("ome.source.netease.preview", JSON.stringify(nextConfig));
     return nextConfig;
@@ -379,12 +383,17 @@ export async function saveNeteaseSourceConfig(payload: SaveMusicSourceConfigPayl
   return invoke<MusicSourceConfig>("save_netease_source_config", { payload });
 }
 
-export async function testNeteaseSourceConnection(payload: SaveMusicSourceConfigPayload): Promise<string> {
+export async function testNeteaseSourceConnection(
+  payload: SaveMusicSourceConfigPayload,
+): Promise<string> {
   if (!isTauriRuntime()) {
     return "Connected. The source is ready.";
   }
 
-  const response = await invoke<{ ok: boolean; message: string }>("test_netease_source_connection", { payload });
+  const response = await invoke<{ ok: boolean; message: string }>(
+    "test_netease_source_connection",
+    { payload },
+  );
   return response.message;
 }
 
@@ -393,7 +402,7 @@ const emptyBilibiliConfig: BilibiliSourceConfig = {
   baseUrl: "https://api.bilibili.com",
   hasToken: false,
   maskedToken: "",
-  searchScope: "music"
+  searchScope: "music",
 };
 
 export async function getBilibiliSourceConfig(): Promise<BilibiliSourceConfig> {
@@ -403,7 +412,9 @@ export async function getBilibiliSourceConfig(): Promise<BilibiliSourceConfig> {
   return invoke<BilibiliSourceConfig>("get_bilibili_source_config");
 }
 
-export async function saveBilibiliSourceConfig(payload: SaveBilibiliSourceConfigPayload): Promise<BilibiliSourceConfig> {
+export async function saveBilibiliSourceConfig(
+  payload: SaveBilibiliSourceConfigPayload,
+): Promise<BilibiliSourceConfig> {
   if (!isTauriRuntime()) {
     const nextConfig: BilibiliSourceConfig = {
       ...readPreviewBilibiliConfig(),
@@ -411,7 +422,7 @@ export async function saveBilibiliSourceConfig(payload: SaveBilibiliSourceConfig
       baseUrl: payload.baseUrl || "https://api.bilibili.com",
       hasToken: Boolean(payload.token) || readPreviewBilibiliConfig().hasToken,
       maskedToken: payload.token ? "••••••••••••" : readPreviewBilibiliConfig().maskedToken,
-      searchScope: payload.searchScope ?? "music"
+      searchScope: payload.searchScope ?? "music",
     };
     window.localStorage.setItem("ome.source.bilibili.preview", JSON.stringify(nextConfig));
     return nextConfig;
@@ -419,9 +430,14 @@ export async function saveBilibiliSourceConfig(payload: SaveBilibiliSourceConfig
   return invoke<BilibiliSourceConfig>("save_bilibili_source_config", { payload });
 }
 
-export async function testBilibiliSourceConnection(payload: SaveBilibiliSourceConfigPayload): Promise<string> {
+export async function testBilibiliSourceConnection(
+  payload: SaveBilibiliSourceConfigPayload,
+): Promise<string> {
   if (!isTauriRuntime()) return "Connected. Bilibili is ready.";
-  const response = await invoke<{ ok: boolean; message: string }>("test_bilibili_source_connection", { payload });
+  const response = await invoke<{ ok: boolean; message: string }>(
+    "test_bilibili_source_connection",
+    { payload },
+  );
   return response.message;
 }
 
@@ -438,7 +454,9 @@ export class BilibiliMusicProvider {
     const inFlight = this.searchRequests.get(cacheKey);
     if (inFlight) return inFlight;
 
-    const request = invoke<MusicSourceSong[]>("search_bilibili_songs", { payload: { query: query.trim() } })
+    const request = invoke<MusicSourceSong[]>("search_bilibili_songs", {
+      payload: { query: query.trim() },
+    })
       .then((songs) => {
         this.searchCache.set(cacheKey, { expiresAt: Date.now() + 2 * 60_000, songs });
         return songs;
@@ -454,7 +472,9 @@ export class BilibiliMusicProvider {
 
   async getVideoMetadata(bvidOrAid: string): Promise<MusicSourceSong> {
     if (!isTauriRuntime()) return previewBilibiliSongs(bvidOrAid)[0];
-    return invoke<MusicSourceSong>("get_bilibili_song_metadata", { payload: { songId: bvidOrAid } });
+    return invoke<MusicSourceSong>("get_bilibili_song_metadata", {
+      payload: { songId: bvidOrAid },
+    });
   }
 
   async getPlayableUrl(songId: string): Promise<PlayableUrlResult> {
@@ -468,7 +488,14 @@ export class BilibiliMusicProvider {
     if (!isTauriRuntime()) {
       return {
         tracks: await listLocalTracks(),
-        playback: { songId, url: null, videoUrl: null, unavailable: true, reason: "api_failed", debug: null }
+        playback: {
+          songId,
+          url: null,
+          videoUrl: null,
+          unavailable: true,
+          reason: "api_failed",
+          debug: null,
+        },
       };
     }
     return invoke<BilibiliImportResult>("import_bilibili_song", { payload: { songId } });
@@ -481,11 +508,11 @@ export class BilibiliMusicProvider {
         id: sourceId,
         cid: cid ?? "preview",
         cacheKey: `bilibili:${cid ?? "preview"}:danmaku`,
-        items: previewDanmaku()
+        items: previewDanmaku(),
       };
     }
     return invoke<DanmakuResponse>("get_bilibili_danmaku", {
-      payload: { source: "bilibili", id: sourceId, cid }
+      payload: { source: "bilibili", id: sourceId, cid },
     });
   }
 
@@ -510,8 +537,8 @@ export class BilibiliAccountSessionProvider {
       qrImg: await QRCode.toDataURL(qr.qrUrl, {
         width: 256,
         margin: 1,
-        color: { dark: "#20120b", light: "#ffffff" }
-      })
+        color: { dark: "#20120b", light: "#ffffff" },
+      }),
     };
   }
 
@@ -524,7 +551,9 @@ export class BilibiliAccountSessionProvider {
 
   async loginWithPassword(): Promise<BilibiliLoginStatus> {
     await this.openSecureWebLogin();
-    throw new Error("Password sign-in opened in Bilibili's secure page. Complete verification there; Ome Music never stores your password.");
+    throw new Error(
+      "Password sign-in opened in Bilibili's secure page. Complete verification there; Ome Music never stores your password.",
+    );
   }
 
   async requestSmsCode(): Promise<SourceConnectionMessage> {
@@ -537,12 +566,14 @@ export class BilibiliAccountSessionProvider {
   }
 
   async importCookie(cookie: string): Promise<BilibiliLoginStatus> {
-    if (!isTauriRuntime()) return { loggedIn: true, expired: false, message: "Connected to Bilibili." };
+    if (!isTauriRuntime())
+      return { loggedIn: true, expired: false, message: "Connected to Bilibili." };
     return invoke<BilibiliLoginStatus>("import_bilibili_cookie", { payload: { cookie } });
   }
 
   async getLoginStatus(): Promise<BilibiliLoginStatus> {
-    if (!isTauriRuntime()) return { loggedIn: false, expired: false, message: "Public content is available." };
+    if (!isTauriRuntime())
+      return { loggedIn: false, expired: false, message: "Public content is available." };
     return invoke<BilibiliLoginStatus>("get_bilibili_login_status");
   }
 
@@ -559,25 +590,32 @@ export class BilibiliAccountSessionProvider {
     return this.getLoginStatus();
   }
 
-  async getMembershipStatus(): Promise<{ isMember: boolean; level?: string | null; message: string }> {
+  async getMembershipStatus(): Promise<{
+    isMember: boolean;
+    level?: string | null;
+    message: string;
+  }> {
     const status = await this.getLoginStatus();
     return {
       isMember: status.loggedIn,
       level: status.loggedIn ? "connected" : null,
-      message: status.loggedIn ? "Connected." : status.message
+      message: status.loggedIn ? "Connected." : status.message,
     };
   }
 
   async testConnection(): Promise<SourceConnectionMessage> {
     if (!isTauriRuntime()) return { ok: true, message: "Connected. Bilibili is ready." };
     return invoke<SourceConnectionMessage>("test_bilibili_source_connection", {
-      payload: { enabled: true, baseUrl: "https://api.bilibili.com" }
+      payload: { enabled: true, baseUrl: "https://api.bilibili.com" },
     });
   }
 
   async openSecureWebLogin(): Promise<SourceConnectionMessage> {
-    if (!isTauriRuntime()) return { ok: true, message: "Open Bilibili in your browser, then import Cookie." };
-    return invoke<SourceConnectionMessage>("open_source_web_login", { payload: { source: "bilibili" } });
+    if (!isTauriRuntime())
+      return { ok: true, message: "Open Bilibili in your browser, then import Cookie." };
+    return invoke<SourceConnectionMessage>("open_source_web_login", {
+      payload: { source: "bilibili" },
+    });
   }
 }
 
@@ -597,14 +635,16 @@ export class NetEaseMusicProvider implements MusicSourceProvider {
     return invoke<NetEaseUserPlaylist[]>("get_netease_user_playlists");
   }
 
-  async syncListeningMemory(payload: NetEaseTasteSyncPayload = {}): Promise<NetEaseTasteSyncResult> {
+  async syncListeningMemory(
+    payload: NetEaseTasteSyncPayload = {},
+  ): Promise<NetEaseTasteSyncResult> {
     if (!isTauriRuntime()) {
       return {
         likedCount: 1,
         playlistCount: payload.includePlaylists ? 1 : 0,
         importedTrackCount: 1,
         analyzedTrackCount: 1,
-        tasteNotes: previewTasteNotes()
+        tasteNotes: previewTasteNotes(),
       };
     }
     return invoke<NetEaseTasteSyncResult>("sync_netease_listening_memory", { payload });
@@ -642,15 +682,19 @@ export class NetEaseMusicProvider implements MusicSourceProvider {
         url: null,
         unavailable: true,
         reason: "api_failed",
-        debug: null
+        debug: null,
       };
     }
-    return invoke<PlayableUrlResult>("get_netease_playable_url", { payload: { songId, level: options?.level } });
+    return invoke<PlayableUrlResult>("get_netease_playable_url", {
+      payload: { songId, level: options?.level },
+    });
   }
 
   async getLyrics(songId: string): Promise<string> {
     if (!isTauriRuntime()) return `[00:00.00]A quiet line for ${songId}`;
-    const response = await invoke<SourceLyricsResult>("get_netease_lyrics", { payload: { songId } });
+    const response = await invoke<SourceLyricsResult>("get_netease_lyrics", {
+      payload: { songId },
+    });
     return response.lyrics;
   }
 
@@ -706,7 +750,11 @@ export class NetEaseAccountSessionProvider implements NetEaseAuthProvider {
 
   async getLoginStatus(): Promise<NetEaseLoginStatus> {
     if (!isTauriRuntime()) {
-      return { loggedIn: false, expired: false, message: "Sign in to your music source to try again." };
+      return {
+        loggedIn: false,
+        expired: false,
+        message: "Sign in to your music source to try again.",
+      };
     }
     return invoke<NetEaseLoginStatus>("get_netease_login_status");
   }
@@ -748,13 +796,16 @@ export class NetEaseAccountSessionProvider implements NetEaseAuthProvider {
   async testConnection(): Promise<SourceConnectionMessage> {
     if (!isTauriRuntime()) return { ok: true, message: "Connected. The source is ready." };
     return invoke<SourceConnectionMessage>("test_netease_source_connection", {
-      payload: { enabled: true, baseUrl: "http://127.0.0.1:3000" }
+      payload: { enabled: true, baseUrl: "http://127.0.0.1:3000" },
     });
   }
 
   async openSecureWebLogin(): Promise<SourceConnectionMessage> {
-    if (!isTauriRuntime()) return { ok: true, message: "Open NetEase in your browser, then import Cookie." };
-    return invoke<SourceConnectionMessage>("open_source_web_login", { payload: { source: "netease" } });
+    if (!isTauriRuntime())
+      return { ok: true, message: "Open NetEase in your browser, then import Cookie." };
+    return invoke<SourceConnectionMessage>("open_source_web_login", {
+      payload: { source: "netease" },
+    });
   }
 }
 
@@ -800,8 +851,8 @@ function previewSongs(query: string): MusicSourceSong[] {
       coverUrl: "",
       playableUrl: null,
       unavailable: true,
-      unavailableReason: "api_failed"
-    }
+      unavailableReason: "api_failed",
+    },
   ];
 }
 
@@ -822,15 +873,39 @@ function previewBilibiliSongs(query: string): MusicSourceSong[] {
       uploader: "Bilibili",
       danmakuCount: 120,
       playCount: 12000,
-      sourceUrl: "https://www.bilibili.com"
-    }
+      sourceUrl: "https://www.bilibili.com",
+    },
   ];
 }
 
 function previewDanmaku(): DanmakuItem[] {
   return [
-    { id: "dm-1", source: "bilibili", cid: "preview", time: 3, text: "这段好有空气感", mode: "1", color: "ffffff", fontSize: "25", timestamp: "", userHash: "", weight: 1 },
-    { id: "dm-2", source: "bilibili", cid: "preview", time: 8, text: "夜里听刚刚好", mode: "1", color: "ffffff", fontSize: "25", timestamp: "", userHash: "", weight: 1 }
+    {
+      id: "dm-1",
+      source: "bilibili",
+      cid: "preview",
+      time: 3,
+      text: "这段好有空气感",
+      mode: "1",
+      color: "ffffff",
+      fontSize: "25",
+      timestamp: "",
+      userHash: "",
+      weight: 1,
+    },
+    {
+      id: "dm-2",
+      source: "bilibili",
+      cid: "preview",
+      time: 8,
+      text: "夜里听刚刚好",
+      mode: "1",
+      color: "ffffff",
+      fontSize: "25",
+      timestamp: "",
+      userHash: "",
+      weight: 1,
+    },
   ];
 }
 
@@ -840,7 +915,7 @@ function previewPlaylist(playlistId: string): MusicSourcePlaylist {
     name: `Playlist ${playlistId}`,
     description: "",
     source: "netease",
-    tracks: previewSongs(playlistId)
+    tracks: previewSongs(playlistId),
   };
 }
 
@@ -852,7 +927,7 @@ function previewUserPlaylist(): NetEaseUserPlaylist {
     creatorName: "Local Preview",
     subscribed: false,
     coverUrl: "",
-    description: ""
+    description: "",
   };
 }
 
@@ -869,8 +944,9 @@ function previewTasteNotes(): TasteNotes {
     favoriteMoods: ["late-night calm"],
     favoriteScenes: ["Late-night radio"],
     hiddenPatterns: ["The first layer is still forming."],
-    recommendationStrategy: "Start with familiar voices, then bring in adjacent songs with restraint.",
+    recommendationStrategy:
+      "Start with familiar voices, then bring in adjacent songs with restraint.",
     confidence: 0.12,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   };
 }

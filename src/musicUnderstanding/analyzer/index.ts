@@ -6,7 +6,7 @@ export type {
   PlaylistAnalysisInput,
   PlaylistAnalysisMode,
   PlaylistAnalysisReport,
-  PlaylistChunkSummary
+  PlaylistChunkSummary,
 } from "./types";
 export { ConfiguredAnalyzer, MockAnalyzer } from "./mockAnalyzer";
 
