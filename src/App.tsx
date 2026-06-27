@@ -139,7 +139,7 @@ export default function App() {
   const [lyricOffsetMs, setLyricOffsetMs] = useState(0);
   const [isLyricsLoading, setLyricsLoading] = useState(false);
   const [isProviderSettingsOpen, setProviderSettingsOpen] = useState(false);
-  const [settingsFocus, setSettingsFocus] = useState<"all" | "music">("music");
+  const [settingsFocus, setSettingsFocus] = useState<"all" | "music" | "atmosphere">("music");
   const [playbackDebug, setPlaybackDebug] = useState<NetEasePlaybackDebug | null>(null);
   const [sourceServiceStatus, setSourceServiceStatus] = useState<NetEaseServiceStatus | null>(null);
   const [sourceLoginStatus, setSourceLoginStatus] = useState<NetEaseLoginStatus | null>(null);
@@ -1028,6 +1028,10 @@ export default function App() {
         onPlaybackQualityChange={changePlaybackQuality}
         onOpenSettings={() => {
           setSettingsFocus("music");
+          setProviderSettingsOpen(true);
+        }}
+        onOpenAtmosphereSettings={() => {
+          setSettingsFocus("atmosphere");
           setProviderSettingsOpen(true);
         }}
       />

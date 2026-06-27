@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type React from "react";
-import { Clock3, Cloud, FileMusic, FolderOpen, Radio, RefreshCw, Settings2, SlidersHorizontal } from "lucide-react";
+import { Clock3, Cloud, FileMusic, FolderOpen, Radio, RefreshCw, Settings2, SlidersHorizontal, Wind } from "lucide-react";
 import {
   BilibiliAccountSessionProvider,
   getBilibiliSourceConfig,
@@ -14,6 +14,7 @@ import {
   type PlayableUrlOptions
 } from "../features/musicSources/provider";
 import type { Track } from "../types/music";
+import { getDanmakuSettings, type DanmakuSettings } from "../features/danmaku/danmakuSettings";
 
 interface LyricsSourceMenuProps {
   track: Track | null;
@@ -29,6 +30,7 @@ interface LyricsSourceMenuProps {
   onResetLyricOffset: () => void;
   onPlaybackQualityChange: (level: NonNullable<PlayableUrlOptions["level"]>) => void;
   onOpenSettings: () => void;
+  onOpenAtmosphereSettings: () => void;
 }
 
 const qualityOptions: Array<{ value: NonNullable<PlayableUrlOptions["level"]>; label: string }> = [
@@ -54,13 +56,15 @@ export function LyricsSourceMenu({
   onAdjustLyricOffset,
   onResetLyricOffset,
   onPlaybackQualityChange,
-  onOpenSettings
+  onOpenSettings,
+  onOpenAtmosphereSettings
 }: LyricsSourceMenuProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [neteaseConfig, setNeteaseConfig] = useState<MusicSourceConfig | null>(null);
   const [bilibiliConfig, setBilibiliConfig] = useState<BilibiliSourceConfig | null>(null);
   const [bilibiliStatus, setBilibiliStatus] = useState<BilibiliLoginStatus | null>(null);
+  const [danmakuSettings, setDanmakuSettings] = useState<DanmakuSettings>(() => getDanmakuSettings());
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -74,6 +78,19 @@ export function LyricsSourceMenu({
     return () => {
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleDanmakuSettings = (event: Event) => {
+      const custom = event as CustomEvent<DanmakuSettings>;
+      setDanmakuSettings(custom.detail ?? getDanmakuSettings());
+    };
+    window.addEventListener("ome:danmaku-settings", handleDanmakuSettings);
+    window.addEventListener("storage", handleDanmakuSettings);
+    return () => {
+      window.removeEventListener("ome:danmaku-settings", handleDanmakuSettings);
+      window.removeEventListener("storage", handleDanmakuSettings);
     };
   }, []);
 
@@ -174,6 +191,24 @@ export function LyricsSourceMenu({
             </label>
           </QuickSection>
 
+          <QuickSection title="弹幕氛围 / Atmosphere">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onOpenAtmosphereSettings();
+              }}
+              className="app-transition flex w-full items-center gap-3 rounded-[16px] bg-[#4a2108]/[0.045] px-3 py-2.5 text-left hover:bg-[#4a2108]/[0.085]"
+            >
+              <Wind className="h-4 w-4 shrink-0 text-[#4a2108]/42" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-bold text-[#4a2108]/62">弹幕情绪</span>
+                <span className="block truncate text-[10px] text-[#4a2108]/28">{danmakuLabel(danmakuSettings)}</span>
+              </span>
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${danmakuSettings.enabled ? "bg-[#638052]/70" : "bg-[#8b6f5d]/28"}`} />
+            </button>
+          </QuickSection>
+
           <button
             type="button"
             onClick={() => {
@@ -227,4 +262,11 @@ function sourceLabel(source?: string): string {
   if (source === "netease") return "网易云 / NetEase Cloud Music";
   if (source === "bilibili") return "Bilibili Video Atmosphere";
   return "本地音乐 / Local Library";
+}
+
+function danmakuLabel(settings: DanmakuSettings): string {
+  if (!settings.enabled) return "关闭 / Off";
+  const mode = settings.displayMode === "video" ? "视频氛围" : settings.displayMode === "ambient" ? "全局氛围" : "关闭";
+  const intensity = settings.emotionalIntensity === "quiet" ? "安静" : settings.emotionalIntensity === "expressive" ? "表达" : "平衡";
+  return `${mode} · ${intensity} · ${Math.round(settings.opacity * 100)}%`;
 }
