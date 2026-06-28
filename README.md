@@ -30,7 +30,7 @@ Download the latest Windows installer from the [GitHub Releases page](https://gi
 
 Recommended file:
 
-- `Ome Music_0.3.2_x64-setup.exe`
+- `Ome.Music_0.3.2_x64-setup.exe`
 
 The current build is unsigned. Windows SmartScreen may show a warning on first launch.
 

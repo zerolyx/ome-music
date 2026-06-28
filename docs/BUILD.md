@@ -36,7 +36,7 @@ npm run release:windows
 Expected outputs:
 
 - `src-tauri/target/release/ome-music-player.exe`
-- `src-tauri/target/release/bundle/nsis/Ome Music_0.3.2_x64-setup.exe`
+- `src-tauri/target/release/bundle/nsis/Ome.Music_0.3.2_x64-setup.exe`
 
 The release executable and installer should not require `npm`, `cargo`, Vite, or a development server on the user's machine.
 
