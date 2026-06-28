@@ -64,6 +64,10 @@ PersonalConfig/
 /playwright-*.png
 /startup-*.json
 /startup-*.log
+.node-runtime/
+node-v*-win-x64.zip
+src-tauri/resources/node/
+src-tauri/resources/netease-runtime/
 
 # Personal local launch helpers
 /*.bat

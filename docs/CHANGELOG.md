@@ -6,6 +6,16 @@ This project follows small, traceable releases. Keep entries short and focused o
 
 - No unreleased changes yet.
 
+## [0.3.3] - 2026-06-28
+
+### Fixed
+
+- Bundled a managed NetEase Cloud Music runtime into the Windows installer so normal users do not need to install Node.js or configure an API URL.
+- Made the NetEase source start through the bundled runtime first, then fall back to the development package only when running from source.
+- Enabled the NetEase source by default for new installs.
+- Reduced the search popover flicker by opening results only after the user types a query.
+- Rewrote NetEase setup and troubleshooting docs from a normal-user perspective.
+
 ## [0.3.2] - 2026-06-28
 
 ### Maintenance

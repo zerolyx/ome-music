@@ -1,6 +1,6 @@
 # Configuration
 
-Ome Music is local-first. It does not ship with provider keys, cookies, or account credentials.
+Ome Music is local-first. It does not ship with provider keys, cookies, account credentials, or private music data.
 
 ## Music Sources
 
@@ -12,28 +12,24 @@ Use the app to choose a local music folder. Ome Music stores file paths and meta
 
 Supported configuration:
 
-- Enable/disable source
-- API base URL
-- QR/login session
+- Enable or disable the source
+- API Base URL
+- QR login session
 - Optional cookie import
 - Playback quality preference
 
 Some tracks may still be unavailable because of copyright, region, membership, account permission, or upstream API limitations.
 
-#### Runtime requirement: Node.js v20+
+#### Runtime Requirement: Node.js v20+
 
-The built-in NetEase Cloud Music API service is a Node.js application. Ome Music does not bundle Node.js, so the default local API at `http://127.0.0.1:3000` only works when Node.js v20 or later is installed and reachable on the system PATH.
+The NetEase Cloud Music source talks to a `NeteaseCloudMusicApi` compatible service. Ome Music keeps the app lightweight and does not bundle a full Node.js runtime.
 
-When Node.js is missing, Ome Music v0.2+ shows an environment prompt at startup:
+Two modes are supported:
 
-- Detects `node --version` on the backend
-- Detects whether the bundled `NeteaseCloudMusicApi` package is present
-- Surfaces a precise error message in the service status (`nodeAvailable`, `apiPackageFound`)
+1. **Local mode, default**: install Node.js v20+ from https://nodejs.org and make sure npm/npx is available on the system PATH. In development, Ome Music uses the project dependency from `node_modules`. In an installed build, Ome Music can prepare the API service through `npx --yes NeteaseCloudMusicApi@4.32.0` on first use.
+2. **External mode**: in Settings -> Music Sources, change NetEase Base URL to an already-deployed `NeteaseCloudMusicApi` instance, for example `http://your-server:3000`. No local Node.js package is needed in this mode.
 
-Two ways to use NetEase Cloud Music:
-
-1. **Local mode (default)**: install Node.js v20+ from https://nodejs.org (tick "Add to PATH"), then restart Ome Music and click "重新检测" in the prompt. The API service starts automatically.
-2. **External mode**: in Settings → Music Sources, change NetEase Base URL to an already-deployed `NeteaseCloudMusicApi` instance (for example `http://your-server:3000`). No Node.js is needed on the local machine in this mode.
+When Node.js or npm/npx is missing, Ome Music shows a clear source status and keeps local music playback available.
 
 Local music playback never requires Node.js.
 
@@ -41,10 +37,10 @@ Local music playback never requires Node.js.
 
 Supported configuration:
 
-- Enable/disable source
-- API base URL
+- Enable or disable the source
+- API Base URL
 - Search scope
-- QR/login session
+- QR login session
 - Optional cookie import
 
 Bilibili video atmosphere and danmaku are loaded only when Bilibili content is played.

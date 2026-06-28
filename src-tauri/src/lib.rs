@@ -15,6 +15,7 @@ use base64::{engine::general_purpose, Engine as _};
 use lofty::{prelude::*, probe::Probe};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use tauri::path::BaseDirectory;
 use sha1::{Digest, Sha1};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -35,6 +36,13 @@ const BILIBILI_BROWSER_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; 
 pub struct AppState {
     db: Mutex<Connection>,
     media_proxy: Mutex<HashMap<String, MediaProxyEntry>>,
+    managed_netease_api: Option<ManagedNeteaseApiRuntime>,
+}
+
+#[derive(Clone, Debug)]
+struct ManagedNeteaseApiRuntime {
+    node_exe: PathBuf,
+    app_js: PathBuf,
 }
 
 #[derive(Clone)]
@@ -1287,7 +1295,7 @@ async fn ensure_netease_api_service(
         let db = state.db.lock().map_err(|error| error.to_string())?;
         load_netease_source_config(&db)?.base_url
     };
-    ensure_local_netease_api_service(&base_url).await
+    ensure_local_netease_api_service(&base_url, state.managed_netease_api.clone()).await
 }
 
 #[tauri::command]
@@ -3315,6 +3323,7 @@ struct ResolvedNeteaseSourceConfig {
     enabled: bool,
     base_url: String,
     token: Option<String>,
+    managed_api: Option<ManagedNeteaseApiRuntime>,
 }
 
 fn load_netease_source_config(db: &Connection) -> Result<NeteaseSourceConfigDto, String> {
@@ -3341,7 +3350,7 @@ fn load_netease_source_config(db: &Connection) -> Result<NeteaseSourceConfigDto,
             masked_token,
         },
         None => NeteaseSourceConfigDto {
-            enabled: false,
+            enabled: true,
             base_url: "http://127.0.0.1:3000".to_string(),
             has_token,
             masked_token,
@@ -3385,6 +3394,7 @@ fn resolve_netease_source_config(
     state: &State<'_, AppState>,
     override_payload: Option<SaveNeteaseSourceConfigPayload>,
 ) -> Result<ResolvedNeteaseSourceConfig, String> {
+    let managed_api = state.managed_netease_api.clone();
     if let Some(payload) = override_payload {
         return Ok(ResolvedNeteaseSourceConfig {
             enabled: payload.enabled,
@@ -3396,6 +3406,7 @@ fn resolve_netease_source_config(
                 .filter(|value| !value.is_empty())
                 .map(ToString::to_string)
                 .or_else(read_netease_token),
+            managed_api,
         });
     }
 
@@ -3412,6 +3423,7 @@ fn resolve_netease_source_config(
         enabled: config.enabled,
         base_url: config.base_url,
         token: read_netease_token(),
+        managed_api,
     })
 }
 
@@ -5027,8 +5039,35 @@ fn parse_bilibili_duration(value: Option<&serde_json::Value>) -> Option<u64> {
     }
 }
 
+fn resolve_managed_netease_api_runtime(app: &tauri::App) -> Option<ManagedNeteaseApiRuntime> {
+    let candidates = [
+        (
+            "resources/node/node.exe",
+            "resources/netease-runtime/node_modules/NeteaseCloudMusicApi/app.js",
+        ),
+        (
+            "node/node.exe",
+            "netease-runtime/node_modules/NeteaseCloudMusicApi/app.js",
+        ),
+    ];
+
+    candidates.into_iter().find_map(|(node_path, app_path)| {
+        let node_exe = app
+            .path()
+            .resolve(node_path, BaseDirectory::Resource)
+            .ok()?;
+        let app_js = app.path().resolve(app_path, BaseDirectory::Resource).ok()?;
+        if node_exe.exists() && app_js.exists() {
+            Some(ManagedNeteaseApiRuntime { node_exe, app_js })
+        } else {
+            None
+        }
+    })
+}
+
 async fn ensure_local_netease_api_service(
     base_url: &str,
+    managed_api: Option<ManagedNeteaseApiRuntime>,
 ) -> Result<NeteaseServiceStatusDto, String> {
     let base_url = normalize_netease_base_url(base_url);
     if !is_local_netease_base_url(&base_url) {
@@ -5043,7 +5082,10 @@ async fn ensure_local_netease_api_service(
     }
 
     let node_available = is_node_available();
-    let api_package_found = find_netease_api_entry().is_some();
+    let api_entry = find_netease_api_entry();
+    let api_package_found = api_entry.is_some();
+    let managed_api_found = managed_api.is_some();
+    let npx_available = is_npx_available();
 
     if is_netease_api_reachable(&base_url).await {
         return Ok(NeteaseServiceStatusDto {
@@ -5052,45 +5094,52 @@ async fn ensure_local_netease_api_service(
             base_url,
             message: "Music source is awake.".to_string(),
             node_available,
-            api_package_found,
+            api_package_found: api_package_found || managed_api_found || npx_available,
         });
     }
 
-    if !node_available {
+    if !node_available && !managed_api_found {
         return Ok(NeteaseServiceStatusDto {
             running: false,
             started: false,
             base_url,
-            message: "Node.js is not installed. NetEase Cloud Music requires Node.js v20 or later. Please install it from https://nodejs.org".to_string(),
+            message: "The built-in NetEase runtime was not found. Please reinstall Ome Music, or set an external music source in Settings.".to_string(),
             node_available: false,
             api_package_found,
         });
     }
 
-    if !api_package_found {
+    if !managed_api_found && !api_package_found && !npx_available {
         return Ok(NeteaseServiceStatusDto {
             running: false,
             started: false,
             base_url,
-            message: "NetEase Cloud Music API package was not found. If this is an installed build, the developer runtime files may be missing.".to_string(),
+            message: "The NetEase music source is not ready. Please reinstall Ome Music, or set an external music source in Settings.".to_string(),
             node_available: true,
             api_package_found: false,
         });
     }
 
-    let app_js = find_netease_api_entry().ok_or_else(|| {
-        "NetEase Cloud Music source package was not found. Run npm install first.".to_string()
-    })?;
-    let working_dir = app_js
-        .parent()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| "NetEase Cloud Music source folder was not found.".to_string())?;
     let port = netease_base_url_port(&base_url).unwrap_or(3000).to_string();
+    let mut command = if let Some(runtime) = managed_api {
+        let mut command = Command::new(runtime.node_exe);
+        command.arg(runtime.app_js);
+        command
+    } else if let Some(app_js) = api_entry {
+        let working_dir = app_js
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| "NetEase Cloud Music source folder was not found.".to_string())?;
+        let mut command = Command::new("node");
+        command.arg(&app_js).current_dir(working_dir);
+        command
+    } else {
+        let mut command = Command::new(npx_command());
+        command.arg("--yes").arg("NeteaseCloudMusicApi@4.32.0");
+        command
+    };
 
-    let mut command = Command::new("node");
     command
-        .arg(&app_js)
-        .current_dir(working_dir)
         .env("PORT", port)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -5106,15 +5155,22 @@ async fn ensure_local_netease_api_service(
         .spawn()
         .map_err(|error| format!("Could not wake the music source. {error}"))?;
 
-    for _ in 0..24 {
+    let attempts = if managed_api_found || api_package_found { 32 } else { 70 };
+    for _ in 0..attempts {
         if is_netease_api_reachable(&base_url).await {
             return Ok(NeteaseServiceStatusDto {
                 running: true,
                 started: true,
                 base_url,
-                message: "Music source is awake.".to_string(),
+                message: if managed_api_found {
+                    "Music source is ready.".to_string()
+                } else if api_package_found {
+                    "Music source is awake.".to_string()
+                } else {
+                    "Music source is awake through npm.".to_string()
+                },
                 node_available,
-                api_package_found,
+                api_package_found: managed_api_found || api_package_found || npx_available,
             });
         }
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -5124,9 +5180,16 @@ async fn ensure_local_netease_api_service(
         running: false,
         started: true,
         base_url,
-        message: "Music source is still warming up.".to_string(),
+        message: if managed_api_found {
+            "Music source is starting. Please try again in a moment.".to_string()
+        } else if api_package_found {
+            "Music source is still warming up.".to_string()
+        } else {
+            "Music source is being prepared through npm. The first launch can take a little longer."
+                .to_string()
+        },
         node_available,
-        api_package_found,
+        api_package_found: managed_api_found || api_package_found || npx_available,
     })
 }
 
@@ -5138,6 +5201,26 @@ fn is_node_available() -> bool {
         .stderr(Stdio::null())
         .output()
         .is_ok_and(|output| output.status.success())
+}
+
+fn is_npx_available() -> bool {
+    Command::new(npx_command())
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .is_ok_and(|output| output.status.success())
+}
+
+#[cfg(target_os = "windows")]
+fn npx_command() -> &'static str {
+    "npx.cmd"
+}
+
+#[cfg(not(target_os = "windows"))]
+fn npx_command() -> &'static str {
+    "npx"
 }
 
 async fn is_netease_api_reachable(base_url: &str) -> bool {
@@ -5240,13 +5323,14 @@ async fn request_netease_json_response(
     }
 
     // Try to start the local NeteaseCloudMusicApi service when pointing at a local URL.
-    // 预检失败不再吞错：把真实原因（Node.js 未装 / NeteaseCloudMusicApi 未找到 / 端口被占等）透出，
-    // 避免后续 request.send() 失败时给出笼统的 "Could not reach" 掩盖真实环境问题。
+    // Surface the preflight reason here so later request errors do not hide a missing
+    // bundled runtime, a blocked port, or an unavailable external source.
     if is_local_netease_base_url(&config.base_url) {
-        let service_status = ensure_local_netease_api_service(&config.base_url).await?;
+        let service_status =
+            ensure_local_netease_api_service(&config.base_url, config.managed_api.clone()).await?;
         if !service_status.running {
             return Err(format!(
-                "NetEase API 服务未就绪 / NetEase API is not ready. {}",
+                "NetEase Cloud Music source is not ready. {}",
                 service_status.message
             ));
         }
@@ -7734,9 +7818,11 @@ fn run_inner() -> Result<(), Box<dyn std::error::Error>> {
         })
         .setup(|app| {
             let db = initialize_database(app).map_err(std::io::Error::other)?;
+            let managed_netease_api = resolve_managed_netease_api_runtime(app);
             app.manage(AppState {
                 db: Mutex::new(db),
                 media_proxy: Mutex::new(HashMap::new()),
+                managed_netease_api,
             });
             Ok(())
         })

@@ -361,9 +361,9 @@ function SourceStatusRow({
 }
 
 function sourceLabel(source?: string): string {
-  if (source === "netease") return "网易云 / NetEase Cloud Music";
+  if (source === "netease") return "\u7f51\u6613\u4e91\u97f3\u4e50 / NetEase Cloud Music";
   if (source === "bilibili") return "Bilibili Video Atmosphere";
-  return "本地音乐 / Local Library";
+  return "\u672c\u5730\u97f3\u4e50 / Local Library";
 }
 
 function neteaseStatusLabel({
@@ -375,27 +375,26 @@ function neteaseStatusLabel({
   loginStatus: NetEaseLoginStatus | null;
   neteaseConfig: MusicSourceConfig | null;
 }): string {
-  if (!neteaseConfig?.enabled) return "关闭";
-  if (serviceStatus && !serviceStatus.nodeAvailable) return "缺少 Node.js";
-  if (serviceStatus && serviceStatus.nodeAvailable && !serviceStatus.apiPackageFound)
-    return "API 缺失";
-  if (serviceStatus?.running) return loginStatus?.loggedIn ? "已连接" : "可用";
-  return neteaseConfig?.enabled ? "可用" : "关闭";
+  if (!neteaseConfig?.enabled) return "\u5173\u95ed";
+  if (serviceStatus && !serviceStatus.running && !serviceStatus.apiPackageFound)
+    return "\u9700\u91cd\u65b0\u5b89\u88c5";
+  if (serviceStatus?.running) return loginStatus?.loggedIn ? "\u5df2\u8fde\u63a5" : "\u53ef\u7528";
+  return neteaseConfig?.enabled ? "\u53ef\u7528" : "\u5173\u95ed";
 }
 
 function danmakuLabel(settings: DanmakuSettings): string {
-  if (!settings.enabled) return "关闭 / Off";
+  if (!settings.enabled) return "\u5173\u95ed / Off";
   const mode =
     settings.displayMode === "video"
-      ? "视频氛围"
+      ? "\u89c6\u9891\u6c1b\u56f4"
       : settings.displayMode === "ambient"
-        ? "全局氛围"
-        : "关闭";
+        ? "\u5168\u5c40\u6c1b\u56f4"
+        : "\u5173\u95ed";
   const intensity =
     settings.emotionalIntensity === "quiet"
-      ? "安静"
+      ? "\u5b89\u9759"
       : settings.emotionalIntensity === "expressive"
-        ? "鲜明"
-        : "平衡";
-  return `${mode} · ${intensity} · ${Math.round(settings.opacity * 100)}%`;
+        ? "\u9c9c\u660e"
+        : "\u5e73\u8861";
+  return `${mode} \u00b7 ${intensity} \u00b7 ${Math.round(settings.opacity * 100)}%`;
 }

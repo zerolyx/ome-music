@@ -36,6 +36,24 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Prepare managed NetEase runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $nodeVersion = "22.17.1"
+          $nodeZip = "node-v$nodeVersion-win-x64.zip"
+          $nodeUrl = "https://nodejs.org/dist/v$nodeVersion/$nodeZip"
+
+          New-Item -ItemType Directory -Force -Path "src-tauri/resources/node" | Out-Null
+          New-Item -ItemType Directory -Force -Path "src-tauri/resources/netease-runtime" | Out-Null
+
+          Invoke-WebRequest -Uri $nodeUrl -OutFile $nodeZip
+          Expand-Archive -Path $nodeZip -DestinationPath ".node-runtime" -Force
+          Copy-Item ".node-runtime/node-v$nodeVersion-win-x64/node.exe" "src-tauri/resources/node/node.exe" -Force
+
+          Set-Content -Path "src-tauri/resources/netease-runtime/package.json" -Value '{"private":true,"dependencies":{"NeteaseCloudMusicApi":"4.32.0"}}' -Encoding UTF8
+          npm install --omit=dev --prefix "src-tauri/resources/netease-runtime"
+
       - name: Build Windows release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -58,7 +76,7 @@ jobs:
 
             ## Notes
 
-            - NetEase Cloud Music requires either a reachable NetEaseCloudMusicApi service or a local Node.js environment that can start it.
+            - NetEase Cloud Music uses a managed runtime included in the installer. No separate Node.js setup is required for normal users.
             - Member-only tracks are requested only with your own signed-in session. Ome Music does not bypass platform access rules.
             - Bilibili and NetEase sessions are stored on the device and should never be committed to the repository.
 

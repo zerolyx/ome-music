@@ -270,7 +270,7 @@ export default function App() {
     try {
       const status = await ensureNeteaseApiService();
       setSourceServiceStatus(status);
-      if (status.nodeAvailable && status.apiPackageFound && status.running) {
+      if (status.running) {
         setEnvPromptDismissed(false);
         window.localStorage.removeItem("ome.env.prompt.dismissed");
       }
@@ -1244,13 +1244,16 @@ export default function App() {
       )}
 
       {sourceServiceStatus &&
-        !sourceServiceStatus.nodeAvailable &&
+        !sourceServiceStatus.running &&
         !envPromptDismissed &&
         !showOnboarding && (
           <EnvironmentPrompt
             status={sourceServiceStatus}
             rechecking={envPromptRechecking}
-            onInstall={() => void openExternalUrl("https://nodejs.org")}
+            onInstall={() => {
+              setSettingsFocus("music");
+              setProviderSettingsOpen(true);
+            }}
             onRecheck={recheckNeteaseEnvironment}
             onDismiss={dismissEnvPrompt}
           />
@@ -1500,16 +1503,13 @@ function EnvironmentPrompt({
   onRecheck: () => void;
   onDismiss: () => void;
 }) {
-  const nodeMissing = !status.nodeAvailable;
-  const apiMissing = status.nodeAvailable && !status.apiPackageFound;
+  const apiMissing = !status.apiPackageFound;
 
-  const title = nodeMissing ? "缺少运行环境 Node.js" : "网易云 API 缺失";
-  const subtitle = nodeMissing
-    ? "NetEase Cloud Music needs Node.js"
-    : "NetEase API package not found";
-  const detail = nodeMissing
-    ? "检测到系统未安装 Node.js，网易云音乐功能（搜索、播放、封面、歌词）将无法运行。本地音乐不受影响。"
-    : "Node.js 已安装，但内置 NeteaseCloudMusicApi 服务包未找到。如果这是安装版，可能是开发者运行时文件缺失。";
+  const title = apiMissing ? "音乐来源需要重新连接" : "音乐来源暂时没有醒来";
+  const subtitle = "NetEase Cloud Music";
+  const detail = apiMissing
+    ? "当前安装包缺少网易云音乐来源所需的随附组件。请重新安装最新版本，或在设置里切换到可用的音乐来源地址。"
+    : status.message || "Ome Music 正在尝试唤醒网易云音乐来源。请稍等片刻后重新检测。";
 
   return (
     <div
@@ -1536,25 +1536,24 @@ function EnvironmentPrompt({
 
       <p className="mt-3 text-[13px] font-medium leading-relaxed text-[#4a2108]/72">{detail}</p>
 
-      {nodeMissing && (
+      {apiMissing && (
         <div className="mt-4 rounded-[18px] bg-[#4a2108]/[0.05] p-3 text-[11px] leading-relaxed text-[#4a2108]/52">
-          <p className="font-bold text-[#4a2108]/62">安装步骤</p>
-          <ol className="mt-1.5 list-decimal space-y-0.5 pl-4">
-            <li>访问 nodejs.org 下载 LTS 版（v20 或更高）</li>
-            <li>安装时勾选「Add to PATH」选项</li>
-            <li>重启 Ome Music，点击下方「重新检测」</li>
-          </ol>
+          <p className="font-bold text-[#4a2108]/62">给普通用户的提示</p>
+          <p className="mt-1.5">
+            正常安装版不需要你手动安装 Node、npm 或任何开发工具。看到这个提示时，优先重新安装最新的
+            Ome Music。
+          </p>
         </div>
       )}
 
       <div className="mt-5 flex items-center gap-2.5">
-        {nodeMissing && (
+        {apiMissing && (
           <button
             type="button"
             onClick={onInstall}
             className="app-transition flex-1 rounded-full bg-[#4a2108]/[0.08] px-4 py-2.5 text-xs font-black text-[#4a2108]/72 hover:bg-[#4a2108]/[0.14] hover:text-[#4a2108]/92"
           >
-            下载 Node.js
+            打开音乐来源设置
           </button>
         )}
         <button
@@ -1574,9 +1573,9 @@ function EnvironmentPrompt({
         </button>
       </div>
 
-      {!nodeMissing && apiMissing && (
+      {apiMissing && (
         <p className="mt-3 text-[10px] text-[#4a2108]/32">
-          如需切换为外部 API 地址，可在「设置 → 音乐来源」中修改 NetEase Base URL。
+          如需使用自己的服务地址，可在「设置 → 音乐来源」中修改 NetEase Base URL。
         </p>
       )}
     </div>

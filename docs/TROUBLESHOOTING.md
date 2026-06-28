@@ -10,12 +10,14 @@ Install Microsoft Edge WebView2 Runtime if the app cannot open its window. The N
 
 ## NetEase Cloud Music Does Not Work
 
-NetEase Cloud Music features require a reachable `NeteaseCloudMusicApi` service.
+NetEase Cloud Music features require a reachable `NeteaseCloudMusicApi` compatible service.
 
 You can use either mode:
 
-- Local mode: install Node.js 20 or later and let Ome Music start the local API service.
+- Local mode: install Node.js 20 or later with npm/npx available on PATH. In installed builds, Ome Music can prepare the local API with `npx --yes NeteaseCloudMusicApi@4.32.0` the first time it is needed.
 - External mode: set the NetEase Base URL in Settings to a deployed `NeteaseCloudMusicApi` endpoint.
+
+If the first local start takes a moment, wait for the source status to become available and try the search again.
 
 If QR login appears successful but member tracks still behave like previews:
 
@@ -68,6 +70,5 @@ Check these first:
 
 - Rust formatting: `cargo fmt --all -- --check`
 - Rust warnings: `cargo clippy --workspace -- -D warnings`
+- Frontend formatting: `npm run format:check`
 - Frontend build: `npm run build`
-- ESLint: `npm run lint`
-- Prettier: `npm run format:check`

@@ -70,55 +70,56 @@ export function OnboardingOverlay({
   };
 
   const musicImported = localTrackCount > 0;
-  const neteaseReady = Boolean(serviceStatus?.running || serviceStatus?.nodeAvailable === false);
+  const neteaseReady = Boolean(serviceStatus?.running);
 
   const steps: OnboardingStep[] = [
     {
       id: "welcome",
       icon: Sparkles,
-      title: "欢迎使用 Ome Music",
-      subtitle: "Welcome to Ome Music",
-      body: "小而美的沉浸式桌面音乐播放器。支持本地音乐、网易云音乐、Bilibili 音频与氛围弹幕。让我们用几步完成初始设置，你也可以随时跳过。",
+      title: "\u6b22\u8fce\u6765\u5230 Ome Music",
+      subtitle: "Welcome",
+      body: "A quiet, immersive desktop music player. Start with local music, then connect NetEase Cloud Music or Bilibili when you are ready.",
     },
     {
       id: "local",
       icon: FolderOpen,
-      title: "导入本地音乐",
-      subtitle: "Import Local Music",
-      body: "点击顶部搜索框，输入本地音乐文件夹路径（如 D:\\Music），按回车即可自动扫描导入。支持 mp3、flac、wav、m4a 等格式。",
-      cta: musicImported ? undefined : { label: "去导入", onClick: onImportMusic },
+      title: "\u5bfc\u5165\u672c\u5730\u97f3\u4e50",
+      subtitle: "Local Music",
+      body: "Choose a music folder on your computer. Ome Music only saves file paths and never copies your original music files.",
+      cta: musicImported
+        ? undefined
+        : { label: "\u5bfc\u5165\u97f3\u4e50", onClick: onImportMusic },
       done: musicImported,
-      doneLabel: `已导入 ${localTrackCount} 首`,
+      doneLabel: `\u5df2\u5bfc\u5165 ${localTrackCount} \u9996`,
     },
     {
       id: "netease",
       icon: Cloud,
-      title: "连接网易云音乐",
-      subtitle: "Connect NetEase Cloud Music",
-      body:
-        neteaseReady && !serviceStatus?.nodeAvailable
-          ? "检测到系统未安装 Node.js。网易云音乐功能（搜索、播放、封面、歌词）需要 Node.js v20+ 运行环境。请在设置中安装 Node.js，或使用外部 API 地址。本地音乐不受影响。"
-          : "网易云音乐功能需要 Node.js v20+ 和本地 API 服务。安装 Node.js 后软件会自动启动 API 服务。然后在设置中扫码登录即可播放会员歌曲。",
-      cta: { label: "去设置", onClick: onOpenNeteaseSettings },
+      title: "\u8fde\u63a5\u7f51\u6613\u4e91\u97f3\u4e50",
+      subtitle: "NetEase Cloud Music",
+      body: neteaseReady
+        ? "The NetEase music source is ready. Open Settings, scan the QR code, and play tracks available to your own account."
+        : "The Windows installer includes the NetEase music source. If it is unavailable, reinstall the latest Ome Music build.",
+      cta: { label: "\u6253\u5f00\u8bbe\u7f6e", onClick: onOpenNeteaseSettings },
       done: neteaseLoggedIn,
-      doneLabel: "已登录",
+      doneLabel: "\u5df2\u767b\u5f55",
     },
     {
       id: "bilibili",
       icon: Radio,
-      title: "连接 Bilibili",
-      subtitle: "Connect Bilibili",
-      body: "Bilibili 音源无需额外运行环境。在设置中扫码登录后即可搜索和播放 Bilibili 音频，并解锁视频氛围层与弹幕效果。",
-      cta: { label: "去设置", onClick: onOpenBilibiliSettings },
+      title: "\u8fde\u63a5 Bilibili",
+      subtitle: "Bilibili",
+      body: "Bilibili can provide music, covers, video atmosphere, and a gentle danmaku layer after sign-in.",
+      cta: { label: "\u6253\u5f00\u8bbe\u7f6e", onClick: onOpenBilibiliSettings },
       done: bilibiliLoggedIn,
-      doneLabel: "已登录",
+      doneLabel: "\u5df2\u767b\u5f55",
     },
     {
       id: "ready",
       icon: Check,
-      title: "一切就绪",
+      title: "\u53ef\u4ee5\u5f00\u59cb\u542c\u4e86",
       subtitle: "All Set",
-      body: "现在你可以开始享受音乐了。在顶部搜索框搜索歌曲，点击右上角齿轮调整歌词与弹幕，底部控制栏管理播放。祝聆听愉快！",
+      body: "Search from the top bar and click a result to play. Settings manages sources, lyrics, danmaku, and storage.",
     },
   ];
 
@@ -145,17 +146,15 @@ export function OnboardingOverlay({
         data-danmaku-safe-zone="onboarding"
         className="relative w-[min(560px,calc(100vw-3rem))] rounded-[32px] border border-white/40 bg-[#f5ece1]/95 p-8 text-[#4a2108] shadow-[0_32px_96px_rgba(74,33,8,0.28)]"
       >
-        {/* 关闭/跳过按钮 */}
         <button
           type="button"
           onClick={handleSkip}
           className="app-transition absolute right-5 top-5 flex items-center gap-1.5 rounded-full bg-[#4a2108]/[0.05] px-3 py-1.5 text-[11px] font-bold text-[#4a2108]/48 hover:bg-[#4a2108]/[0.1] hover:text-[#4a2108]/72"
         >
           <SkipForward className="h-3.5 w-3.5" />
-          跳过引导
+          {"\u8df3\u8fc7"}
         </button>
 
-        {/* 进度条 */}
         <div className="mb-6 mt-2 h-1 w-full overflow-hidden rounded-full bg-[#4a2108]/[0.06]">
           <div
             className="app-transition h-full rounded-full bg-gradient-to-r from-[#c66043]/70 to-[#d4a05a]/80"
@@ -163,7 +162,6 @@ export function OnboardingOverlay({
           />
         </div>
 
-        {/* 步骤指示器 */}
         <div className="mb-6 flex items-center justify-center gap-2">
           {steps.map((step, index) => (
             <button
@@ -182,14 +180,12 @@ export function OnboardingOverlay({
           ))}
         </div>
 
-        {/* 图标 */}
         <div className="mb-5 flex justify-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-[24px] bg-gradient-to-br from-[#c66043]/12 to-[#d4a05a]/10 shadow-[0_8px_24px_rgba(198,96,67,0.12)]">
             <StepIcon className="h-9 w-9 text-[#7a2d1c]/65" strokeWidth={1.6} />
           </div>
         </div>
 
-        {/* 标题 */}
         <div className="mb-3 text-center">
           <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#4a2108]/32">
             {currentStep.subtitle}
@@ -197,12 +193,10 @@ export function OnboardingOverlay({
           <h2 className="mt-1.5 text-[22px] font-bold text-[#4a2108]/88">{currentStep.title}</h2>
         </div>
 
-        {/* 正文 */}
         <p className="mx-auto mb-6 max-w-[420px] text-center text-[13.5px] font-medium leading-[1.7] text-[#4a2108]/64">
           {currentStep.body}
         </p>
 
-        {/* 完成状态徽章 */}
         {currentStep.done && currentStep.doneLabel && (
           <div className="mb-5 flex justify-center">
             <span className="flex items-center gap-1.5 rounded-full bg-[#638052]/12 px-3 py-1 text-[11px] font-bold text-[#3d5230]/72">
@@ -212,7 +206,6 @@ export function OnboardingOverlay({
           </div>
         )}
 
-        {/* CTA 按钮 */}
         {currentStep.cta && (
           <div className="mb-5 flex justify-center">
             <button
@@ -226,7 +219,6 @@ export function OnboardingOverlay({
           </div>
         )}
 
-        {/* 底部导航 */}
         <div className="flex items-center justify-between border-t border-[#4a2108]/[0.06] pt-5">
           <button
             type="button"
@@ -234,7 +226,7 @@ export function OnboardingOverlay({
             disabled={stepIndex === 0}
             className="app-transition rounded-full px-4 py-2 text-xs font-bold text-[#4a2108]/38 hover:text-[#4a2108]/62 disabled:opacity-30"
           >
-            上一步
+            {"\u4e0a\u4e00\u6b65"}
           </button>
 
           <span className="text-[10px] font-semibold text-[#4a2108]/28">
@@ -246,7 +238,7 @@ export function OnboardingOverlay({
             onClick={handleNext}
             className="app-transition flex items-center gap-1.5 rounded-full bg-[#c66043]/[0.14] px-5 py-2 text-xs font-black text-[#7a2d1c]/82 hover:bg-[#c66043]/[0.22] hover:text-[#7a2d1c]"
           >
-            {isLastStep ? "开始使用" : "下一步"}
+            {isLastStep ? "\u5f00\u59cb\u4f7f\u7528" : "\u4e0b\u4e00\u6b65"}
             {!isLastStep && <ArrowRight className="h-3.5 w-3.5" />}
             {isLastStep && <Music2 className="h-3.5 w-3.5" />}
           </button>

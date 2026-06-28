@@ -222,7 +222,7 @@ export function TopSearch({
         )}
       </div>
 
-      {isOpen && (query.trim() || localResults.length > 0) && (
+      {isOpen && query.trim().length > 0 && (
         <div
           data-testid="search-results"
           className="search-popover search-results-scroll mt-2.5 min-h-0 max-h-[min(62svh,calc(100svh-6.25rem),520px)] touch-pan-y overflow-y-auto overscroll-contain rounded-[24px] p-3 pr-2"
@@ -395,14 +395,15 @@ function readNeteaseSearchError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (
     message.includes("Could not reach") ||
-    message.includes("无法连接") ||
+    message.includes("Could not reach") ||
+    message.includes("\u65e0\u6cd5\u8fde\u63a5") ||
     message.includes("ECONNREFUSED") ||
     message.includes("connect to") ||
     message.includes("Network Error")
   ) {
-    return "NetEase API 未连接。请确认本地 API 服务已启动，或在设置中改用可用的 API 地址。 / Could not reach the NetEase API. Check that the local service is running or set a reachable API URL in Settings.";
+    return "NetEase Cloud Music is not ready yet. Try again shortly or reconnect the music source in Settings.";
   }
-  return message || "NetEase 搜索失败，请稍后再试 / NetEase search failed, please try again.";
+  return message || "NetEase search failed, please try again.";
 }
 
 function SearchGroup({ title, children }: { title: string; children: React.ReactNode }) {

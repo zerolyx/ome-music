@@ -1,20 +1,30 @@
-# Ome Music
+﻿# Ome Music
 
 English | [中文](./README.zh-CN.md)
 
-Ome Music is a lightweight, immersive desktop music player for Windows. It is built with Tauri, React, TypeScript, Tailwind CSS, Rust, and SQLite.
+Ome Music is a lightweight Windows music player built for people who just want to open the app and listen.
 
-The product direction is simple: music first. Covers, lyrics, atmosphere, and playback should feel calm and cinematic, while source configuration and technical controls stay behind the experience.
+You do not need to know Node.js, Rust, Vite, URLs, packaging, or command lines to use Ome Music. Download the Windows setup file, install it, open Ome Music, and connect your music sources from the app.
 
-## Highlights
+## For Normal Users
 
-- Local music import and playback
-- NetEase Cloud Music source
-- Bilibili music source, video atmosphere, and danmaku layer
-- Lyrics display with timing offset controls
-- Private DJ / Music Curator experience
-- Local SQLite library and listening history
-- Lightweight Tauri desktop packaging
+1. Open the [GitHub Releases page](https://github.com/zerolyx/ome-music/releases).
+2. Download `Ome.Music_0.3.3_x64-setup.exe`.
+3. Double-click the setup file and follow the installer.
+4. Open Ome Music from the Start Menu or desktop shortcut.
+5. Search a song, import local music, or scan the QR code in Settings to connect NetEase Cloud Music.
+
+The current build is unsigned, so Windows SmartScreen may show a warning. Choose **More info** and **Run anyway** only if you downloaded it from this repository.
+
+## What You Can Do
+
+- Play local music from your computer.
+- Search and play available NetEase Cloud Music tracks with your own account session.
+- Use Bilibili as a music and video-atmosphere source.
+- View covers, lyrics, video atmosphere, and gentle danmaku.
+- Keep local listening data on your device.
+
+Ome Music does not bypass memberships, copyright, region restrictions, or platform access rules.
 
 ## Screenshots
 
@@ -22,19 +32,24 @@ The product direction is simple: music first. Covers, lyrics, atmosphere, and pl
 
 ![Ome Music settings screenshot](docs/assets/screenshot-settings.png)
 
-Only commit screenshots that are safe for public display. Do not include API keys, cookies, account names, private playlists, logs, local paths, or personal listening history.
+## First Launch
 
-## Installation
+- Local music works without signing in.
+- NetEase Cloud Music works best after QR login in **Settings > Music Sources**.
+- If a member-only or restricted song still cannot play, Ome Music will show it as unavailable instead of crashing.
+- Bilibili can be used for public content first; sign-in unlocks account-only access where available.
 
-Download the latest Windows installer from the [GitHub Releases page](https://github.com/zerolyx/ome-music/releases).
+## Privacy
 
-Recommended file:
+- API keys, cookies, sessions, local databases, caches, and logs should never be committed to GitHub.
+- Local music files are referenced by path and are not uploaded by Ome Music.
+- NetEase Cloud Music and Bilibili use your own session only.
 
-- `Ome.Music_0.3.2_x64-setup.exe`
+See [docs/PRIVACY.md](docs/PRIVACY.md) and [SECURITY.md](SECURITY.md).
 
-The current build is unsigned. Windows SmartScreen may show a warning on first launch.
+## For Developers
 
-## Build From Source
+Use this section only if you want to build Ome Music from source.
 
 Requirements:
 
@@ -67,30 +82,7 @@ Build the Windows release:
 npm run release:windows
 ```
 
-The release build bundles the frontend and does not require Vite or a development server.
-
-## Configuration
-
-Ome Music does not include built-in API keys, cookies, passwords, or tokens.
-
-Configure sources inside the app:
-
-- NetEase Cloud Music: API base URL, login session, optional cookie import
-- Bilibili: public search and optional login session for account-only content
-- Curator provider: OpenAI-compatible provider name, base URL, API key, and model
-- Voice: optional speech-to-text and text-to-speech providers
-
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
-
-## Security and Privacy
-
-- Do not commit API keys, cookies, sessions, local databases, cache, logs, release binaries, or private screenshots.
-- Local music files are referenced by path and are not uploaded by Ome Music.
-- NetEase Cloud Music and Bilibili access uses the user's own session only. Ome Music does not bypass membership, copyright, region, or platform restrictions.
-
-See [docs/PRIVACY.md](docs/PRIVACY.md) and [SECURITY.md](SECURITY.md).
-
-## Documentation
+Developer notes live in:
 
 - [Build Guide](docs/BUILD.md)
 - [Configuration](docs/CONFIGURATION.md)

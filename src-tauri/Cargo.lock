@@ -2225,7 +2225,7 @@ dependencies = [
 
 [[package]]
 name = "ome-music-player"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "base64 0.22.1",
  "flate2",
