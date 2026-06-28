@@ -6,7 +6,14 @@ export type RadioSessionStatus = "idle" | "preparing" | "playing" | "paused" | "
 export type RadioSessionSource = "taste_notes" | "user_prompt" | "time_context" | "mood_context";
 
 export type RadioKind =
-  "daily" | "lateNight" | "rainyDay" | "youth" | "quietRoom" | "discovery" | "artist" | "memory";
+  | "daily"
+  | "lateNight"
+  | "rainyDay"
+  | "youth"
+  | "quietRoom"
+  | "discovery"
+  | "artist"
+  | "memory";
 
 export interface RadioHostNote {
   id: string;

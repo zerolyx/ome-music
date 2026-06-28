@@ -2,7 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { isTauriRuntime } from "../library/libraryApi";
 
 export type MusicUnderstandingPurpose =
-  "playlist_analysis" | "preference_summary" | "recommendation_reason";
+  | "playlist_analysis"
+  | "preference_summary"
+  | "recommendation_reason";
 
 export interface LlmProviderConfig {
   providerName: string;
