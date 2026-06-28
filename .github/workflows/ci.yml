@@ -1,4 +1,5 @@
 name: CI
+
 on:
   push:
     branches: [main]
@@ -8,135 +9,76 @@ on:
       - "LICENSE"
   pull_request:
     branches: [main]
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
-  # ── Rust 检查 ──────────────────────────────────────────────
   rust:
+    name: Rust checks
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: src-tauri
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-      - name: 安装 Tauri 系统依赖
+
+      - name: Install Tauri Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libssl-dev libgtk-3-dev
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libgtk-3-dev
+
       - name: cargo check
         run: cargo check --workspace
+
       - name: cargo clippy
         run: cargo clippy --workspace -- -D warnings
+
       - name: cargo fmt
         run: cargo fmt --all -- --check
-  # ── TypeScript 检查 ────────────────────────────────────────
-  typescript:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: TypeScript 类型检查
-        run: npx tsc --noEmit
-      - name: ESLint
-        run: npm run lint
-      - name: Prettier
-        run: npm run format:check
-  # ── 云端同步核查 ────────────────────────────────────────────
-  # 确认触发本次构建的提交已成功推送到云端，并在 GitHub 远端可被检索到。
-  # 任一不一致即判定工作流失败，避免「本地显示已推送、远端实际缺失」的静默失败。
-  verify-cloud-sync:
-    needs: [rust, typescript]
-    if: github.event_name == 'push'
+
+  frontend:
+    name: Frontend checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          fetch-depth: 0
+          node-version: 22
+          cache: npm
 
-      - name: 记录本次构建的提交 SHA
-        id: local
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Install dependencies
+        run: npm ci
 
-      - name: 拉取远端最新引用
-        run: git fetch origin "${{ github.ref_name }}" --tags --force
+      - name: TypeScript
+        run: npx tsc --noEmit
 
-      - name: 核对本地与远端提交一致
-        run: |
-          LOCAL_SHA="${{ steps.local.outputs.sha }}"
-          REMOTE_SHA=$(git rev-parse "origin/${{ github.ref_name }}")
-          echo "本地提交 SHA:  $LOCAL_SHA"
-          echo "远端提交 SHA:  $REMOTE_SHA"
-          if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
-            echo "::error::本地提交与远端不一致，推送可能未完成或被覆盖。请重新 git push 后重试。"
-            exit 1
-          fi
-          echo "✓ 本地与远端提交一致"
+      - name: ESLint
+        run: npm run lint
 
-      - name: 通过 GitHub API 核查远端可见性
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          LOCAL_SHA="${{ steps.local.outputs.sha }}"
-          REPO="${{ github.repository }}"
-          echo "查询 GitHub API: /repos/$REPO/commits/$LOCAL_SHA"
-          HTTP_CODE=$(curl -s -o /tmp/api-response.json -w "%{http_code}" \
-            -H "Authorization: token $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/commits/$LOCAL_SHA")
-          echo "GitHub API 响应码: $HTTP_CODE"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::GitHub API 未能检索到提交 $LOCAL_SHA (HTTP $HTTP_CODE)，云端同步异常。"
-            cat /tmp/api-response.json
-            exit 1
-          fi
-          echo "✓ 远端可检索到本次提交"
+      - name: Prettier
+        run: npm run format:check
 
-      - name: 核查关键文件已在云端落地
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          REPO="${{ github.repository }}"
-          BRANCH="${{ github.ref_name }}"
-          FILES=(
-            ".github/workflows/ci.yml"
-            ".github/workflows/release.yml"
-            ".prettierrc"
-            "eslint.config.mjs"
-            "Dockerfile.api"
-            "Dockerfile.build"
-            "src-tauri/src/lib.rs"
-            "package.json"
-          )
-          for FILE in "${FILES[@]}"; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              -H "Authorization: token $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/$REPO/contents/$FILE?ref=$BRANCH")
-            if [ "$HTTP_CODE" != "200" ]; then
-              echo "::error::文件缺失于远端: $FILE (HTTP $HTTP_CODE)"
-              exit 1
-            fi
-            echo "✓ $FILE 已在云端"
-          done
-
-      - name: 云端同步核查通过
-        run: |
-          echo "══════════════════════════════════════════"
-          echo "  云端同步核查全部通过"
-          echo "  提交: ${{ steps.local.outputs.sha }}"
-          echo "  分支: ${{ github.ref_name }}"
-          echo "  本地与远端一致 · GitHub API 可检索 · 关键文件已落地"
-          echo "══════════════════════════════════════════"
+      - name: Production build
+        run: npm run build

@@ -1,11 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LyricsSourceMenu } from "./components/LyricsSourceMenu";
 import { NowPlayingHero } from "./components/NowPlayingHero";
-import {
-  OnboardingOverlay,
-  isOnboardingCompleted,
-  resetOnboarding,
-} from "./components/OnboardingOverlay";
+import { OnboardingOverlay, resetOnboarding } from "./components/OnboardingOverlay";
 import { OmeRadioPanel } from "./components/OmeRadioPanel";
 import { PlayerControls } from "./components/PlayerControls";
 import { TopSearch } from "./components/TopSearch";
@@ -192,8 +188,8 @@ export default function App() {
     () => window.localStorage.getItem("ome.env.prompt.dismissed") === "1",
   );
   const [envPromptRechecking, setEnvPromptRechecking] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !isOnboardingCompleted());
-  const [showDjPanel, setShowDjPanel] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const showDjPanel = true;
   const [radioSession, setRadioSession] = useState<RadioSession | null>(null);
   const radioSessionRef = useRef<RadioSession | null>(null);
   const spokenRadioSegmentsRef = useRef<Set<string>>(new Set());
@@ -363,13 +359,10 @@ export default function App() {
       });
     }, 1700);
 
-    const djTimer = window.setTimeout(() => setShowDjPanel(true), 1100);
-
     return () => {
       cancelled = true;
       window.clearTimeout(restoreTimer);
       window.clearTimeout(backgroundTimer);
-      window.clearTimeout(djTimer);
     };
   }, [restoredSnapshotTrack]);
 
@@ -1181,7 +1174,7 @@ export default function App() {
   };
 
   return (
-    <div className="startup-shell h-screen overflow-hidden bg-[#d0c6ba] text-[#4a2108]">
+    <div className="startup-shell relative h-[100dvh] max-h-[100dvh] min-h-0 overflow-hidden bg-[#d0c6ba] text-[#4a2108]">
       <div className="fixed inset-0 bg-[#d0c6ba]" />
       {currentTrack && (
         <>
@@ -1284,7 +1277,7 @@ export default function App() {
         />
       )}
 
-      <main className="relative h-screen overflow-hidden">
+      <main className="absolute inset-0 min-h-0 overflow-hidden">
         <NowPlayingHero
           track={currentTrack}
           lyrics={lyrics}
