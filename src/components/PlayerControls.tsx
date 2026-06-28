@@ -1,15 +1,4 @@
-import {
-  Pause,
-  Play,
-  Repeat,
-  Repeat1,
-  Shuffle,
-  SkipBack,
-  SkipForward,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
-import clsx from "clsx";
+import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import type { LoopMode, Track } from "../types/music";
 import { formatDuration } from "../utils/format";
 
@@ -34,13 +23,9 @@ export function PlayerControls({
   isPlaying,
   progressSeconds,
   volume,
-  shuffle,
-  loopMode,
   onTogglePlay,
   onNext,
   onPrevious,
-  onToggleShuffle,
-  onToggleLoop,
   onSetProgress,
   onSetVolume,
 }: PlayerControlsProps) {
@@ -58,32 +43,7 @@ export function PlayerControls({
       className="fixed inset-x-0 bottom-0 z-30 h-24 text-[#4a2108]"
     >
       <div className="absolute inset-x-10 bottom-8 grid grid-cols-[1fr_auto_1fr] items-center">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={onToggleShuffle}
-            className={clsx("player-icon-button", shuffle && "is-active")}
-            aria-label="Shuffle"
-            aria-pressed={shuffle}
-            title="Shuffle"
-          >
-            <Shuffle className="h-[18px] w-[18px]" />
-          </button>
-          <button
-            type="button"
-            onClick={onToggleLoop}
-            className={clsx("player-icon-button", loopMode !== "off" && "is-active")}
-            aria-label={`Loop: ${loopMode}`}
-            aria-pressed={loopMode !== "off"}
-            title={`Loop: ${loopMode}`}
-          >
-            {loopMode === "one" ? (
-              <Repeat1 className="h-[18px] w-[18px]" />
-            ) : (
-              <Repeat className="h-[18px] w-[18px]" />
-            )}
-          </button>
-        </div>
+        <div aria-hidden="true" />
 
         <div className="flex items-center justify-center gap-7">
           <button

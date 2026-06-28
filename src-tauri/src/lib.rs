@@ -3416,10 +3416,15 @@ fn resolve_netease_source_config(
 }
 
 fn save_netease_token(token: &str) -> Result<(), String> {
+    let normalized = normalize_cookie_header(token);
+    if normalized.is_empty() {
+        return Err("The NetEase session credential was empty.".to_string());
+    }
+
     // Reject plaintext fallback: sessions must live in the OS keyring.
     keyring::Entry::new(NETEASE_KEYRING_SERVICE, NETEASE_KEYRING_ACCOUNT)
         .map_err(|error| error.to_string())?
-        .set_password(token)
+        .set_password(&normalized)
         .map_err(|error| error.to_string())?;
 
     // Clean up any legacy plaintext fallback from older builds.
@@ -3433,7 +3438,7 @@ fn read_netease_token() -> Option<String> {
     keyring::Entry::new(NETEASE_KEYRING_SERVICE, NETEASE_KEYRING_ACCOUNT)
         .ok()
         .and_then(|entry| entry.get_password().ok())
-        .map(|value| value.trim().to_string())
+        .map(|value| normalize_cookie_header(&value))
         .filter(|value| !value.is_empty())
         .or_else(read_netease_token_fallback)
 }
@@ -3454,7 +3459,7 @@ fn read_netease_token_fallback() -> Option<String> {
     let bytes = general_purpose::STANDARD.decode(encoded.trim()).ok()?;
     String::from_utf8(bytes)
         .ok()
-        .map(|value| value.trim().to_string())
+        .map(|value| normalize_cookie_header(&value))
         .filter(|value| !value.is_empty())
 }
 
@@ -3708,6 +3713,41 @@ fn cookie_header_from_response(response: &reqwest::Response) -> Option<String> {
     } else {
         Some(cookies.join("; "))
     }
+}
+
+fn normalize_cookie_header(cookie: &str) -> String {
+    const COOKIE_ATTRIBUTES: &[&str] = &[
+        "path", "domain", "expires", "max-age", "httponly", "secure", "samesite", "priority",
+    ];
+
+    let mut seen = HashSet::new();
+    cookie
+        .split(';')
+        .filter_map(|part| {
+            let trimmed = part.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            let (name, value) = trimmed.split_once('=')?;
+            let name = name.trim();
+            let value = value.trim();
+            if name.is_empty() || value.is_empty() {
+                return None;
+            }
+            if COOKIE_ATTRIBUTES
+                .iter()
+                .any(|attribute| name.eq_ignore_ascii_case(attribute))
+            {
+                return None;
+            }
+            let key = name.to_ascii_lowercase();
+            if !seen.insert(key) {
+                return None;
+            }
+            Some(format!("{name}={value}"))
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 fn bilibili_cookie_from_login_url(url: &str) -> Option<String> {
@@ -5568,7 +5608,7 @@ async fn fetch_netease_playable_url_with_level(
 
         let item = first_playable_item(&value);
         let url = playback_url_from_item(&item);
-        let trial_only = is_netease_trial_only(&item);
+        let trial_only = is_netease_trial_only(&item, url.is_some(), is_member);
         let response_code = item
             .get("code")
             .or_else(|| value.get("code"))
@@ -5766,7 +5806,15 @@ fn playback_url_from_item(item: &serde_json::Value) -> Option<String> {
         .map(ToString::to_string)
 }
 
-fn is_netease_trial_only(item: &serde_json::Value) -> bool {
+fn is_netease_trial_only(
+    item: &serde_json::Value,
+    has_playable_url: bool,
+    is_member: bool,
+) -> bool {
+    if has_playable_url && is_member {
+        return false;
+    }
+
     let has_trial_info = item
         .get("freeTrialInfo")
         .is_some_and(|value| !value.is_null());
