@@ -2,48 +2,51 @@
 
 ## Windows Blocks the App
 
-Development builds may be unsigned. Windows SmartScreen may warn before running the app. Only continue if you built the app yourself or trust the release source.
+Ome Music builds are currently unsigned. Windows SmartScreen may warn before running the installer or app. Only continue if you built the app yourself or trust the GitHub release source.
 
 ## WebView2 Missing
 
-Install Microsoft Edge WebView2 Runtime if the app cannot open its window. The NSIS installer will attempt to download and install it silently on first run.
+Install Microsoft Edge WebView2 Runtime if the app cannot open its window. The NSIS installer attempts to download and install WebView2 silently when needed.
 
-## Node.js Missing (NetEase Cloud Music)
+## NetEase Cloud Music Does Not Work
 
-Starting with v0.2, Ome Music automatically checks whether Node.js is installed when the NetEase Cloud Music source is enabled. If Node.js is not on the system PATH, a centered prompt appears:
+NetEase Cloud Music features require a reachable `NeteaseCloudMusicApi` service.
 
-- Title: 缺少运行环境 Node.js
-- It explains that NetEase Cloud Music features (search, playback, cover, lyrics) cannot run without Node.js v20 or later
-- It offers a "下载 Node.js" button that opens https://nodejs.org
-- It offers a "重新检测" button to re-run the check after installation
-- It offers a "稍后再说" button to dismiss the prompt
+You can use either mode:
 
-Local music playback is not affected — only NetEase Cloud Music features require Node.js.
+- Local mode: install Node.js 20 or later and let Ome Music start the local API service.
+- External mode: set the NetEase Base URL in Settings to a deployed `NeteaseCloudMusicApi` endpoint.
 
-After installing Node.js (remember to tick "Add to PATH" on Windows), restart Ome Music and click "重新检测". The NetEase Cloud Music API service will then start automatically.
+If QR login appears successful but member tracks still behave like previews:
 
-If you prefer not to install Node.js locally, you can also point the NetEase Base URL to an externally deployed NeteaseCloudMusicApi instance in Settings → Music Sources.
+1. Reopen Settings.
+2. Check NetEase login status.
+3. Refresh or sign in again.
+4. Try a track that your account can play in the official NetEase Cloud Music app.
+
+Ome Music only uses your own session. It does not bypass membership, copyright, region, or platform restrictions.
 
 ## NetEase or Bilibili Track Cannot Play
 
 Possible reasons:
 
-- Not logged in
+- Not signed in
+- Session expired
 - Membership required
 - Copyright or region restriction
 - Track removed upstream
 - Source API unavailable
 - Network failure
 
-The app should show an unavailable state rather than crashing.
+The app should show an unavailable state instead of crashing.
 
 ## Lyrics Do Not Match
 
-Use the lyrics controls to reload, import `.lrc`, or adjust timing. The Curator must not generate fake official lyrics.
+Use the lyrics controls to reload lyrics, import an `.lrc` file, or adjust timing. The Curator must not generate fake official lyrics.
 
-## Build Fails
+## Release Build Fails
 
-Run:
+Run the local checks first:
 
 ```bash
 npm install
@@ -52,4 +55,19 @@ cd src-tauri
 cargo check
 ```
 
-If release packaging fails, confirm that Rust, Visual Studio Build Tools, WebView2, and Tauri dependencies are installed.
+If packaging still fails, check:
+
+- Rust stable toolchain is installed.
+- Visual Studio Build Tools are installed on Windows.
+- WebView2 Runtime is available.
+- `src-tauri/target/` is not corrupted by an interrupted build.
+
+## CI Fails After a Maintenance Patch
+
+Check these first:
+
+- Rust formatting: `cargo fmt --all -- --check`
+- Rust warnings: `cargo clippy --workspace -- -D warnings`
+- Frontend build: `npm run build`
+- ESLint: `npm run lint`
+- Prettier: `npm run format:check`
