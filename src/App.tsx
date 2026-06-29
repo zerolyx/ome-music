@@ -1632,6 +1632,7 @@ export default function App() {
           onLessLikeThis={handleLessLikeThis}
           onShare={handleShare}
           onCycleSpeed={cyclePlaybackSpeed}
+          onSeekToLyric={setProgress}
         />
       </main>
 

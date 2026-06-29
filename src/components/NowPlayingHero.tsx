@@ -35,6 +35,10 @@ interface NowPlayingHeroProps {
   onLessLikeThis: () => void;
   onShare: () => string;
   onCycleSpeed: () => void;
+  // Click a lyric line to seek the audio to that line's start time. The
+  // Lyrics Room is a stage, not a flat list — clicking a line should feel
+  // like dropping the needle at that moment, then the room recenters.
+  onSeekToLyric: (seconds: number) => void;
 }
 
 export function NowPlayingHero({
@@ -56,12 +60,12 @@ export function NowPlayingHero({
   onLessLikeThis,
   onShare,
   onCycleSpeed,
+  onSeekToLyric,
 }: NowPlayingHeroProps) {
   const [isTitleExpanded, setTitleExpanded] = useState(false);
   const [isMoreMenuOpen, setMoreMenuOpen] = useState(false);
   const [likePulse, setLikePulse] = useState(false);
   const [moreToast, setMoreToast] = useState<string | null>(null);
-  const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -124,17 +128,6 @@ export function NowPlayingHero({
     const message = onShare();
     setMoreToast(message);
   };
-
-  useEffect(() => {
-    const container = lyricsScrollRef.current;
-    const activeLine = container?.querySelector<HTMLElement>(
-      `[data-lyric-index="${currentLyricIndex}"]`,
-    );
-    if (!container || !activeLine) return;
-    const targetTop =
-      activeLine.offsetTop - container.clientHeight / 2 + activeLine.clientHeight / 2;
-    container.scrollTo({ top: Math.max(0, targetTop), behavior: isPlaying ? "smooth" : "auto" });
-  }, [currentLyricIndex, isPlaying, track?.id]);
 
   if (!track) {
     return (
@@ -296,38 +289,13 @@ export function NowPlayingHero({
             Finding the words
           </div>
         ) : lyrics.length > 0 ? (
-          <div
-            ref={lyricsScrollRef}
-            className="lyrics-scroll h-[58vh] touch-pan-y overflow-y-auto overscroll-contain py-[24vh] pr-8"
-            onWheel={(event) => event.stopPropagation()}
-          >
-            {lyrics.map((line, index) => {
-              const offset = index - currentLyricIndex;
-              const distance = Math.abs(offset);
-              const isCurrent = index === currentLyricIndex;
-              const isNeighbor = distance === 1;
-              const scale = isCurrent ? 1 : isNeighbor ? 0.92 : 0.84;
-              const xOffset = isCurrent ? 0 : isNeighbor ? -12 : -24;
-
-              return (
-                <p
-                  key={line.id}
-                  data-lyric-index={index}
-                  style={{
-                    transform: `translateX(${xOffset}px) scale(${scale})`,
-                  }}
-                  className={clsx(
-                    "flex min-h-[7.75rem] origin-left items-center text-balance text-4xl font-black leading-[1.04] transition-[opacity,filter,transform,color] duration-500 ease-out lg:text-5xl xl:text-7xl",
-                    isCurrent && "text-[#4a2108] opacity-100 blur-0",
-                    isNeighbor && "text-[#4a2108]/[0.30] opacity-70 blur-[2.5px]",
-                    distance > 1 && "text-[#4a2108]/[0.18] opacity-45 blur-[5px]",
-                  )}
-                >
-                  {line.text}
-                </p>
-              );
-            })}
-          </div>
+          <LyricsRoom
+            lyrics={lyrics}
+            currentLyricIndex={currentLyricIndex}
+            isPlaying={isPlaying}
+            trackId={track.id}
+            onSeekToLyric={onSeekToLyric}
+          />
         ) : track.source === "bilibili" ? (
           <BilibiliVideoAtmosphere
             track={track}
@@ -385,6 +353,97 @@ export function NowPlayingHero({
         </div>
       </div>
     </section>
+  );
+}
+
+// Lyrics Room — the right-side lyric stage. Not a flat scrolling list:
+// the current line is the spatial center (sharp, large, ~full opacity),
+// nearby lines drift and blur like close echoes, and far lines dissolve
+// into the air with a gentle rotate so they read as atmosphere. Click any
+// line to drop the needle at that moment; the auto-scroll effect below
+// then recenters the stage on the new current line.
+//
+// Depth tiers (per spec):
+//   current  — opacity ~0.96, no blur, scale 1, no rotate
+//   nearby   — opacity ~0.42, blur 3px, scale 0.9, subtle fan drift
+//   far      — opacity fading to ~0.16, blur 7px, scale 0.8, gentle rotate
+// Motion is slow (duration-700) and eased so line changes feel like
+// breathing, never jittery. No 3D transforms — just opacity / blur /
+// scale / a hair of rotate, which is enough to suggest depth.
+function LyricsRoom({
+  lyrics,
+  currentLyricIndex,
+  isPlaying,
+  trackId,
+  onSeekToLyric,
+}: {
+  lyrics: LyricLine[];
+  currentLyricIndex: number;
+  isPlaying: boolean;
+  trackId: string;
+  onSeekToLyric: (seconds: number) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Recenter the stage on the current line — smooth while playing, instant
+  // when paused or right after a track switch so the room snaps to attention
+  // without a long slide.
+  useEffect(() => {
+    const container = scrollRef.current;
+    const activeLine = container?.querySelector<HTMLElement>(
+      `[data-lyric-index="${currentLyricIndex}"]`,
+    );
+    if (!container || !activeLine) return;
+    const targetTop =
+      activeLine.offsetTop - container.clientHeight / 2 + activeLine.clientHeight / 2;
+    container.scrollTo({ top: Math.max(0, targetTop), behavior: isPlaying ? "smooth" : "auto" });
+  }, [currentLyricIndex, isPlaying, trackId]);
+
+  return (
+    <div
+      ref={scrollRef}
+      className="lyrics-scroll h-[58vh] touch-pan-y overflow-y-auto overscroll-contain py-[24vh] pr-8"
+      onWheel={(event) => event.stopPropagation()}
+    >
+      {lyrics.map((line, index) => {
+        const offset = index - currentLyricIndex; // signed: <0 above, >0 below
+        const distance = Math.abs(offset);
+        const isCurrent = distance === 0;
+        const isNearby = distance >= 1 && distance <= 2;
+
+        const opacity = isCurrent ? 0.96 : isNearby ? 0.42 : Math.max(0.14, 0.3 - distance * 0.02);
+        const blur = isCurrent ? 0 : isNearby ? 3 : 7;
+        const scale = isCurrent ? 1 : isNearby ? 0.9 : 0.8;
+        // Radiating drift: lines fan outward from center, capped so far
+        // lines don't leave the stage. Direction follows sign(offset).
+        const dir = Math.sign(offset);
+        const xShift = isCurrent ? 0 : dir * Math.min(distance, 4) * 6;
+        // Gentle rotate — the "echo in air" cue. Capped to stay calm.
+        const rotate = isCurrent ? 0 : dir * Math.min(distance, 3) * 0.5;
+
+        return (
+          <button
+            type="button"
+            key={line.id}
+            data-lyric-index={index}
+            onClick={() => onSeekToLyric(line.startTime)}
+            style={{
+              transform: `translateX(${xShift}px) scale(${scale}) rotate(${rotate}deg)`,
+              opacity,
+              filter: blur > 0 ? `blur(${blur}px)` : undefined,
+            }}
+            className={clsx(
+              "app-transition m-0 flex min-h-[7.75rem] w-full origin-center cursor-pointer items-center border-0 bg-transparent p-0 text-left text-balance text-4xl font-black leading-[1.04] duration-700 ease-out lg:text-5xl xl:text-7xl",
+              isCurrent ? "text-[#4a2108]" : "text-[#4a2108] hover:text-[#4a2108]/70",
+            )}
+            title={`Jump to ${formatTime(line.startTime)}`}
+            aria-current={isCurrent ? "true" : undefined}
+          >
+            {line.text}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
