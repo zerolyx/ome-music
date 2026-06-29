@@ -8047,7 +8047,8 @@ fn run_inner() -> Result<(), Box<dyn std::error::Error>> {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 // Kill the managed node.exe runtime so it does not orphan when the
                 // app exits and block the NSIS installer from overwriting it.
-                let state = window.app_handle().state::<AppState>();
+                let app_handle = window.app_handle();
+                let state = app_handle.state::<AppState>();
                 if let Ok(mut guard) = state.managed_netease_child.lock() {
                     if let Some(mut child) = guard.take() {
                         let _ = child.kill();
