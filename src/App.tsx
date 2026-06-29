@@ -238,6 +238,11 @@ export default function App() {
   const playbackRetryKeyRef = useRef<string>("");
   const [isVoiceDucking, setVoiceDucking] = useState(false);
   const [lyrics, setLyrics] = useState<LyricLine[]>([]);
+  // Translated lyrics (same LRC shape as `lyrics`). Resolved alongside the
+  // main lyrics; the Lyrics Room reveals them via the hidden Translation
+  // tool. Empty when the source has no translation — the tool then shows a
+  // soft "暂无翻译" notice instead of an empty toggle.
+  const [translatedLyrics, setTranslatedLyrics] = useState<LyricLine[]>([]);
   const [lyricCacheKey, setLyricCacheKey] = useState<string | null>(null);
   const [lyricWarning, setLyricWarning] = useState<string | null>(null);
   const [lyricOffsetMs, setLyricOffsetMs] = useState(0);
@@ -500,6 +505,7 @@ export default function App() {
     const requestId = lyricRequestRef.current + 1;
     lyricRequestRef.current = requestId;
     setLyrics([]);
+    setTranslatedLyrics([]);
     setLyricWarning(null);
     setLyricOffsetMs(0);
     setLyricsLoading(true);
@@ -509,12 +515,14 @@ export default function App() {
         if (lyricRequestRef.current !== requestId) return;
         setLyricCacheKey(resolved.cacheKey);
         setLyrics(parseLrc(resolved.lyrics));
+        setTranslatedLyrics(parseLrc(resolved.translatedLyrics ?? ""));
         setLyricWarning(resolved.warning ?? null);
         setLyricOffsetMs(resolved.offsetMs);
       })
       .catch(() => {
         if (lyricRequestRef.current !== requestId) return;
         setLyrics([]);
+        setTranslatedLyrics([]);
         setLyricWarning("No matched lyrics for this version.");
         setLyricOffsetMs(0);
       })
@@ -534,6 +542,7 @@ export default function App() {
         if (lyricRequestRef.current !== requestId) return;
         setLyricCacheKey(resolved.cacheKey);
         setLyrics(parseLrc(resolved.lyrics));
+        setTranslatedLyrics(parseLrc(resolved.translatedLyrics ?? ""));
         setLyricWarning(resolved.warning ?? null);
         setLyricOffsetMs(resolved.offsetMs);
       })
@@ -553,6 +562,7 @@ export default function App() {
     lastPlayEventKeyRef.current = null;
     if (!currentTrack || (!essentialRestoreDone && isRemoteTrack(currentTrack))) {
       setLyrics([]);
+      setTranslatedLyrics([]);
       setLyricWarning(null);
       setLyricOffsetMs(0);
       setLyricsLoading(false);
@@ -1613,6 +1623,7 @@ export default function App() {
         <NowPlayingHero
           track={currentTrack}
           lyrics={lyrics}
+          translatedLyrics={translatedLyrics}
           currentLyricIndex={currentLyricIndex}
           lyricWarning={lyricWarning}
           isPlaying={isPlaying}

@@ -19,6 +19,7 @@ import { DanmakuAtmosphereLayer } from "./DanmakuAtmosphereLayer";
 interface NowPlayingHeroProps {
   track: Track | null;
   lyrics: LyricLine[];
+  translatedLyrics: LyricLine[];
   currentLyricIndex: number;
   lyricWarning?: string | null;
   isPlaying: boolean;
@@ -44,6 +45,7 @@ interface NowPlayingHeroProps {
 export function NowPlayingHero({
   track,
   lyrics,
+  translatedLyrics,
   currentLyricIndex,
   lyricWarning,
   isPlaying,
@@ -291,6 +293,7 @@ export function NowPlayingHero({
         ) : lyrics.length > 0 ? (
           <LyricsRoom
             lyrics={lyrics}
+            translatedLyrics={translatedLyrics}
             currentLyricIndex={currentLyricIndex}
             isPlaying={isPlaying}
             trackId={track.id}
@@ -372,18 +375,34 @@ export function NowPlayingHero({
 // scale / a hair of rotate, which is enough to suggest depth.
 function LyricsRoom({
   lyrics,
+  translatedLyrics,
   currentLyricIndex,
   isPlaying,
   trackId,
   onSeekToLyric,
 }: {
   lyrics: LyricLine[];
+  translatedLyrics: LyricLine[];
   currentLyricIndex: number;
   isPlaying: boolean;
   trackId: string;
   onSeekToLyric: (seconds: number) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Hidden Lyric Tools — translation toggle only for now (romanization /
+  // word-by-word are present but disabled: their data isn't parsed yet).
+  // Persisted so the user's reveal preference survives across tracks.
+  const [translationVisible, setTranslationVisible] = useState<boolean>(
+    () => window.localStorage.getItem("ome.lyrics.translationVisible") === "1",
+  );
+
+  const toggleTranslation = () => {
+    setTranslationVisible((prev) => {
+      const next = !prev;
+      window.localStorage.setItem("ome.lyrics.translationVisible", next ? "1" : "0");
+      return next;
+    });
+  };
 
   // Recenter the stage on the current line — smooth while playing, instant
   // when paused or right after a track switch so the room snaps to attention
@@ -399,51 +418,146 @@ function LyricsRoom({
     container.scrollTo({ top: Math.max(0, targetTop), behavior: isPlaying ? "smooth" : "auto" });
   }, [currentLyricIndex, isPlaying, trackId]);
 
+  // Match the current line's translation. Translated LRC usually shares the
+  // main LRC's timestamp structure, so an index match is the honest default;
+  // if the translated track has fewer lines, we fall back to a time search so
+  // we still surface the right line rather than nothing.
+  const currentTranslatedText = (() => {
+    if (!translationVisible || translatedLyrics.length === 0) return null;
+    const byIndex = translatedLyrics[currentLyricIndex];
+    if (byIndex?.text) return byIndex.text;
+    const current = lyrics[currentLyricIndex];
+    if (!current) return null;
+    let closest: LyricLine | null = null;
+    let bestDelta = Infinity;
+    for (const line of translatedLyrics) {
+      const delta = Math.abs(line.startTime - current.startTime);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        closest = line;
+      }
+    }
+    return closest?.text ?? null;
+  })();
+
   return (
-    <div
-      ref={scrollRef}
-      className="lyrics-scroll h-[58vh] touch-pan-y overflow-y-auto overscroll-contain py-[24vh] pr-8"
-      onWheel={(event) => event.stopPropagation()}
+    <>
+      <div
+        ref={scrollRef}
+        className="lyrics-scroll h-[58vh] touch-pan-y overflow-y-auto overscroll-contain py-[24vh] pr-8"
+        onWheel={(event) => event.stopPropagation()}
+      >
+        {lyrics.map((line, index) => {
+          const offset = index - currentLyricIndex; // signed: <0 above, >0 below
+          const distance = Math.abs(offset);
+          const isCurrent = distance === 0;
+          const isNearby = distance >= 1 && distance <= 2;
+
+          const opacity = isCurrent
+            ? 0.96
+            : isNearby
+              ? 0.42
+              : Math.max(0.14, 0.3 - distance * 0.02);
+          const blur = isCurrent ? 0 : isNearby ? 3 : 7;
+          const scale = isCurrent ? 1 : isNearby ? 0.9 : 0.8;
+          // Radiating drift: lines fan outward from center, capped so far
+          // lines don't leave the stage. Direction follows sign(offset).
+          const dir = Math.sign(offset);
+          const xShift = isCurrent ? 0 : dir * Math.min(distance, 4) * 6;
+          // Gentle rotate — the "echo in air" cue. Capped to stay calm.
+          const rotate = isCurrent ? 0 : dir * Math.min(distance, 3) * 0.5;
+
+          return (
+            <button
+              type="button"
+              key={line.id}
+              data-lyric-index={index}
+              onClick={() => onSeekToLyric(line.startTime)}
+              style={{
+                transform: `translateX(${xShift}px) scale(${scale}) rotate(${rotate}deg)`,
+                opacity,
+                filter: blur > 0 ? `blur(${blur}px)` : undefined,
+              }}
+              className={clsx(
+                "app-transition m-0 flex min-h-[7.75rem] w-full origin-center cursor-pointer items-center border-0 bg-transparent p-0 text-left text-balance text-4xl font-black leading-[1.04] duration-700 ease-out lg:text-5xl xl:text-7xl",
+                isCurrent ? "text-[#4a2108]" : "text-[#4a2108] hover:text-[#4a2108]/70",
+              )}
+              title={`Jump to ${formatTime(line.startTime)}`}
+              aria-current={isCurrent ? "true" : undefined}
+            >
+              <span className="flex flex-col">
+                <span>{line.text}</span>
+                {isCurrent && currentTranslatedText && (
+                  <span className="mt-3 text-lg font-semibold leading-snug text-[#4a2108]/55 lg:text-xl xl:text-2xl">
+                    {currentTranslatedText}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Hidden Lyric Tools — sit at the bottom-right corner of the stage.
+          Default opacity 0; only reveal when the pointer enters this small
+          hotspot. They never compete with the lyric stage on first glance.
+          Translation is live; Romanization / Word-by-word render disabled
+          until their data pipelines exist. */}
+      <div className="group/tool pointer-events-auto absolute bottom-5 right-5 z-20 flex flex-col items-end gap-1.5 p-2">
+        <div className="flex items-center gap-1 rounded-full border border-[#4a2108]/10 bg-white/45 px-1 py-1 opacity-0 shadow-[0_8px_24px_rgba(74,33,8,0.08)] backdrop-blur-md transition-all duration-300 group-hover/tool:opacity-100">
+          <HiddenToolButton
+            label="译"
+            active={translationVisible}
+            onClick={toggleTranslation}
+            title="Translation / 翻译"
+          />
+          <HiddenToolButton label="音" disabled title="Romanization / 罗马音 (暂不可用)" />
+          <HiddenToolButton label="逐字" disabled title="Word-by-word / 逐字 (暂不可用)" />
+        </div>
+        {translationVisible && !currentTranslatedText && (
+          <p className="rounded-full bg-[#4a2108]/[0.05] px-2.5 py-1 text-[10px] font-semibold text-[#4a2108]/45 opacity-0 transition-opacity duration-300 group-hover/tool:opacity-100">
+            暂无翻译 · No translation for this version
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
+// A single hidden-tool pill. Compact, calm — just a one-character label so
+// the cluster reads as a whisper, not a toolbar. Active state is a soft fill;
+// disabled is greyed and non-interactive (its data isn't wired yet).
+function HiddenToolButton({
+  label,
+  active,
+  disabled,
+  onClick,
+  title,
+}: {
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-pressed={active}
+      className={clsx(
+        "app-transition flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] font-bold",
+        disabled
+          ? "cursor-not-allowed text-[#4a2108]/25"
+          : active
+            ? "bg-[#4a2108]/85 text-white"
+            : "text-[#4a2108]/45 hover:bg-[#4a2108]/[0.06] hover:text-[#4a2108]/75",
+      )}
     >
-      {lyrics.map((line, index) => {
-        const offset = index - currentLyricIndex; // signed: <0 above, >0 below
-        const distance = Math.abs(offset);
-        const isCurrent = distance === 0;
-        const isNearby = distance >= 1 && distance <= 2;
-
-        const opacity = isCurrent ? 0.96 : isNearby ? 0.42 : Math.max(0.14, 0.3 - distance * 0.02);
-        const blur = isCurrent ? 0 : isNearby ? 3 : 7;
-        const scale = isCurrent ? 1 : isNearby ? 0.9 : 0.8;
-        // Radiating drift: lines fan outward from center, capped so far
-        // lines don't leave the stage. Direction follows sign(offset).
-        const dir = Math.sign(offset);
-        const xShift = isCurrent ? 0 : dir * Math.min(distance, 4) * 6;
-        // Gentle rotate — the "echo in air" cue. Capped to stay calm.
-        const rotate = isCurrent ? 0 : dir * Math.min(distance, 3) * 0.5;
-
-        return (
-          <button
-            type="button"
-            key={line.id}
-            data-lyric-index={index}
-            onClick={() => onSeekToLyric(line.startTime)}
-            style={{
-              transform: `translateX(${xShift}px) scale(${scale}) rotate(${rotate}deg)`,
-              opacity,
-              filter: blur > 0 ? `blur(${blur}px)` : undefined,
-            }}
-            className={clsx(
-              "app-transition m-0 flex min-h-[7.75rem] w-full origin-center cursor-pointer items-center border-0 bg-transparent p-0 text-left text-balance text-4xl font-black leading-[1.04] duration-700 ease-out lg:text-5xl xl:text-7xl",
-              isCurrent ? "text-[#4a2108]" : "text-[#4a2108] hover:text-[#4a2108]/70",
-            )}
-            title={`Jump to ${formatTime(line.startTime)}`}
-            aria-current={isCurrent ? "true" : undefined}
-          >
-            {line.text}
-          </button>
-        );
-      })}
-    </div>
+      {label}
+    </button>
   );
 }
 
