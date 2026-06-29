@@ -67,7 +67,10 @@ PersonalConfig/
 .node-runtime/
 node-v*-win-x64.zip
 src-tauri/resources/node/
-src-tauri/resources/netease-runtime/
+# Managed NetEase runtime: commit only the pinned manifests, never the installed packages.
+src-tauri/resources/netease-runtime/node_modules/
+src-tauri/resources/netease-runtime/*.log
+src-tauri/resources/netease-runtime/.npmrc
 
 # Personal local launch helpers
 /*.bat

@@ -20,16 +20,13 @@ Supported configuration:
 
 Some tracks may still be unavailable because of copyright, region, membership, account permission, or upstream API limitations.
 
-#### Runtime Requirement: Node.js v20+
+#### Runtime: Bundled Managed Runtime
 
-The NetEase Cloud Music source talks to a `NeteaseCloudMusicApi` compatible service. Ome Music keeps the app lightweight and does not bundle a full Node.js runtime.
+The Windows installer bundles a managed NetEase Cloud Music runtime (Node.js + `NeteaseCloudMusicApi`). Normal users do **not** need to install Node.js, npm, npx, or use any command line. Download the installer, install, and the NetEase source is ready.
 
-Two modes are supported:
+**Source development mode** requires Node.js 20+ and `npm install`. Run `npm run desktop` to start the dev server, which uses the project dependency from `node_modules`.
 
-1. **Local mode, default**: install Node.js v20+ from https://nodejs.org and make sure npm/npx is available on the system PATH. In development, Ome Music uses the project dependency from `node_modules`. In an installed build, Ome Music can prepare the API service through `npx --yes NeteaseCloudMusicApi@4.32.0` on first use.
-2. **External mode**: in Settings -> Music Sources, change NetEase Base URL to an already-deployed `NeteaseCloudMusicApi` instance, for example `http://your-server:3000`. No local Node.js package is needed in this mode.
-
-When Node.js or npm/npx is missing, Ome Music shows a clear source status and keeps local music playback available.
+**External service mode** is for advanced users who already run a `NeteaseCloudMusicApi` instance elsewhere. In Settings -> Music Sources, change the NetEase Base URL to point to that instance, for example `http://your-server:3000`. This is optional and not required for normal use.
 
 Local music playback never requires Node.js.
 

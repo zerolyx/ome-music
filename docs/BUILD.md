@@ -36,7 +36,7 @@ npm run release:windows
 Expected outputs:
 
 - `src-tauri/target/release/ome-music-player.exe`
-- `src-tauri/target/release/bundle/nsis/Ome.Music_0.3.3_x64-setup.exe`
+- `src-tauri/target/release/bundle/nsis/Ome.Music_0.3.4_x64-setup.exe`
 
 The release executable and installer should not require `npm`, `cargo`, Vite, or a development server on the user's machine.
 
@@ -47,11 +47,31 @@ The `Release Windows Build` workflow runs when a tag matching `v*` is pushed.
 Example:
 
 ```bash
-git tag v0.3.3
-git push origin v0.3.3
+git tag v0.3.4
+git push origin v0.3.4
 ```
 
 The workflow should create a GitHub Release and upload the Windows NSIS installer.
+
+### Managed NetEase runtime supply chain
+
+The Windows installer bundles a managed Node.js + `NeteaseCloudMusicApi` runtime. The release workflow hardens this supply chain:
+
+- The Node.js archive is pinned to an exact version (`NODE_VERSION`) and verified against a committed SHA256 (`NODE_SHA256`) before extraction.
+- The `NeteaseCloudMusicApi` version is pinned exactly (no caret) in `src-tauri/resources/netease-runtime/package.json`.
+- The managed runtime is installed with `npm ci --omit=dev` from the committed `package-lock.json`, so every release resolves the same transitive dependency tree.
+- SHA256 checksums for every installer artifact are written to the workflow log and uploaded as the `release-sha256-checksums` artifact.
+
+When bumping the Node.js runtime:
+
+1. Update `NODE_VERSION` and `NODE_SHA256` together in `.github/workflows/release.yml`. The hash is published at `https://nodejs.org/dist/v<NODE_VERSION>/SHASUMS256.txt`.
+2. When bumping `NeteaseCloudMusicApi`, update the pinned version in `src-tauri/resources/netease-runtime/package.json` and regenerate the lockfile locally with:
+
+   ```bash
+   npm install --package-lock-only --omit=dev --prefix "src-tauri/resources/netease-runtime"
+   ```
+
+3. Commit both `package.json` and `package-lock.json`. Never commit the resulting `node_modules/`.
 
 ## Do Not Commit
 

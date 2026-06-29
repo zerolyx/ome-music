@@ -38,23 +38,45 @@ jobs:
 
       - name: Prepare managed NetEase runtime
         shell: pwsh
+        env:
+          # Pinned Node.js runtime shipped inside the installer.
+          # Update both NODE_VERSION and NODE_SHA256 together when bumping.
+          NODE_VERSION: "22.17.1"
+          NODE_SHA256: "b1fdb5635ba860f6bf71474f2ca882459a582de49b1d869451e3ad188e3943eb"
         run: |
           $ErrorActionPreference = "Stop"
-          $nodeVersion = "22.17.1"
-          $nodeZip = "node-v$nodeVersion-win-x64.zip"
-          $nodeUrl = "https://nodejs.org/dist/v$nodeVersion/$nodeZip"
+          $nodeZip = "node-v$env:NODE_VERSION-win-x64.zip"
+          $nodeUrl = "https://nodejs.org/dist/v$env:NODE_VERSION/$nodeZip"
 
           New-Item -ItemType Directory -Force -Path "src-tauri/resources/node" | Out-Null
           New-Item -ItemType Directory -Force -Path "src-tauri/resources/netease-runtime" | Out-Null
 
+          Write-Host "Downloading Node.js $env:NODE_VERSION runtime..."
           Invoke-WebRequest -Uri $nodeUrl -OutFile $nodeZip
-          Expand-Archive -Path $nodeZip -DestinationPath ".node-runtime" -Force
-          Copy-Item ".node-runtime/node-v$nodeVersion-win-x64/node.exe" "src-tauri/resources/node/node.exe" -Force
 
-          Set-Content -Path "src-tauri/resources/netease-runtime/package.json" -Value '{"private":true,"dependencies":{"NeteaseCloudMusicApi":"4.32.0"}}' -Encoding UTF8
-          npm install --omit=dev --prefix "src-tauri/resources/netease-runtime"
+          # Supply-chain hardening: verify the downloaded archive matches the pinned SHA256.
+          $actualHash = (Get-FileHash -Algorithm SHA256 -Path $nodeZip).Hash.ToLower()
+          $expectedHash = $env:NODE_SHA256.ToLower()
+          if ($actualHash -ne $expectedHash) {
+            Write-Error "Node.js archive SHA256 mismatch.`nExpected: $expectedHash`nActual:   $actualHash`nRefusing to continue the release build."
+            exit 1
+          }
+          Write-Host "Node.js archive SHA256 verified: $actualHash"
+
+          Expand-Archive -Path $nodeZip -DestinationPath ".node-runtime" -Force
+          Copy-Item ".node-runtime/node-v$env:NODE_VERSION-win-x64/node.exe" "src-tauri/resources/node/node.exe" -Force
+
+          # The managed NetEase runtime manifests (package.json + package-lock.json) are committed
+          # to the repository with NeteaseCloudMusicApi pinned to an exact version. Using `npm ci`
+          # guarantees reproducible installs that match the lockfile.
+          if (-not (Test-Path "src-tauri/resources/netease-runtime/package-lock.json")) {
+            Write-Error "Managed runtime lockfile not found. Run `npm install --package-lock-only --omit=dev` locally and commit src-tauri/resources/netease-runtime/package-lock.json."
+            exit 1
+          }
+          npm ci --omit=dev --prefix "src-tauri/resources/netease-runtime"
 
       - name: Build Windows release
+        id: tauri_build
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,6 +96,10 @@ jobs:
 
             This is an unsigned development build. Windows SmartScreen may show a warning the first time you open it.
 
+            ## Integrity
+
+            SHA256 hashes for every released artifact are published in the workflow logs of the "Generate SHA256 checksums" step. Verify the installer hash before opening it.
+
             ## Notes
 
             - NetEase Cloud Music uses a managed runtime included in the installer. No separate Node.js setup is required for normal users.
@@ -84,3 +110,32 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: --target x86_64-pc-windows-msvc
+
+      - name: Generate SHA256 checksums
+        shell: pwsh
+        run: |
+          $bundleRoot = "src-tauri/target/x86_64-pc-windows-msvc/release/bundle"
+          if (-not (Test-Path $bundleRoot)) {
+            $bundleRoot = "src-tauri/target/release/bundle"
+          }
+          Write-Host "Scanning $bundleRoot for release artifacts..."
+          $artifacts = Get-ChildItem -Path $bundleRoot -Recurse -File -Include "*.exe","*.msi"
+          if ($artifacts.Count -eq 0) {
+            Write-Warning "No installer artifacts found under $bundleRoot; skipping checksum generation."
+            return
+          }
+          $checksumFile = "sha256-checksums.txt"
+          foreach ($artifact in $artifacts) {
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $artifact.FullName).Hash.ToLower()
+            "$hash  $($artifact.Name)" | Out-File -FilePath $checksumFile -Append -Encoding UTF8
+            Write-Host "$hash  $($artifact.FullName)"
+          }
+          Write-Host "::notice::SHA256 checksums written to $checksumFile"
+
+      - name: Upload checksum artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-sha256-checksums
+          path: sha256-checksums.txt
+          if-no-files-found: ignore

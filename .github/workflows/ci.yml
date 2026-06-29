@@ -82,3 +82,27 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+  docs:
+    name: Documentation checks
+    runs-on: ubuntu-latest
+    # Always run docs:check on pull requests so docs-only changes are still
+    # validated before merge. On push to main the workflow only triggers for
+    # non-docs changes (see paths-ignore above), which is fine because the PR
+    # already validated the docs.
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: docs:check
+        run: npm run docs:check

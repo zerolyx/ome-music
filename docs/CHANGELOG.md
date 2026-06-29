@@ -6,6 +6,31 @@ This project follows small, traceable releases. Keep entries short and focused o
 
 - No unreleased changes yet.
 
+## [0.3.4] - 2026-06-29
+
+### Fixed
+
+- Merged NetEase session cookies from both the response body and `Set-Cookie` header so QR login no longer loses session fragments.
+- Disabled Node.js runtime probing in release builds; the installer uses the bundled managed runtime instead of searching for `npx` on the user's machine.
+- Added retry logic to NetEase login status checks to tolerate transient upstream failures.
+- Improved NetEase playback error classification with bilingual keyword detection.
+- Restored the initial page splash-screen fix (inline body background colour) that was lost during the main squash.
+- Hardened NetEase and Bilibili QR login polling with client-side max-life timeouts and consecutive-error thresholds to stop infinite retry loops.
+
+### Security
+
+- Narrowed the Tauri asset protocol scope to remove default access to the Downloads directory.
+- Added path authorization to `scan_music_directory` so arbitrary front-end paths cannot be scanned.
+
+### Maintenance
+
+- Aligned version references across README, Chinese README, Build Guide, and Changelog to `0.3.4`.
+- Rewrote NetEase runtime documentation to clarify that the installer bundles a managed runtime and normal users do not need Node.js.
+- Hid misleading Bilibili password and SMS login buttons; Bilibili account sign-in is routed through Secure Web Login.
+- Added SHA256 verification for the bundled Node.js runtime in the release workflow and switched to `npm ci --omit=dev` for reproducible managed-runtime installs.
+- Added a lightweight `docs:check` script and CI job for documentation consistency.
+- Added a refactor TODO for splitting `App.tsx` into focused hooks.
+
 ## [0.3.3] - 2026-06-28
 
 ### Fixed

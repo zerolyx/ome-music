@@ -10,6 +10,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "netease:api": "NeteaseCloudMusicApi",
     "size:audit": "node scripts/size-audit.mjs",
+    "docs:check": "node scripts/docs-check.mjs",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.{js,mjs,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{js,mjs,json}\"",

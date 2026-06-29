@@ -2283,10 +2283,10 @@ function BilibiliSourceSettings({
         >
           <span>
             <span className="block text-sm font-semibold text-white/68">
-              账号密码或短信 / Password or SMS
+              网页安全登录 / Secure Web Login
             </span>
             <span className="mt-1 block text-xs text-white/32">
-              由 Bilibili 官方页面完成验证码和安全验证。
+              Bilibili account/password and SMS verification are handled through Secure Web Login.
             </span>
           </span>
           <ChevronDown
@@ -2295,21 +2295,18 @@ function BilibiliSourceSettings({
         </button>
 
         {otherLoginOpen && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <SourceButton
-              icon={KeyRound}
-              label="密码登录 / Password"
-              loading={openingWebLogin}
-              disabled={openingWebLogin || !enabled}
-              onClick={onSecureWebLogin}
-            />
+          <div className="grid gap-3">
             <SourceButton
               icon={ShieldCheck}
-              label="短信登录 / SMS"
+              label="打开 Bilibili 安全登录 / Open Secure Web Login"
               loading={openingWebLogin}
               disabled={openingWebLogin || !enabled}
               onClick={onSecureWebLogin}
             />
+            <p className="text-xs text-white/32">
+              Ome Music does not collect your Bilibili password or SMS code. All verification is
+              completed on the official Bilibili page.
+            </p>
           </div>
         )}
       </div>
