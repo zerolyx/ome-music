@@ -4873,11 +4873,35 @@ fn normalize_netease_image_url(value: String) -> String {
     }
 }
 
+// Whether a cover URL should be routed through the ome-media:// proxy.
+//
+// Only remote http(s) URLs need proxying. Local/inline covers (data:, blob:,
+// file:), already-proxied ome-media:// URLs, and the SVG fallback cover
+// produced by `fallback_cover_url` must be passed through untouched so the
+// WebView can render them directly. Routing a data: URI through reqwest would
+// break the default placeholder for songs with no cover art.
+fn is_proxyable_remote_url(url: &str) -> bool {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("data:")
+        || lower.starts_with("blob:")
+        || lower.starts_with("file:")
+        || lower.starts_with("ome-media:")
+        || lower.contains("ome-media.localhost")
+    {
+        return false;
+    }
+    lower.starts_with("http://") || lower.starts_with("https://")
+}
+
 fn proxy_bilibili_song_cover(
     state: &State<'_, AppState>,
     song: &mut SourceSongDto,
 ) -> Result<(), String> {
-    if !song.cover_url.trim().is_empty() {
+    if is_proxyable_remote_url(&song.cover_url) {
         song.cover_url = register_media_proxy(state.inner(), &song.cover_url, "image")?;
     }
     Ok(())
@@ -4894,14 +4918,10 @@ fn proxy_netease_song_covers(
     for song in songs.iter_mut().filter(|song| {
         song.source.as_deref() == Some("netease") || song.source.as_deref().is_none()
     }) {
-        let cover = song.cover_url.trim();
-        if cover.is_empty()
-            || cover.starts_with("ome-media:")
-            || cover.contains("ome-media.localhost")
-        {
+        if !is_proxyable_remote_url(&song.cover_url) {
             continue;
         }
-        song.cover_url = register_media_proxy(state.inner(), cover, "image")?;
+        song.cover_url = register_media_proxy(state.inner(), &song.cover_url, "image")?;
     }
     Ok(())
 }
@@ -4921,10 +4941,7 @@ fn proxy_bilibili_track_covers(
     tracks: &mut [TrackDto],
 ) -> Result<(), String> {
     for track in tracks.iter_mut().filter(|track| track.source == "bilibili") {
-        if !track.cover_url.trim().is_empty()
-            && !track.cover_url.contains("ome-media.localhost")
-            && !track.cover_url.starts_with("ome-media:")
-        {
+        if is_proxyable_remote_url(&track.cover_url) {
             track.cover_url = register_media_proxy(state.inner(), &track.cover_url, "image")?;
         }
     }
@@ -4941,14 +4958,10 @@ fn proxy_netease_track_covers(
     tracks: &mut [TrackDto],
 ) -> Result<(), String> {
     for track in tracks.iter_mut().filter(|track| track.source == "netease") {
-        let cover = track.cover_url.trim();
-        if cover.is_empty()
-            || cover.starts_with("ome-media:")
-            || cover.contains("ome-media.localhost")
-        {
+        if !is_proxyable_remote_url(&track.cover_url) {
             continue;
         }
-        track.cover_url = register_media_proxy(state.inner(), cover, "image")?;
+        track.cover_url = register_media_proxy(state.inner(), &track.cover_url, "image")?;
     }
     Ok(())
 }
