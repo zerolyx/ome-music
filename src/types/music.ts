@@ -17,7 +17,25 @@ export type JournalMood = "开心" | "平静" | "疲惫" | "焦虑" | "伤感" |
 export type DesiredMusicVibe =
   "安静氛围" | "轻快明亮" | "专注背景" | "情绪陪伴" | "能量提升" | "探索新歌";
 
-export type LoopMode = "off" | "one" | "all";
+// LoopMode drives the "what happens when this track ends" decision.
+//   off      — stop after the current track
+//   one      — repeat the same track
+//   all      — list loop (advance to next track, wrap at end)
+//   curator  — Curator mode: advance like list loop for now; the taste-based
+//              "recommend next" wiring is a later phase. Distinct from "all"
+//              so the UI can show a different icon and so the ended handler
+//              can later swap in a recommendation step without touching the
+//              mode cycle.
+export type LoopMode = "off" | "one" | "all" | "curator";
+
+// Unified playback mode shown by the single mode button in the player bar.
+// Maps onto (LoopMode, shuffle) so the existing playAdjacentTrack / ended
+// logic keeps working unchanged.
+//   curator    → loopMode="curator", shuffle=false
+//   loop       → loopMode="all",     shuffle=false
+//   repeat-one → loopMode="one",     shuffle=false
+//   shuffle    → loopMode="all",     shuffle=true
+export type PlaybackMode = "curator" | "loop" | "repeat-one" | "shuffle";
 
 export type MusicSource = "local" | "netease" | "bilibili";
 

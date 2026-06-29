@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { FolderOpen, Loader2 } from "lucide-react";
+import {
+  FolderOpen,
+  Heart,
+  Loader2,
+  MoreHorizontal,
+  Share,
+  Sparkles,
+  ThumbsDown,
+  X,
+} from "lucide-react";
 import clsx from "clsx";
 import type { Track } from "../types/music";
 import type { LyricLine } from "../features/lyrics/lyricsResolver";
@@ -21,6 +30,11 @@ interface NowPlayingHeroProps {
   isImporting: boolean;
   error: string | null;
   onImport: () => void;
+  liked: boolean;
+  onToggleLike: () => void;
+  onLessLikeThis: () => void;
+  onShare: () => string;
+  onCycleSpeed: () => void;
 }
 
 export function NowPlayingHero({
@@ -37,12 +51,22 @@ export function NowPlayingHero({
   isImporting,
   error,
   onImport,
+  liked,
+  onToggleLike,
+  onLessLikeThis,
+  onShare,
+  onCycleSpeed,
 }: NowPlayingHeroProps) {
   const [isTitleExpanded, setTitleExpanded] = useState(false);
+  const [isMoreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [likePulse, setLikePulse] = useState(false);
+  const [moreToast, setMoreToast] = useState<string | null>(null);
   const lyricsScrollRef = useRef<HTMLDivElement | null>(null);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setTitleExpanded(false);
+    setMoreMenuOpen(false);
   }, [track?.id]);
 
   useEffect(() => {
@@ -53,6 +77,53 @@ export function NowPlayingHero({
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [isTitleExpanded]);
+
+  // Close the "more" menu on outside pointer / Esc — mirrors the Quick
+  // Settings panel behavior so the two popovers feel consistent.
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!moreMenuRef.current?.contains(event.target as Node)) setMoreMenuOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMoreMenuOpen]);
+
+  // Auto-dismiss the "more" toast after a short delay — these are light
+  // confirmations (share copied, less-like-this recorded), not modals.
+  useEffect(() => {
+    if (!moreToast) return;
+    const timer = window.setTimeout(() => setMoreToast(null), 2400);
+    return () => window.clearTimeout(timer);
+  }, [moreToast]);
+
+  const handleLike = () => {
+    if (!liked) {
+      // Brief pulse animation when liking — the heart grows then settles.
+      setLikePulse(true);
+      window.setTimeout(() => setLikePulse(false), 480);
+    }
+    onToggleLike();
+  };
+
+  const handleLessLikeThis = () => {
+    setMoreMenuOpen(false);
+    onLessLikeThis();
+    setMoreToast("Got it — fewer like this.");
+  };
+
+  const handleShare = () => {
+    setMoreMenuOpen(false);
+    const message = onShare();
+    setMoreToast(message);
+  };
 
   useEffect(() => {
     const container = lyricsScrollRef.current;
@@ -103,40 +174,105 @@ export function NowPlayingHero({
         data-danmaku-safe-zone="left-visual"
         className="left-visual-stack relative z-10 flex min-w-0 flex-col items-center md:items-start"
       >
-        <div className="record-sleeve">
+        <div className="record-sleeve relative">
           <ArtworkImage
             src={track.coverUrl}
             alt={track.album || track.title}
             source={track.source}
             className="h-full w-full rounded-[18px] object-cover"
           />
+          {/* Like button — bottom-right of the cover. Doubles as a Taste
+              Signal: tapping it records a liked/unliked event that feeds
+              the listening-memory / radio scoring pipeline. Filled heart
+              when liked, soft outline otherwise. */}
+          <button
+            type="button"
+            onClick={handleLike}
+            className={`app-transition absolute bottom-3 right-3 flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-xl ${
+              liked
+                ? "bg-[#7a2d1c]/85 text-white shadow-[0_8px_24px_rgba(122,45,28,0.42)]"
+                : "bg-white/55 text-[#4a2108]/55 hover:bg-white/75 hover:text-[#7a2d1c]"
+            } ${likePulse ? "scale-[1.18]" : "scale-100"}`}
+            aria-label={liked ? "Unlike" : "Like"}
+            aria-pressed={liked}
+            title={liked ? "Unlike / 取消喜欢" : "Like / 喜欢"}
+          >
+            <Heart className={`h-[18px] w-[18px] ${liked ? "fill-current" : ""}`} />
+          </button>
         </div>
 
         <div className="mt-6 w-[min(70vw,390px)] text-center md:w-[min(29vw,420px)] md:text-left">
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => setTitleExpanded((value) => !value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                setTitleExpanded((value) => !value);
-              }
-            }}
-            className="block w-full cursor-pointer text-left"
-            aria-expanded={isTitleExpanded}
-          >
-            <h1
-              title={track.title}
-              className="line-clamp-2 max-h-[2.12em] text-[clamp(1.18rem,1.65vw,1.72rem)] font-bold leading-[1.06] text-[#4a2108]/88 transition-colors duration-300 hover:text-[#4a2108]"
+          <div className="flex items-start gap-2">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setTitleExpanded((value) => !value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setTitleExpanded((value) => !value);
+                }
+              }}
+              className="block min-w-0 flex-1 cursor-pointer text-left"
+              aria-expanded={isTitleExpanded}
             >
-              {track.title}
-            </h1>
+              <h1
+                title={track.title}
+                className="line-clamp-2 max-h-[2.12em] text-[clamp(1.18rem,1.65vw,1.72rem)] font-bold leading-[1.06] text-[#4a2108]/88 transition-colors duration-300 hover:text-[#4a2108]"
+              >
+                {track.title}
+              </h1>
+            </div>
+            {/* More button — hidden secondary actions. Opens a light glass
+                popover with Less like this / Playback speed / Share / Add to
+                playlist (stub) / View source (stub). Kept deliberately small
+                so it never competes with the cover or lyrics. */}
+            <div ref={moreMenuRef} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setMoreMenuOpen((value) => !value)}
+                className={`app-transition flex h-9 w-9 items-center justify-center rounded-full text-[#4a2108]/40 hover:bg-[#4a2108]/[0.05] hover:text-[#4a2108]/70 ${
+                  isMoreMenuOpen ? "bg-[#4a2108]/[0.06] text-[#4a2108]/70" : ""
+                }`}
+                aria-label="More options"
+                aria-expanded={isMoreMenuOpen}
+                title="More / 更多"
+              >
+                <MoreHorizontal className="h-[18px] w-[18px]" />
+              </button>
+              {isMoreMenuOpen && (
+                <div className="quick-settings-panel settings-scroll absolute right-0 top-11 z-50 w-60 overflow-y-auto rounded-[20px] p-2">
+                  <MoreMenuItem
+                    icon={ThumbsDown}
+                    label="Less like this"
+                    sublabel="减少推荐"
+                    onClick={handleLessLikeThis}
+                  />
+                  <MoreMenuItem
+                    icon={Sparkles}
+                    label="Playback speed"
+                    sublabel="播放速度"
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      onCycleSpeed();
+                    }}
+                  />
+                  <MoreMenuItem icon={Share} label="Share" sublabel="分享" onClick={handleShare} />
+                  <MoreMenuItem icon={X} label="Add to playlist" sublabel="添加到歌单" disabled />
+                  <MoreMenuItem icon={X} label="View source" sublabel="查看来源" disabled />
+                </div>
+              )}
+            </div>
           </div>
           <div className="mt-4 space-y-1.5 text-[13px] font-semibold leading-5 text-[#4a2108]/[0.3]">
             <p>{track.artist}</p>
             <p>{track.album}</p>
           </div>
+          {moreToast && (
+            <p className="app-transition mt-3 rounded-full bg-[#4a2108]/[0.06] px-3 py-1.5 text-xs font-semibold text-[#4a2108]/60">
+              {moreToast}
+            </p>
+          )}
         </div>
       </div>
 
@@ -249,6 +385,40 @@ export function NowPlayingHero({
         </div>
       </div>
     </section>
+  );
+}
+
+// A single row in the "more" popover. Light, glassy, quiet — never a heavy
+// context menu. Disabled items render greyed out so the user can see the shape
+// of future features without being able to click them yet.
+function MoreMenuItem({
+  icon: Icon,
+  label,
+  sublabel,
+  onClick,
+  disabled,
+}: {
+  icon: typeof Heart;
+  label: string;
+  sublabel: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="app-transition source-menu-row flex w-full items-center gap-3 rounded-[14px] px-3 py-2 text-left disabled:cursor-not-allowed disabled:opacity-35"
+    >
+      <Icon className="h-[15px] w-[15px] shrink-0 text-[#4a2108]/50" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-bold text-[#4a2108]/82">{label}</span>
+        <span className="block truncate text-[11px] font-semibold text-[#4a2108]/38">
+          {sublabel}
+        </span>
+      </span>
+    </button>
   );
 }
 

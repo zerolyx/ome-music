@@ -3,7 +3,7 @@ import { LyricsSourceMenu } from "./components/LyricsSourceMenu";
 import { NowPlayingHero } from "./components/NowPlayingHero";
 import { OnboardingOverlay, resetOnboarding } from "./components/OnboardingOverlay";
 import { OmeRadioPanel } from "./components/OmeRadioPanel";
-import { PlayerControls } from "./components/PlayerControls";
+import { PlayerControls, PLAYBACK_SPEEDS, type PlaybackSpeed } from "./components/PlayerControls";
 import { TopSearch } from "./components/TopSearch";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import {
@@ -11,6 +11,7 @@ import {
   isTrackUnavailable,
   listLocalTracks,
   recordPlaybackEvent,
+  setTrackLiked,
   toPlayableSrc,
   type PlaybackEventType,
 } from "./features/library/libraryApi";
@@ -55,7 +56,7 @@ import {
   snapshotToTrack,
 } from "./features/startup/lastSessionSnapshot";
 import { markStartup, noteStartupTask, reportStartup } from "./features/startup/startupDebug";
-import type { LoopMode, Track } from "./types/music";
+import type { LoopMode, PlaybackMode, Track } from "./types/music";
 
 const neteaseProvider = new NetEaseMusicProvider();
 const neteaseAuthProvider = new NetEaseAccountSessionProvider();
@@ -75,10 +76,40 @@ const GlobalDanmakuAtmosphereLayer = lazy(() =>
   })),
 );
 
-function nextLoopMode(loopMode: LoopMode): LoopMode {
-  if (loopMode === "off") return "all";
-  if (loopMode === "all") return "one";
-  return "off";
+// Derive the unified PlaybackMode (shown by the single mode button) from the
+// underlying (loopMode, shuffle) pair. This keeps the existing playAdjacentTrack
+// / ended handler logic untouched — they still read loopMode + shuffle directly.
+function derivePlaybackMode(loopMode: LoopMode, shuffle: boolean): PlaybackMode {
+  if (shuffle) return "shuffle";
+  if (loopMode === "curator") return "curator";
+  if (loopMode === "one") return "repeat-one";
+  return "loop";
+}
+
+// Advance to the next PlaybackMode in the cycle:
+//   curator → loop → repeat-one → shuffle → curator
+// Maps back onto (loopMode, shuffle) so the playback engine is unchanged.
+function nextPlaybackMode(mode: PlaybackMode): PlaybackMode {
+  if (mode === "curator") return "loop";
+  if (mode === "loop") return "repeat-one";
+  if (mode === "repeat-one") return "shuffle";
+  return "curator";
+}
+
+function applyPlaybackMode(mode: PlaybackMode): { loopMode: LoopMode; shuffle: boolean } {
+  switch (mode) {
+    case "curator":
+      return { loopMode: "curator", shuffle: false };
+    case "repeat-one":
+      return { loopMode: "one", shuffle: false };
+    case "shuffle":
+      // Keep loopMode "all" so the queue still advances after the shuffle
+      // order is exhausted (Fisher-Yates rebuilds).
+      return { loopMode: "all", shuffle: true };
+    case "loop":
+    default:
+      return { loopMode: "all", shuffle: false };
+  }
 }
 
 function sourceIdForTrack(track: Track): string | null {
@@ -88,6 +119,22 @@ function sourceIdForTrack(track: Track): string | null {
   }
   if (track.filePath.startsWith("unavailable:bilibili:")) {
     return track.filePath.replace("unavailable:bilibili:", "");
+  }
+  return null;
+}
+
+// Public share URL for a track, if one exists. NetEase songs link to
+// music.163.com; Bilibili songs link to bilibili.com/video/{bvid}. Local
+// tracks have no public URL — the caller should show a soft notice.
+function sourceShareUrl(track: Track): string | null {
+  const sourceId = sourceIdForTrack(track);
+  if (track.source === "netease" && sourceId) {
+    return `https://music.163.com/#/song?id=${sourceId}`;
+  }
+  if (track.source === "bilibili" && sourceId) {
+    // Bilibili sourceId is stored as "{bvid}:{cid}" — extract the bvid.
+    const bvid = sourceId.split(":")[0];
+    return bvid ? `https://www.bilibili.com/video/${bvid}` : null;
   }
   return null;
 }
@@ -221,6 +268,17 @@ export default function App() {
         : "hires";
     },
   );
+  // Playback speed (0.5x–2x). Persisted so the user's preferred rate survives
+  // restarts. Default is 1x. Applied to the <audio> element via a dedicated
+  // effect below.
+  const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(() => {
+    const stored = Number.parseFloat(window.localStorage.getItem("ome.playback.speed") ?? "1");
+    return (PLAYBACK_SPEEDS as readonly number[]).includes(stored) ? (stored as PlaybackSpeed) : 1;
+  });
+  // Queue drawer visibility. The drawer itself lands in Phase 2; for now this
+  // state just toggles the player-bar queue button active state so the
+  // interaction is wired and ready.
+  const [isQueueDrawerOpen, setQueueDrawerOpen] = useState(false);
 
   const currentIndex = useMemo(
     () => tracks.findIndex((track) => track.id === currentTrackId),
@@ -417,6 +475,15 @@ export default function App() {
       audioRef.current = null;
     };
   }, []);
+
+  // Apply the persisted playback speed to the audio element whenever it
+  // changes (or when the element is first created). 1x is the default and
+  // never distorts pitch because the browser treats rate=1 as a no-op.
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.playbackRate = playbackSpeed;
+  }, [playbackSpeed]);
 
   const reloadLyrics = useCallback(() => {
     if (!currentTrack) return;
@@ -692,6 +759,14 @@ export default function App() {
 
       // 列表循环：单曲也应循环重播，避免"all 模式只有一首歌却停止"。
       if (loop === "all" && tracks.length > 0) {
+        playAdjacentTrack("next", { markSkip: false });
+        return;
+      }
+
+      // Curator 模式：现阶段行为同列表循环（自动播放下一首）。真正的
+      // "根据喜好/最近播放/情绪推荐下一首" wiring 是后续阶段的工作；
+      // 这里保持向前推进，避免 Curator 模式下播完即停。
+      if (loop === "curator" && tracks.length > 0) {
         playAdjacentTrack("next", { markSkip: false });
         return;
       }
@@ -1065,6 +1140,94 @@ export default function App() {
     window.localStorage.setItem("ome.playback.netease.quality", level);
   };
 
+  // Unified playback-mode button: cycles curator → loop → repeat-one →
+  // shuffle → curator. Maps onto (loopMode, shuffle) so the playback engine
+  // is unchanged.
+  const cyclePlaybackMode = () => {
+    const current = derivePlaybackMode(loopMode, shuffle);
+    const next = nextPlaybackMode(current);
+    const applied = applyPlaybackMode(next);
+    setLoopMode(applied.loopMode);
+    setShuffle(applied.shuffle);
+  };
+
+  // Cycle through the allowed playback speeds (1 → 1.25 → 1.5 → 2 → 0.5 →
+  // 0.75 → 1). Persisted to localStorage; the audio element picks up the new
+  // rate via the dedicated effect below.
+  const cyclePlaybackSpeed = () => {
+    const currentIndex = PLAYBACK_SPEEDS.indexOf(playbackSpeed);
+    const nextIndex = (currentIndex + 1) % PLAYBACK_SPEEDS.length;
+    const next = PLAYBACK_SPEEDS[nextIndex]!;
+    setPlaybackSpeed(next);
+    window.localStorage.setItem("ome.playback.speed", String(next));
+  };
+
+  const toggleQueueDrawer = () => setQueueDrawerOpen((value) => !value);
+
+  // Like / unlike the current track. Calls the Rust `set_track_liked` command,
+  // which both persists the `liked` flag to the DB AND records a `liked`/
+  // `unliked` playback event — the latter feeds the listening-memory /
+  // radio scoring pipeline (a Taste Signal), so no separate event is needed
+  // here. The returned track list replaces the local library so the heart
+  // state syncs to search results, the queue, and the playlist drawer too.
+  const toggleLike = async () => {
+    const track = currentTrackRef.current;
+    if (!track) return;
+    // Optimistically flip the heart so the UI feels instant, then reconcile
+    // with the DB result. If the DB call fails we revert.
+    const previousLiked = track.liked;
+    setTracks((value) =>
+      value.map((item) => (item.id === track.id ? { ...item, liked: !previousLiked } : item)),
+    );
+    try {
+      const updatedTracks = await setTrackLiked(
+        track.id,
+        !previousLiked,
+        Math.floor(progressSecondsRef.current),
+      );
+      setTracks(updatedTracks);
+    } catch (error) {
+      console.error("failed to toggle like", error);
+      // Revert on failure.
+      setTracks((value) =>
+        value.map((item) => (item.id === track.id ? { ...item, liked: previousLiked } : item)),
+      );
+    }
+  };
+
+  // "Less like this" — a negative Taste Signal. For Phase 1 we record it
+  // locally (localStorage) so it can feed future recommendation logic
+  // without requiring a Rust schema change. The UI shows a soft toast.
+  const handleLessLikeThis = () => {
+    const track = currentTrackRef.current;
+    if (!track) return;
+    try {
+      const key = "ome.taste.lessRecommended";
+      const existing = JSON.parse(window.localStorage.getItem(key) ?? "[]") as string[];
+      if (!existing.includes(track.id)) {
+        existing.push(track.id);
+        if (existing.length > 200) existing.shift();
+        window.localStorage.setItem(key, JSON.stringify(existing));
+      }
+    } catch (error) {
+      console.error("failed to record less-like-this", error);
+    }
+  };
+
+  // Share — copies the source's public URL to the clipboard. NetEase songs
+  // link to music.163.com; Bilibili songs link to bilibili.com/video/{bvid};
+  // local tracks have no public URL and the user gets a soft notice.
+  const handleShare = (): string => {
+    const track = currentTrackRef.current;
+    if (!track) return "Nothing to share right now.";
+    const url = sourceShareUrl(track);
+    if (!url) {
+      return "This local track cannot be shared as a public link.";
+    }
+    void navigator.clipboard?.writeText(url).catch(() => {});
+    return "Link copied to clipboard.";
+  };
+
   const playLocalTrack = (track: Track) => {
     lastPlayEventKeyRef.current = null;
     setCurrentTrackId(track.id);
@@ -1399,6 +1562,11 @@ export default function App() {
           isImporting={isImporting}
           error={libraryError}
           onImport={importFolder}
+          liked={currentTrack?.liked ?? false}
+          onToggleLike={toggleLike}
+          onLessLikeThis={handleLessLikeThis}
+          onShare={handleShare}
+          onCycleSpeed={cyclePlaybackSpeed}
         />
       </main>
 
@@ -1453,11 +1621,16 @@ export default function App() {
         volume={volume}
         shuffle={shuffle}
         loopMode={loopMode}
+        playbackMode={derivePlaybackMode(loopMode, shuffle)}
+        playbackSpeed={playbackSpeed}
+        qualityLevel={playbackQuality}
+        isQueueDrawerOpen={isQueueDrawerOpen}
         onTogglePlay={togglePlay}
         onNext={() => playAdjacentTrack("next")}
         onPrevious={() => playAdjacentTrack("previous")}
-        onToggleShuffle={() => setShuffle((value) => !value)}
-        onToggleLoop={() => setLoopMode((value) => nextLoopMode(value))}
+        onCyclePlaybackMode={cyclePlaybackMode}
+        onCyclePlaybackSpeed={cyclePlaybackSpeed}
+        onToggleQueue={toggleQueueDrawer}
         onSetProgress={setProgress}
         onSetVolume={setVolume}
       />
