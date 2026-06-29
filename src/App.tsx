@@ -24,7 +24,6 @@ import {
 } from "./features/lyrics/lyricsResolver";
 import {
   ensureNeteaseApiService,
-  openExternalUrl,
   BilibiliAccountSessionProvider,
   BilibiliMusicProvider,
   NetEaseAccountSessionProvider,

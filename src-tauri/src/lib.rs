@@ -15,8 +15,8 @@ use base64::{engine::general_purpose, Engine as _};
 use lofty::{prelude::*, probe::Probe};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use tauri::path::BaseDirectory;
 use sha1::{Digest, Sha1};
+use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use walkdir::WalkDir;
@@ -5155,7 +5155,11 @@ async fn ensure_local_netease_api_service(
         .spawn()
         .map_err(|error| format!("Could not wake the music source. {error}"))?;
 
-    let attempts = if managed_api_found || api_package_found { 32 } else { 70 };
+    let attempts = if managed_api_found || api_package_found {
+        32
+    } else {
+        70
+    };
     for _ in 0..attempts {
         if is_netease_api_reachable(&base_url).await {
             return Ok(NeteaseServiceStatusDto {
