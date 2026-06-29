@@ -1416,7 +1416,7 @@ async fn import_netease_cookie(
     if cookie.is_empty() {
         return Err("Cookie is required.".to_string());
     }
-    save_netease_token(&cookie)?;
+    save_netease_token(cookie)?;
     let config = resolve_netease_source_config(&state, None)?;
     fetch_netease_login_status(&config).await
 }
