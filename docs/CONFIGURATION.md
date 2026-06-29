@@ -20,15 +20,20 @@ Supported configuration:
 
 Some tracks may still be unavailable because of copyright, region, membership, account permission, or upstream API limitations.
 
-#### Runtime: Bundled Managed Runtime
+#### Runtime Requirement
 
-The Windows installer bundles a managed NetEase Cloud Music runtime (Node.js + `NeteaseCloudMusicApi`). Normal users do **not** need to install Node.js, npm, npx, or use any command line. Download the installer, install, and the NetEase source is ready.
+The Windows installer includes a bundled managed NetEase runtime (node.exe + `NeteaseCloudMusicApi`). Normal users do not need Node.js, npm, or command-line tools. Developers building from source need Node.js 20+.
 
 **Source development mode** requires Node.js 20+ and `npm install`. Run `npm run desktop` to start the dev server, which uses the project dependency from `node_modules`.
 
-**External service mode** is for advanced users who already run a `NeteaseCloudMusicApi` instance elsewhere. In Settings -> Music Sources, change the NetEase Base URL to point to that instance, for example `http://your-server:3000`. This is optional and not required for normal use.
+NetEase runtime modes:
+
+1. **Bundled mode, default**: the installer ships a managed NetEase runtime (node.exe + NeteaseCloudMusicApi) inside the app. Normal users do not need to install or configure anything. When running from source, Ome Music uses the project dependency from `node_modules`.
+2. **External mode**: in Settings -> Music Sources, change NetEase Base URL to an already-deployed `NeteaseCloudMusicApi` instance, for example `http://your-server:3000`. No local Node.js package is needed in this mode.
 
 Local music playback never requires Node.js.
+
+Uninstall preserves user data by default. Upgrade/reinstall does not delete your library, login, or settings.
 
 ### Bilibili
 

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { ChevronDown, Loader2, Music2, Search, Settings, X } from "lucide-react";
+import { ChevronDown, Loader2, Music2, RefreshCw, Search, Settings, X } from "lucide-react";
 import {
   BilibiliMusicProvider,
+  ensureNeteaseApiService,
   getBilibiliSourceConfig,
   getNeteaseSourceConfig,
   NetEaseMusicProvider,
+  waitForNeteaseServiceReady,
   type MusicSourceSong,
 } from "../features/musicSources/provider";
 import type { Track } from "../types/music";
@@ -50,6 +52,11 @@ export function TopSearch({
   const [playingBilibiliId, setPlayingBilibiliId] = useState<string | null>(null);
   const [neteaseVisible, setNeteaseVisible] = useState(SOURCE_PAGE_SIZE);
   const [bilibiliVisible, setBilibiliVisible] = useState(SOURCE_PAGE_SIZE);
+  // NetEase 服务启动状态门：扫码后立即搜索时服务可能尚未就绪，需要在前端友好等待并提示。
+  const [neteaseServiceStarting, setNeteaseServiceStarting] = useState(false);
+  const [neteaseServiceError, setNeteaseServiceError] = useState<string | null>(null);
+  // 触发重新尝试服务门：自增以重置搜索 effect 走一遍服务等待。
+  const [neteaseRetryToken, setNeteaseRetryToken] = useState(0);
 
   const localResults = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -87,9 +94,11 @@ export function TopSearch({
   useEffect(() => {
     const term = query.trim();
     setNeteaseMessage(null);
+    setNeteaseServiceError(null);
 
     if (!isOpen || !neteaseEnabled || term.length < 2) {
       setNeteaseResults([]);
+      setNeteaseServiceStarting(false);
       return;
     }
 
@@ -97,7 +106,34 @@ export function TopSearch({
     setNeteaseVisible(SOURCE_PAGE_SIZE);
 
     let cancelled = false;
-    const timer = window.setTimeout(() => {
+    const timer = window.setTimeout(async () => {
+      // 服务门：扫码后立即搜索时，NetEase 服务可能尚未就绪。
+      // 先检查 stage，未就绪则在前端就近等待并给出友好提示，避免静默失败。
+      try {
+        const status = await ensureNeteaseApiService();
+        if (cancelled) return;
+        if (status.stage !== "ready") {
+          setNeteaseServiceStarting(true);
+          const waited = await waitForNeteaseServiceReady();
+          if (cancelled) return;
+          setNeteaseServiceStarting(false);
+          if (waited.stage !== "ready") {
+            setNeteaseResults([]);
+            setNeteaseServiceError(
+              waited.message || "网易云源暂时不可用 / NetEase source is unavailable right now.",
+            );
+            return;
+          }
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setNeteaseServiceStarting(false);
+        setNeteaseResults([]);
+        setNeteaseServiceError(readNeteaseServiceError(error));
+        return;
+      }
+
+      if (cancelled) return;
       setSearchingSource(true);
       neteaseProvider
         .searchSongs(term)
@@ -120,7 +156,7 @@ export function TopSearch({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [isOpen, neteaseEnabled, query]);
+  }, [isOpen, neteaseEnabled, query, neteaseRetryToken]);
 
   useEffect(() => {
     const term = query.trim();
@@ -262,6 +298,30 @@ export function TopSearch({
                   label="网易云源未启用 / NetEase source is off"
                   onOpenSettings={onOpenSettings}
                 />
+              ) : neteaseServiceStarting ? (
+                <div className="flex items-center gap-2 px-2 py-3 text-xs font-semibold text-[#4a2108]/46">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  正在启动网易云音乐源 / Starting NetEase music source…
+                  <span className="ml-auto text-[10px] font-semibold text-[#4a2108]/32">
+                    第一次启动可能需要几秒 / 本地音乐可以立即播放
+                  </span>
+                </div>
+              ) : neteaseServiceError ? (
+                <div className="flex flex-col gap-2 px-2 py-3">
+                  <p className="text-xs font-semibold text-[#4a2108]/56">{neteaseServiceError}</p>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setNeteaseServiceError(null);
+                      setNeteaseRetryToken((value) => value + 1);
+                    }}
+                    className="app-transition inline-flex w-fit items-center gap-1.5 rounded-full bg-[#4a2108]/8 px-2.5 py-1 text-[11px] font-bold text-[#4a2108]/62 hover:bg-[#4a2108]/14 hover:text-[#4a2108]/82"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    重试 / Retry
+                  </button>
+                </div>
               ) : isSearchingSource ? (
                 <div className="flex items-center gap-2 px-2 py-3 text-xs font-semibold text-[#4a2108]/38">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -404,6 +464,14 @@ function readNeteaseSearchError(error: unknown): string {
     return "NetEase Cloud Music is not ready yet. Try again shortly or reconnect the music source in Settings.";
   }
   return message || "NetEase search failed, please try again.";
+}
+
+function readNeteaseServiceError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (!message) {
+    return "网易云源暂时无法启动 / Could not start the NetEase source.";
+  }
+  return message;
 }
 
 function SearchGroup({ title, children }: { title: string; children: React.ReactNode }) {

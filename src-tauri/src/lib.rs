@@ -3,8 +3,8 @@ use std::{
     fs,
     io::Read,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    sync::Mutex,
+    process::{Child, Command, Stdio},
+    sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -38,6 +38,7 @@ pub struct AppState {
     db: Mutex<Connection>,
     media_proxy: Mutex<HashMap<String, MediaProxyEntry>>,
     managed_netease_api: Option<ManagedNeteaseApiRuntime>,
+    pub managed_netease_child: Arc<Mutex<Option<Child>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -308,6 +309,7 @@ pub struct NeteaseServiceStatusDto {
     message: String,
     node_available: bool,
     api_package_found: bool,
+    stage: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1338,7 +1340,12 @@ async fn ensure_netease_api_service(
         let db = state.db.lock().map_err(|error| error.to_string())?;
         load_netease_source_config(&db)?.base_url
     };
-    ensure_local_netease_api_service(&base_url, state.managed_netease_api.clone()).await
+    ensure_local_netease_api_service(
+        &base_url,
+        state.managed_netease_api.clone(),
+        &state.managed_netease_child,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -3367,6 +3374,7 @@ struct ResolvedNeteaseSourceConfig {
     base_url: String,
     token: Option<String>,
     managed_api: Option<ManagedNeteaseApiRuntime>,
+    managed_netease_child: Arc<Mutex<Option<Child>>>,
 }
 
 fn load_netease_source_config(db: &Connection) -> Result<NeteaseSourceConfigDto, String> {
@@ -3438,6 +3446,7 @@ fn resolve_netease_source_config(
     override_payload: Option<SaveNeteaseSourceConfigPayload>,
 ) -> Result<ResolvedNeteaseSourceConfig, String> {
     let managed_api = state.managed_netease_api.clone();
+    let managed_netease_child = state.managed_netease_child.clone();
     if let Some(payload) = override_payload {
         return Ok(ResolvedNeteaseSourceConfig {
             enabled: payload.enabled,
@@ -3450,6 +3459,7 @@ fn resolve_netease_source_config(
                 .map(ToString::to_string)
                 .or_else(read_netease_token),
             managed_api,
+            managed_netease_child,
         });
     }
 
@@ -3467,6 +3477,7 @@ fn resolve_netease_source_config(
         base_url: config.base_url,
         token: read_netease_token(),
         managed_api,
+        managed_netease_child,
     })
 }
 
@@ -5152,6 +5163,7 @@ fn resolve_managed_netease_api_runtime(app: &tauri::App) -> Option<ManagedNeteas
 async fn ensure_local_netease_api_service(
     base_url: &str,
     managed_api: Option<ManagedNeteaseApiRuntime>,
+    child_handle: &Mutex<Option<Child>>,
 ) -> Result<NeteaseServiceStatusDto, String> {
     let base_url = normalize_netease_base_url(base_url);
     if !is_local_netease_base_url(&base_url) {
@@ -5162,6 +5174,7 @@ async fn ensure_local_netease_api_service(
             message: "External music source selected.".to_string(),
             node_available: false,
             api_package_found: false,
+            stage: "not_started".to_string(),
         });
     }
 
@@ -5193,6 +5206,7 @@ async fn ensure_local_netease_api_service(
             message: "Music source is awake.".to_string(),
             node_available,
             api_package_found: api_package_found || managed_api_found || npx_available,
+            stage: "ready".to_string(),
         });
     }
 
@@ -5204,6 +5218,7 @@ async fn ensure_local_netease_api_service(
             message: "The built-in NetEase runtime was not found. Please reinstall Ome Music, or set an external music source in Settings.".to_string(),
             node_available: false,
             api_package_found,
+            stage: "failed".to_string(),
         });
     }
 
@@ -5215,6 +5230,7 @@ async fn ensure_local_netease_api_service(
             message: "The NetEase music source is not ready. Please reinstall Ome Music, or set an external music source in Settings.".to_string(),
             node_available: true,
             api_package_found: false,
+            stage: "failed".to_string(),
         });
     }
 
@@ -5245,9 +5261,29 @@ async fn ensure_local_netease_api_service(
 
     suppress_command_window(&mut command);
 
-    command
-        .spawn()
-        .map_err(|error| format!("Could not wake the music source. {error}"))?;
+    // Reuse a still-running managed child so repeated calls do not orphan or
+    // duplicate the bundled node.exe process. Clear any handle whose child has
+    // already exited so a fresh process can be spawned.
+    let mut existing_child_alive = false;
+    if let Ok(mut guard) = child_handle.lock() {
+        let needs_clear = match guard.as_mut() {
+            Some(child) => matches!(child.try_wait(), Ok(Some(_)) | Err(_)),
+            None => false,
+        };
+        if needs_clear {
+            *guard = None;
+        }
+        existing_child_alive = guard.is_some();
+    }
+
+    if !existing_child_alive {
+        let child = command
+            .spawn()
+            .map_err(|error| format!("Could not wake the music source. {error}"))?;
+        if let Ok(mut guard) = child_handle.lock() {
+            *guard = Some(child);
+        }
+    }
 
     let attempts = if managed_api_found || api_package_found {
         32
@@ -5269,6 +5305,7 @@ async fn ensure_local_netease_api_service(
                 },
                 node_available,
                 api_package_found: managed_api_found || api_package_found || npx_available,
+                stage: "ready".to_string(),
             });
         }
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -5288,6 +5325,7 @@ async fn ensure_local_netease_api_service(
         },
         node_available,
         api_package_found: managed_api_found || api_package_found || npx_available,
+        stage: "waiting_health".to_string(),
     })
 }
 
@@ -5440,8 +5478,12 @@ async fn request_netease_json_response(
     // Surface the preflight reason here so later request errors do not hide a missing
     // bundled runtime, a blocked port, or an unavailable external source.
     if is_local_netease_base_url(&config.base_url) {
-        let service_status =
-            ensure_local_netease_api_service(&config.base_url, config.managed_api.clone()).await?;
+        let service_status = ensure_local_netease_api_service(
+            &config.base_url,
+            config.managed_api.clone(),
+            &config.managed_netease_child,
+        )
+        .await?;
         if !service_status.running {
             return Err(format!(
                 "NetEase Cloud Music source is not ready. {}",
@@ -7997,8 +8039,21 @@ fn run_inner() -> Result<(), Box<dyn std::error::Error>> {
                 db: Mutex::new(db),
                 media_proxy: Mutex::new(HashMap::new()),
                 managed_netease_api,
+                managed_netease_child: Arc::new(Mutex::new(None)),
             });
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                // Kill the managed node.exe runtime so it does not orphan when the
+                // app exits and block the NSIS installer from overwriting it.
+                let state = window.app_handle().state::<AppState>();
+                if let Ok(mut guard) = state.managed_netease_child.lock() {
+                    if let Some(mut child) = guard.take() {
+                        let _ = child.kill();
+                    }
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             get_app_version,

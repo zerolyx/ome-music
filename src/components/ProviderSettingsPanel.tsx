@@ -43,6 +43,7 @@ import {
 import {
   BilibiliAccountSessionProvider,
   BilibiliMusicProvider,
+  ensureNeteaseApiService,
   getBilibiliSourceConfig,
   getNeteaseSourceConfig,
   NetEaseAccountSessionProvider,
@@ -56,6 +57,8 @@ import {
   type BilibiliSourceConfig,
   type NetEaseLoginStatus,
   type NetEaseQrLogin,
+  type NetEaseServiceStage,
+  type NetEaseServiceStatus,
   type NetEaseVipStatus,
   type MusicSourceConfig,
   type NetEaseUserPlaylist,
@@ -200,6 +203,12 @@ export function ProviderSettingsPanel({
   const [neteaseLoginStatus, setNeteaseLoginStatus] = useState<NetEaseLoginStatus | null>(null);
   const [neteaseVipStatus, setNeteaseVipStatus] = useState<NetEaseVipStatus | null>(null);
   const [neteaseQr, setNeteaseQr] = useState<NetEaseQrLogin | null>(null);
+  // NetEase 本地服务启动状态：扫码后立即搜索时，前端可显示 stage 并在失败后重试。
+  const [neteaseServiceStatus, setNeteaseServiceStatus] = useState<NetEaseServiceStatus | null>(
+    null,
+  );
+  const [isRefreshingNeteaseService, setRefreshingNeteaseService] = useState(false);
+  const [neteaseServiceRetryToken, setNeteaseServiceRetryToken] = useState(0);
   // QR 会话状态与起始时间：用于在弹窗内就近显示动态状态、过期/超时后保留弹窗供用户重新生成。
   const [neteaseQrStatus, setNeteaseQrStatus] = useState<QrSessionStatus>("waiting");
   const neteaseQrStartedAtRef = useRef<number>(0);
@@ -467,6 +476,48 @@ export function ProviderSettingsPanel({
     const timer = window.setInterval(() => setSmsCooldown((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearInterval(timer);
   }, [smsCooldown]);
+
+  // NetEase 本地服务状态轮询：仅在来源面板且网易云启用时进行。
+  // 到达 ready / failed 终态后停止轮询，避免后台空跑；用户点重试会通过 retryToken 触发重启。
+  useEffect(() => {
+    if (!open || activeSection !== "sources" || !neteaseEnabled) return;
+    let cancelled = false;
+    let intervalId: number | null = null;
+    const stopPolling = () => {
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+    const poll = async () => {
+      try {
+        const status = await ensureNeteaseApiService();
+        if (cancelled) return;
+        setNeteaseServiceStatus(status);
+        if (status.stage === "ready" || status.stage === "failed") {
+          stopPolling();
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setNeteaseServiceStatus({
+          running: false,
+          started: false,
+          baseUrl: "",
+          message: readError(error),
+          nodeAvailable: false,
+          apiPackageFound: false,
+          stage: "failed",
+        });
+        stopPolling();
+      }
+    };
+    void poll();
+    intervalId = window.setInterval(poll, 2200);
+    return () => {
+      cancelled = true;
+      stopPolling();
+    };
+  }, [open, activeSection, neteaseEnabled, neteaseServiceRetryToken]);
 
   useEffect(() => {
     if (!open || activeSection !== "storage") return;
@@ -1873,6 +1924,31 @@ export function ProviderSettingsPanel({
                         </div>
                       </div>
 
+                      <NetEaseServiceStatusCard
+                        status={neteaseServiceStatus}
+                        isRefreshing={isRefreshingNeteaseService}
+                        onRetry={() => {
+                          setRefreshingNeteaseService(true);
+                          // 通过 retryToken 重启轮询；ensureNeteaseApiService 会由 effect 立即调用一次。
+                          setNeteaseServiceRetryToken((value) => value + 1);
+                          // 异步再拉取一次以同步刷新态，与 effect 内的初次 poll 等价但确保 isRefreshing 立即被清掉。
+                          void ensureNeteaseApiService()
+                            .then((status) => setNeteaseServiceStatus(status))
+                            .catch((error) =>
+                              setNeteaseServiceStatus({
+                                running: false,
+                                started: false,
+                                baseUrl: "",
+                                message: readError(error),
+                                nodeAvailable: false,
+                                apiPackageFound: false,
+                                stage: "failed",
+                              }),
+                            )
+                            .finally(() => setRefreshingNeteaseService(false));
+                        }}
+                      />
+
                       <BilibiliSourceSettings
                         config={bilibiliConfig}
                         enabled={bilibiliEnabled}
@@ -2946,6 +3022,86 @@ function StatusLine({ label, value }: { label: string; value: string }) {
       </p>
     </div>
   );
+}
+
+// NetEase 本地服务状态卡：在「音乐来源」面板中显示 stage 与轻量进度指示。
+// 终态用单色小点区分，进行中用旋转 loader；失败时显示 message 与「重试 / Retry」。
+function NetEaseServiceStatusCard({
+  status,
+  isRefreshing,
+  onRetry,
+}: {
+  status: NetEaseServiceStatus | null;
+  isRefreshing: boolean;
+  onRetry: () => void;
+}) {
+  const stage: NetEaseServiceStage = status?.stage ?? "not_started";
+  const label = neteaseServiceStageLabel(stage);
+  const isPending =
+    stage === "checking_runtime" ||
+    stage === "checking_api" ||
+    stage === "starting_service" ||
+    stage === "waiting_health";
+  const isReady = stage === "ready";
+  const isFailed = stage === "failed";
+
+  return (
+    <div className="rounded-[20px] bg-white/[0.035] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {isPending ? (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-white/52" />
+          ) : (
+            <span
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                isReady ? "bg-emerald-300/80" : isFailed ? "bg-rose-300/80" : "bg-white/30"
+              }`}
+            />
+          )}
+          <p className="truncate text-xs font-semibold text-white/64">{label}</p>
+        </div>
+        {isFailed && (
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={isRefreshing}
+            className="app-transition inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-white/[0.08] px-3 text-[11px] font-semibold text-white/72 hover:bg-white/[0.13] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {isRefreshing ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3 w-3" />
+            )}
+            重试 / Retry
+          </button>
+        )}
+      </div>
+      {isFailed && status?.message ? (
+        <p className="mt-2 text-[11px] leading-5 text-white/38">{status.message}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function neteaseServiceStageLabel(stage: NetEaseServiceStage): string {
+  switch (stage) {
+    case "not_started":
+      return "未启动 / Not started";
+    case "checking_runtime":
+      return "正在检查运行环境 / Checking runtime...";
+    case "checking_api":
+      return "正在检查 API / Checking API files...";
+    case "starting_service":
+      return "正在启动网易云服务 / Starting NetEase service...";
+    case "waiting_health":
+      return "正在等待服务响应 / Waiting for service...";
+    case "ready":
+      return "网易云音乐源已就绪 / NetEase source ready";
+    case "failed":
+      return "启动失败 / Failed to start";
+    default:
+      return "未启动 / Not started";
+  }
 }
 
 function StorageRow({

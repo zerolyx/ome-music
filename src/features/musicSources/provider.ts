@@ -85,6 +85,15 @@ export interface BilibiliSourceConfig extends MusicSourceConfig {
   searchScope: "music" | "vocaloid" | "live" | "cover" | "mv" | "all";
 }
 
+export type NetEaseServiceStage =
+  | "not_started"
+  | "checking_runtime"
+  | "checking_api"
+  | "starting_service"
+  | "waiting_health"
+  | "ready"
+  | "failed";
+
 export interface NetEaseServiceStatus {
   running: boolean;
   started: boolean;
@@ -92,6 +101,7 @@ export interface NetEaseServiceStatus {
   message: string;
   nodeAvailable: boolean;
   apiPackageFound: boolean;
+  stage: NetEaseServiceStage;
 }
 
 export interface SaveMusicSourceConfigPayload {
@@ -362,10 +372,21 @@ export async function ensureNeteaseApiService(): Promise<NetEaseServiceStatus> {
       message: "Music source is awake.",
       nodeAvailable: true,
       apiPackageFound: true,
+      stage: "ready",
     };
   }
 
   return invoke<NetEaseServiceStatus>("ensure_netease_api_service");
+}
+
+export async function waitForNeteaseServiceReady(maxWaitMs = 15000): Promise<NetEaseServiceStatus> {
+  const start = Date.now();
+  let status = await ensureNeteaseApiService();
+  while (status.stage !== "ready" && status.stage !== "failed" && Date.now() - start < maxWaitMs) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    status = await ensureNeteaseApiService();
+  }
+  return status;
 }
 
 export async function openExternalUrl(url: string): Promise<void> {

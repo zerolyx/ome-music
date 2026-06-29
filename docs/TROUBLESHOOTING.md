@@ -14,13 +14,17 @@ The Windows installer bundles a managed NetEase runtime. Normal users do not nee
 
 If the NetEase source is unavailable:
 
-1. Open Settings -> Music Sources and check the source status.
-2. If the managed runtime failed to start, restart Ome Music and try again.
-3. For advanced setups, you can point the NetEase Base URL to an external `NeteaseCloudMusicApi` instance you already run.
+- Bundled mode, default: the Windows installer ships a managed NetEase runtime (`node.exe` + `NeteaseCloudMusicApi`) inside the app. Normal users do not need to install Node.js or configure an API URL. When running from source, Ome Music uses the project dependency from `node_modules`.
+- External mode: set the NetEase Base URL in Settings to a deployed `NeteaseCloudMusicApi` endpoint.
+- If the managed runtime failed to start, restart Ome Music and try again. The Settings -> Music Sources panel shows the staged startup status (checking runtime → checking API → starting service → waiting for health → ready).
 
 Source development requires Node.js 20+ and `npm install`. See [Build Guide](BUILD.md).
 
 If the first start takes a moment, wait for the source status to become available and try the search again.
+
+### Installer Cannot Overwrite `node.exe`
+
+If the installer reports "Error opening file for writing ... node.exe", close any running Ome Music and retry. The installer automatically stops old processes before upgrading, but if a process is stuck, use Task Manager to end `ome-music-player` and `node.exe` under the Ome Music install folder, then retry.
 
 If QR login appears successful but member tracks still behave like previews:
 
@@ -30,6 +34,10 @@ If QR login appears successful but member tracks still behave like previews:
 4. Try a track that your account can play in the official NetEase Cloud Music app.
 
 Ome Music only uses your own session. It does not bypass membership, copyright, region, or platform restrictions.
+
+## Uninstall and Data Preservation
+
+Uninstalling does not delete your data. Your library, login, and settings survive uninstall and upgrade.
 
 ## NetEase or Bilibili Track Cannot Play
 

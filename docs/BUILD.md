@@ -36,9 +36,15 @@ npm run release:windows
 Expected outputs:
 
 - `src-tauri/target/release/ome-music-player.exe`
-- `src-tauri/target/release/bundle/nsis/Ome.Music_0.3.4_x64-setup.exe`
+- `src-tauri/target/release/bundle/nsis/Ome.Music_0.3.5_x64-setup.exe`
 
 The release executable and installer should not require `npm`, `cargo`, Vite, or a development server on the user's machine.
+
+## Installer Contents and User Data
+
+The Windows installer bundles a complete, ready-to-run environment. Normal users do not need to compile, run npm install, or install Node.js. The managed NetEase runtime (node.exe + NeteaseCloudMusicApi) is packaged at build time and shipped inside the installer.
+
+Uninstalling Ome Music preserves user data (library, login sessions, settings, caches) by default. To fully clean up, users can manually delete `%APPDATA%\com.ome.music` and `%LOCALAPPDATA%\com.ome.music`.
 
 ## GitHub Release Build
 
@@ -47,8 +53,8 @@ The `Release Windows Build` workflow runs when a tag matching `v*` is pushed.
 Example:
 
 ```bash
-git tag v0.3.4
-git push origin v0.3.4
+git tag v0.3.5
+git push origin v0.3.5
 ```
 
 The workflow should create a GitHub Release and upload the Windows NSIS installer.
