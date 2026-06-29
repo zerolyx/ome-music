@@ -987,16 +987,11 @@ fn scan_music_directory(
     drop(db);
 
     let requested = Path::new(&path);
-    let music_dir = app
-        .path()
-        .audio_dir()
-        .map_err(|error| error.to_string())?;
+    let music_dir = app.path().audio_dir().map_err(|error| error.to_string())?;
     // A path is authorized only if it is equal to or nested under an
     // authorized directory, or under the default Music directory. We never
     // authorize ancestors of authorized directories.
-    let is_authorized = authorized
-        .iter()
-        .any(|dir| requested.starts_with(dir))
+    let is_authorized = authorized.iter().any(|dir| requested.starts_with(dir))
         || requested.starts_with(&music_dir);
 
     if !is_authorized {
