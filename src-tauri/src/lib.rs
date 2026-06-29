@@ -5901,7 +5901,8 @@ async fn fetch_netease_login_status(
                     });
                 }
 
-                last_error = json_text(value.get("message")).or_else(|| json_text(value.get("msg")));
+                last_error =
+                    json_text(value.get("message")).or_else(|| json_text(value.get("msg")));
             }
             Err(error) => {
                 last_error = Some(error);
@@ -6137,8 +6138,7 @@ fn classify_netease_unavailable_reason(
     let mentions_expired = message.contains("expired")
         || message.contains("session")
         || message.contains("\u{5931}\u{6548}");
-    let mentions_copyright =
-        message.contains("copyright") || message.contains("\u{7248}\u{6743}");
+    let mentions_copyright = message.contains("copyright") || message.contains("\u{7248}\u{6743}");
     let mentions_region = message.contains("region") || message.contains("\u{5730}\u{533a}");
     let mentions_removed = message.contains("removed") || message.contains("\u{4e0b}\u{67b6}");
 
