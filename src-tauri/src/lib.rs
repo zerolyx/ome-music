@@ -1384,14 +1384,12 @@ async fn check_netease_qr_login(
     .to_string();
 
     let login_status = if code == 803 {
-        let cookie = value
-            .get("cookie")
-            .and_then(|cookie| cookie.as_str())
-            .or(response.set_cookie.as_deref())
-            .map(str::trim)
-            .filter(|cookie| !cookie.is_empty());
+        let cookie = merge_cookie_headers(
+            value.get("cookie").and_then(|cookie| cookie.as_str()),
+            response.set_cookie.as_deref(),
+        );
         if let Some(cookie) = cookie {
-            save_netease_token(cookie)?;
+            save_netease_token(&cookie)?;
         } else {
             return Err("扫码登录成功但未能获取会话凭证，请重试。 / Sign-in confirmed but the session cookie was missing.".to_string());
         }
@@ -1418,7 +1416,7 @@ async fn import_netease_cookie(
     if cookie.is_empty() {
         return Err("Cookie is required.".to_string());
     }
-    save_netease_token(cookie)?;
+    save_netease_token(&cookie)?;
     let config = resolve_netease_source_config(&state, None)?;
     fetch_netease_login_status(&config).await
 }
@@ -3762,6 +3760,47 @@ fn normalize_cookie_header(cookie: &str) -> String {
         .join("; ")
 }
 
+fn merge_cookie_headers(primary: Option<&str>, secondary: Option<&str>) -> Option<String> {
+    let mut order: Vec<String> = Vec::new();
+    let mut values: HashMap<String, (String, String)> = HashMap::new();
+
+    for cookie in [primary, secondary].into_iter().flatten() {
+        let normalized = normalize_cookie_header(cookie);
+        for part in normalized.split(';') {
+            let trimmed = part.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let Some((name, value)) = trimmed.split_once('=') else {
+                continue;
+            };
+            let name = name.trim();
+            let value = value.trim();
+            if name.is_empty() || value.is_empty() {
+                continue;
+            }
+            let key = name.to_ascii_lowercase();
+            if !values.contains_key(&key) {
+                order.push(key.clone());
+            }
+            values.insert(key, (name.to_string(), value.to_string()));
+        }
+    }
+
+    let merged = order
+        .into_iter()
+        .filter_map(|key| values.get(&key).cloned())
+        .map(|(name, value)| format!("{name}={value}"))
+        .collect::<Vec<_>>()
+        .join("; ");
+
+    if merged.is_empty() {
+        None
+    } else {
+        Some(merged)
+    }
+}
+
 fn bilibili_cookie_from_login_url(url: &str) -> Option<String> {
     const COOKIE_NAMES: &[&str] = &[
         "SESSDATA",
@@ -5081,11 +5120,25 @@ async fn ensure_local_netease_api_service(
         });
     }
 
-    let node_available = is_node_available();
-    let api_entry = find_netease_api_entry();
-    let api_package_found = api_entry.is_some();
     let managed_api_found = managed_api.is_some();
+
+    #[cfg(debug_assertions)]
+    let api_entry = find_netease_api_entry();
+    #[cfg(not(debug_assertions))]
+    let api_entry: Option<PathBuf> = None;
+
+    #[cfg(debug_assertions)]
+    let system_node_available = is_node_available();
+    #[cfg(not(debug_assertions))]
+    let system_node_available = false;
+
+    #[cfg(debug_assertions)]
     let npx_available = is_npx_available();
+    #[cfg(not(debug_assertions))]
+    let npx_available = false;
+
+    let api_package_found = api_entry.is_some();
+    let node_available = managed_api_found || system_node_available;
 
     if is_netease_api_reachable(&base_url).await {
         return Ok(NeteaseServiceStatusDto {
@@ -5098,7 +5151,7 @@ async fn ensure_local_netease_api_service(
         });
     }
 
-    if !node_available && !managed_api_found {
+    if !node_available {
         return Ok(NeteaseServiceStatusDto {
             running: false,
             started: false,
@@ -5145,11 +5198,7 @@ async fn ensure_local_netease_api_service(
         .stdout(Stdio::null())
         .stderr(Stdio::null());
 
-    #[cfg(target_os = "windows")]
-    {
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
+    suppress_command_window(&mut command);
 
     command
         .spawn()
@@ -5197,9 +5246,12 @@ async fn ensure_local_netease_api_service(
     })
 }
 
+#[cfg(debug_assertions)]
 fn is_node_available() -> bool {
-    Command::new("node")
-        .arg("--version")
+    let mut command = Command::new("node");
+    command.arg("--version");
+    suppress_command_window(&mut command);
+    command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -5207,9 +5259,12 @@ fn is_node_available() -> bool {
         .is_ok_and(|output| output.status.success())
 }
 
+#[cfg(debug_assertions)]
 fn is_npx_available() -> bool {
-    Command::new(npx_command())
-        .arg("--version")
+    let mut command = Command::new(npx_command());
+    command.arg("--version");
+    suppress_command_window(&mut command);
+    command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -5263,6 +5318,16 @@ fn netease_base_url_port(base_url: &str) -> Option<u16> {
     port.parse::<u16>().ok()
 }
 
+#[cfg(target_os = "windows")]
+fn suppress_command_window(command: &mut Command) {
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn suppress_command_window(_command: &mut Command) {}
+
+#[cfg(debug_assertions)]
 fn find_netease_api_entry() -> Option<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(current_dir) = std::env::current_dir() {
@@ -5407,16 +5472,14 @@ async fn complete_netease_session_from_response(
         return Err(friendly_netease_login_error(&value));
     }
 
-    let cookie = value
-        .get("cookie")
-        .and_then(|cookie| cookie.as_str())
-        .or(response.set_cookie.as_deref())
-        .map(str::trim)
-        .filter(|cookie| !cookie.is_empty())
+    let cookie = merge_cookie_headers(
+        value.get("cookie").and_then(|cookie| cookie.as_str()),
+        response.set_cookie.as_deref(),
+    )
         .ok_or_else(|| {
             "登录成功但未能获取会话凭证，请尝试扫码登录。 / Sign-in succeeded but no session credential was returned. Try scan login.".to_string()
         })?;
-    save_netease_token(cookie)?;
+    save_netease_token(&cookie)?;
 
     let refreshed_config = resolve_netease_source_config(state, None)?;
     fetch_netease_login_status(&refreshed_config).await
@@ -5636,14 +5699,15 @@ async fn fetch_netease_playable_url_with_level(
                 "standard"
             }
         });
+    let has_token = config.token.is_some();
     let login_status = fetch_netease_login_status(config).await.ok();
     let is_logged_in = login_status
         .as_ref()
-        .is_some_and(|status| status.logged_in && !status.expired);
+        .map(|status| status.logged_in && !status.expired)
+        .unwrap_or(has_token);
     let user_profile = login_status;
     let vip_status = fetch_netease_vip_status(config).await.ok();
     let is_member = vip_status.as_ref().is_some_and(|status| status.is_member);
-    let has_token = config.token.is_some();
     let mut levels = if has_token {
         ordered_netease_levels(requested_level)
     } else {
@@ -5780,7 +5844,7 @@ async fn fetch_netease_playable_url_with_level(
 async fn fetch_netease_login_status(
     config: &ResolvedNeteaseSourceConfig,
 ) -> Result<NeteaseLoginStatusDto, String> {
-    if config.token.is_none() {
+    let Some(initial_token) = config.token.clone() else {
         return Ok(NeteaseLoginStatusDto {
             logged_in: false,
             expired: false,
@@ -5789,40 +5853,71 @@ async fn fetch_netease_login_status(
             avatar_url: None,
             message: "Sign in to your music source to try again.".to_string(),
         });
+    };
+
+    let mut current_config = config.clone();
+    let mut current_token = initial_token;
+    let mut last_error: Option<String> = None;
+
+    for endpoint in ["/login/status", "/user/account"] {
+        match request_netease_json_response(&current_config, endpoint, &[]).await {
+            Ok(response) => {
+                if let Some(merged_cookie) =
+                    merge_cookie_headers(Some(&current_token), response.set_cookie.as_deref())
+                {
+                    if merged_cookie != current_token {
+                        save_netease_token(&merged_cookie)?;
+                        current_token = merged_cookie;
+                        current_config.token = Some(current_token.clone());
+                    }
+                }
+
+                let value = response.value;
+                let data = value.get("data").unwrap_or(&value);
+                let profile = data.get("profile").or_else(|| value.get("profile"));
+                let account = data.get("account").or_else(|| value.get("account"));
+                let nickname = profile
+                    .and_then(|profile| profile.get("nickname"))
+                    .and_then(|value| value.as_str())
+                    .map(ToString::to_string);
+                let user_id_value = account
+                    .and_then(|account| account.get("id"))
+                    .or_else(|| profile.and_then(|profile| profile.get("userId")));
+                let user_id = Some(json_id(user_id_value)).filter(|value| !value.is_empty());
+                let avatar_url = profile
+                    .and_then(|profile| profile.get("avatarUrl"))
+                    .and_then(|value| value.as_str())
+                    .map(ToString::to_string);
+                let logged_in = nickname.is_some() || user_id.is_some();
+
+                if logged_in {
+                    return Ok(NeteaseLoginStatusDto {
+                        logged_in: true,
+                        expired: false,
+                        nickname,
+                        user_id,
+                        avatar_url,
+                        message: "Connected.".to_string(),
+                    });
+                }
+
+                last_error = json_text(value.get("message")).or_else(|| json_text(value.get("msg")));
+            }
+            Err(error) => {
+                last_error = Some(error);
+            }
+        }
     }
 
-    let value = match request_netease_json(config, "/login/status", &[]).await {
-        Ok(value) => value,
-        Err(_) => request_netease_json(config, "/user/account", &[]).await?,
-    };
-    let data = value.get("data").unwrap_or(&value);
-    let profile = data.get("profile").or_else(|| value.get("profile"));
-    let account = data.get("account").or_else(|| value.get("account"));
-    let nickname = profile
-        .and_then(|profile| profile.get("nickname"))
-        .and_then(|value| value.as_str())
-        .map(ToString::to_string);
-    let user_id_value = account
-        .and_then(|account| account.get("id"))
-        .or_else(|| profile.and_then(|profile| profile.get("userId")));
-    let user_id = Some(json_id(user_id_value)).filter(|value| !value.is_empty());
-    let avatar_url = profile
-        .and_then(|profile| profile.get("avatarUrl"))
-        .and_then(|value| value.as_str())
-        .map(ToString::to_string);
-    let logged_in = nickname.is_some() || user_id.is_some();
-
     Ok(NeteaseLoginStatusDto {
-        logged_in,
-        expired: !logged_in,
-        nickname,
-        user_id,
-        avatar_url,
-        message: if logged_in {
-            "Connected.".to_string()
-        } else {
+        logged_in: false,
+        expired: true,
+        nickname: None,
+        user_id: None,
+        avatar_url: None,
+        message: last_error.unwrap_or_else(|| {
             "Your session has expired. Please reconnect NetEase Cloud Music.".to_string()
-        },
+        }),
     })
 }
 
@@ -6035,6 +6130,36 @@ fn classify_netease_unavailable_reason(
         .get("fee")
         .and_then(|value| value.as_i64())
         .unwrap_or(0);
+    let mentions_login = message.contains("login")
+        || message.contains("cookie")
+        || message.contains("\u{767b}\u{5f55}");
+    let mentions_vip = message.contains("vip") || message.contains("\u{4f1a}\u{5458}");
+    let mentions_expired = message.contains("expired")
+        || message.contains("session")
+        || message.contains("\u{5931}\u{6548}");
+    let mentions_copyright =
+        message.contains("copyright") || message.contains("\u{7248}\u{6743}");
+    let mentions_region = message.contains("region") || message.contains("\u{5730}\u{533a}");
+    let mentions_removed = message.contains("removed") || message.contains("\u{4e0b}\u{67b6}");
+
+    if config.token.is_none() && (mentions_vip || mentions_login || fee == 1 || fee == 4) {
+        return "not_logged_in".to_string();
+    }
+    if mentions_expired || (config.token.is_some() && mentions_login) || code == 301 {
+        return "cookie_expired".to_string();
+    }
+    if mentions_vip || fee == 1 || fee == 4 {
+        return "vip_required".to_string();
+    }
+    if mentions_copyright || code == -110 {
+        return "no_copyright".to_string();
+    }
+    if mentions_region || code == 403 {
+        return "region_restricted".to_string();
+    }
+    if mentions_removed || code == 404 {
+        return "song_removed".to_string();
+    }
 
     if config.token.is_none()
         && (message.contains("vip")
