@@ -5980,8 +5980,9 @@ async fn fetch_netease_playable_url_with_level(
                 // audio element can load it, and so we can attach the right
                 // headers/Referer for the NetEase CDN.
                 let proxied_url = match proxy_state {
-                    Some(state) => register_media_proxy(state, &url, "audio")
-                        .unwrap_or_else(|_| url.clone()),
+                    Some(state) => {
+                        register_media_proxy(state, &url, "audio").unwrap_or_else(|_| url.clone())
+                    }
                     None => url.clone(),
                 };
                 final_debug.attempts = attempts;
