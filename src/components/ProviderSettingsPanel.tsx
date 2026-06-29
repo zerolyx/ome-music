@@ -81,6 +81,7 @@ import {
   type StorageReport,
 } from "../features/storage/storageApi";
 
+import { ArtworkImage } from "./ArtworkImage";
 import type { Track } from "../types/music";
 
 interface ProviderSettingsPanelProps {
@@ -153,6 +154,181 @@ type QrSessionStatus = "waiting" | "scanned" | "expired" | "timeout";
 // 网易云二维码官方有效期约 180s；Bilibili 二维码约 200s。
 const NETEASE_QR_MAX_LIFE_MS = 180_000;
 const BILIBILI_QR_MAX_LIFE_MS = 200_000;
+
+// Playlist Shelf persistence — records which NetEase playlists have been
+// imported into the local library and when, so the shelf can surface
+// "Imported" state and a "last synced" stamp across sessions without a
+// re-fetch. Best-effort: localStorage failures are swallowed so a quota
+// error never blocks the import itself.
+const PLAYLIST_SHELF_KEY = "ome.playlistShelf.imported";
+const LIKED_SYNC_KEY = "ome.playlistShelf.likedSyncedAt";
+
+interface ImportedPlaylistRecord {
+  id: string;
+  name: string;
+  trackCount: number;
+  importedAt: string; // ISO timestamp
+}
+
+// Per-playlist import progress. Replaces the single boolean
+// `isImportingPlaylist` for the shelf cards so each row reports its own
+// state (reading / imported N / failed) instead of a global lock.
+type PlaylistImportState =
+  | { status: "reading" }
+  | { status: "imported"; trackCount: number; at: string }
+  | { status: "failed"; reason: string; at: string };
+
+function loadImportedPlaylistRecords(): Record<string, ImportedPlaylistRecord> {
+  try {
+    const raw = window.localStorage.getItem(PLAYLIST_SHELF_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, ImportedPlaylistRecord>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveImportedPlaylistRecords(records: Record<string, ImportedPlaylistRecord>) {
+  try {
+    window.localStorage.setItem(PLAYLIST_SHELF_KEY, JSON.stringify(records));
+  } catch {
+    // ignore quota / serialization errors — shelf stamps are best-effort
+  }
+}
+
+function loadLikedSyncedAt(): string | null {
+  try {
+    return window.localStorage.getItem(LIKED_SYNC_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveLikedSyncedAt(iso: string) {
+  try {
+    window.localStorage.setItem(LIKED_SYNC_KEY, iso);
+  } catch {
+    // ignore
+  }
+}
+
+// Heuristic: NetEase returns the user's liked-songs playlist ("我喜欢的音乐")
+// as the first owned (non-subscribed) playlist in /user/playlist. We surface
+// it distinctly in the shelf so the user sees their Liked collection as a
+// first-class card. When login info is available we additionally confirm the
+// creator matches the logged-in user; otherwise we trust the NetEase ordering
+// convention.
+function isLikedSongsPlaylist(
+  playlist: NetEaseUserPlaylist,
+  index: number,
+  loginStatus: NetEaseLoginStatus | null,
+): boolean {
+  if (playlist.subscribed) return false;
+  if (index !== 0) return false;
+  const owner = loginStatus?.nickname || loginStatus?.userId;
+  if (!owner) return true;
+  return playlist.creatorName === owner;
+}
+
+// Soft relative-time label for the shelf stamps ("just now", "3m ago", ...).
+function formatRelativeTime(iso: string | null): string | null {
+  if (!iso) return null;
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return null;
+  const diffMs = Date.now() - then;
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 45) return "just now";
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  return `${Math.floor(sec / 86400)}d ago`;
+}
+
+// A single shelf card. The shelf is a card grid rather than a backend
+// table: cover, name, count, a quiet sync-status line that reports the
+// live per-playlist progress (reading / imported N / failed), and a
+// single primary action that flips between Import / Re-sync. The Liked
+// collection gets a soft ring + badge so it reads as first-class.
+function PlaylistShelfCard({
+  playlist,
+  liked,
+  state,
+  imported,
+  disabled,
+  onImport,
+}: {
+  playlist: NetEaseUserPlaylist;
+  liked: boolean;
+  state?: PlaylistImportState;
+  imported?: ImportedPlaylistRecord;
+  disabled: boolean;
+  onImport: () => void;
+}) {
+  const isReading = state?.status === "reading";
+  const isFailed = state?.status === "failed";
+  const isImported = state?.status === "imported" || (!state && !!imported);
+  const liveImported = state?.status === "imported" ? state : null;
+  const importedCount = liveImported?.trackCount ?? imported?.trackCount ?? 0;
+  const importedLabel = formatRelativeTime(liveImported?.at ?? imported?.importedAt ?? null);
+  const failedReason = state?.status === "failed" ? state.reason : "";
+
+  return (
+    <div
+      className={clsx(
+        "flex flex-col gap-2 rounded-[18px] bg-white/[0.04] p-3",
+        liked && "ring-1 ring-white/12",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <ArtworkImage
+          src={playlist.coverUrl}
+          alt={playlist.name}
+          source="netease"
+          className="h-12 w-12 shrink-0 rounded-[10px] object-cover"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            {liked && (
+              <span className="shrink-0 rounded-full bg-[#7a2d1c]/45 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white/74">
+                Liked
+              </span>
+            )}
+            <p className="truncate text-sm font-semibold text-white/82">{playlist.name}</p>
+          </div>
+          <p className="truncate text-xs text-white/38">
+            {playlist.trackCount} songs
+            {playlist.creatorName ? ` · ${playlist.creatorName}` : ""}
+          </p>
+        </div>
+      </div>
+
+      {/* Sync status line — quiet per-row feedback replacing the old global
+          message: reading / imported N · Xm ago / failed. */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-[11px] font-medium text-white/40">
+          {isReading
+            ? "Reading playlist…"
+            : isFailed
+              ? `Failed · ${failedReason}`
+              : isImported
+                ? `Imported ${importedCount}${importedLabel ? ` · ${importedLabel}` : ""}`
+                : liked
+                  ? "Not imported yet"
+                  : "NetEase"}
+        </span>
+        <button
+          type="button"
+          onClick={onImport}
+          disabled={isReading || disabled}
+          className="app-transition flex shrink-0 items-center gap-1.5 rounded-full bg-white/[0.08] px-3 py-1.5 text-xs font-semibold text-white/64 hover:bg-white/[0.13] hover:text-white disabled:cursor-wait disabled:opacity-45"
+        >
+          {isReading && <Loader2 className="h-3 w-3 animate-spin" />}
+          {isReading ? "Reading" : isImported ? "Re-sync" : "Import"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function ProviderSettingsPanel({
   open,
@@ -231,6 +407,16 @@ export function ProviderSettingsPanel({
   const [isImportingPlaylist, setImportingPlaylist] = useState(false);
   const [isLoadingUserPlaylists, setLoadingUserPlaylists] = useState(false);
   const [isSyncingMemory, setSyncingMemory] = useState(false);
+  // Playlist Shelf state. `importedRecords` is the persisted cache of
+  // playlists already imported into the local library (survives restarts);
+  // `playlistStates` is the live per-playlist progress state machine that
+  // drives the card's reading / imported N / failed feedback. `likedSyncedAt`
+  // is the persisted stamp for the last "Sync Liked" run.
+  const [importedRecords, setImportedRecords] = useState<Record<string, ImportedPlaylistRecord>>(
+    () => loadImportedPlaylistRecords(),
+  );
+  const [playlistStates, setPlaylistStates] = useState<Record<string, PlaylistImportState>>({});
+  const [likedSyncedAt, setLikedSyncedAt] = useState<string | null>(() => loadLikedSyncedAt());
   const [isTestingBilibili, setTestingBilibili] = useState(false);
   const [isCheckingBilibili, setCheckingBilibili] = useState(false);
   const [isCreatingBilibiliQr, setCreatingBilibiliQr] = useState(false);
@@ -240,7 +426,6 @@ export function ProviderSettingsPanel({
   const [openingWebLoginSource, setOpeningWebLoginSource] = useState<"netease" | "bilibili" | null>(
     null,
   );
-  const [importingPlaylistId, setImportingPlaylistId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [modelMessage, setModelMessage] = useState<string | null>(null);
   const [sourceMessage, setSourceMessage] = useState<string | null>(null);
@@ -942,7 +1127,9 @@ export function ProviderSettingsPanel({
     const trimmedPlaylistId = playlistId.trim();
     if (!trimmedPlaylistId) return;
     setImportingPlaylist(true);
-    setImportingPlaylistId(trimmedPlaylistId);
+    // Mark this row as "reading" so the shelf card shows live per-playlist
+    // progress instead of the old global lock. Other rows stay actionable.
+    setPlaylistStates((prev) => ({ ...prev, [trimmedPlaylistId]: { status: "reading" } }));
     setSourceMessage(null);
 
     try {
@@ -950,12 +1137,34 @@ export function ProviderSettingsPanel({
       const playlist = await neteaseProvider.importPlaylist(trimmedPlaylistId);
       const tracks = await refreshLocalTracksAfterSourceImport();
       onLibraryChanged?.(tracks);
-      setSourceMessage(`Imported ${playlist.tracks.length} songs.`);
+      const at = new Date().toISOString();
+      setPlaylistStates((prev) => ({
+        ...prev,
+        [trimmedPlaylistId]: { status: "imported", trackCount: playlist.tracks.length, at },
+      }));
+      setImportedRecords((prev) => {
+        const next: Record<string, ImportedPlaylistRecord> = {
+          ...prev,
+          [trimmedPlaylistId]: {
+            id: trimmedPlaylistId,
+            name: playlist.name,
+            trackCount: playlist.tracks.length,
+            importedAt: at,
+          },
+        };
+        saveImportedPlaylistRecords(next);
+        return next;
+      });
+      setSourceMessage(`Imported ${playlist.tracks.length} songs from "${playlist.name}".`);
     } catch (error) {
-      setSourceMessage(`Import failed. ${readError(error)}`);
+      const reason = readError(error);
+      setPlaylistStates((prev) => ({
+        ...prev,
+        [trimmedPlaylistId]: { status: "failed", reason, at: new Date().toISOString() },
+      }));
+      setSourceMessage(`Import failed. ${reason}`);
     } finally {
       setImportingPlaylist(false);
-      setImportingPlaylistId(null);
     }
   };
 
@@ -1000,6 +1209,9 @@ export function ProviderSettingsPanel({
       setTasteNotes(result.tasteNotes);
       const tracks = await refreshLocalTracksAfterSourceImport();
       onLibraryChanged?.(tracks);
+      const syncedAt = new Date().toISOString();
+      setLikedSyncedAt(syncedAt);
+      saveLikedSyncedAt(syncedAt);
       setSourceMessage(
         includePlaylists
           ? `Synced ${result.likedCount} liked songs and ${result.playlistCount} playlists. Taste notes are ready.`
@@ -2008,7 +2220,7 @@ export function ProviderSettingsPanel({
                             <div className="flex items-center gap-2">
                               <Library className="h-4 w-4 text-white/46" />
                               <h4 className="text-sm font-semibold text-white/82">
-                                Listening Memory / 聆听记忆
+                                Playlist Shelf / 歌单架
                               </h4>
                             </div>
                             <p className="mt-1 text-sm leading-6 text-white/42">
@@ -2052,6 +2264,24 @@ export function ProviderSettingsPanel({
                           </div>
                         </div>
 
+                        {/* Sync stamps — Liked sync time + total imported count.
+                            Quiet single line so the user always knows whether
+                            "Sync Liked" actually finished and how many playlists
+                            already live in the local library. */}
+                        {((likedSyncedAt && formatRelativeTime(likedSyncedAt)) ||
+                          Object.keys(importedRecords).length > 0) && (
+                          <p className="text-xs text-white/34">
+                            {likedSyncedAt && formatRelativeTime(likedSyncedAt)
+                              ? `Liked synced ${formatRelativeTime(likedSyncedAt)}`
+                              : "Liked not synced yet"}
+                            {Object.keys(importedRecords).length > 0
+                              ? ` · ${Object.keys(importedRecords).length} playlist${
+                                  Object.keys(importedRecords).length === 1 ? "" : "s"
+                                } imported`
+                              : ""}
+                          </p>
+                        )}
+
                         {tasteNotes && (
                           <div className="rounded-[18px] bg-black/10 px-4 py-3">
                             <p className="text-sm font-semibold text-white/74">
@@ -2070,31 +2300,21 @@ export function ProviderSettingsPanel({
                           </div>
                         )}
 
+                        {/* Full shelf — no slice cap. Cards render in a
+                            scrollable grid so all playlists stay reachable
+                            without becoming a backend-style table. */}
                         {neteaseUserPlaylists.length > 0 && (
-                          <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
-                            {neteaseUserPlaylists.slice(0, 12).map((playlist) => (
-                              <div
+                          <div className="settings-scroll grid max-h-[22rem] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                            {neteaseUserPlaylists.map((playlist, index) => (
+                              <PlaylistShelfCard
                                 key={playlist.id}
-                                className="flex items-center justify-between gap-3 rounded-[18px] bg-white/[0.04] px-3 py-2"
-                              >
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-semibold text-white/82">
-                                    {playlist.name}
-                                  </p>
-                                  <p className="truncate text-xs text-white/38">
-                                    {playlist.trackCount} songs
-                                    {playlist.creatorName ? ` - ${playlist.creatorName}` : ""}
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => importPlaylistById(playlist.id)}
-                                  disabled={isImportingPlaylist}
-                                  className="app-transition shrink-0 rounded-full bg-white/[0.08] px-3 py-1.5 text-xs font-semibold text-white/64 hover:bg-white/[0.13] hover:text-white disabled:cursor-wait disabled:opacity-45"
-                                >
-                                  {importingPlaylistId === playlist.id ? "Reading" : "Import"}
-                                </button>
-                              </div>
+                                playlist={playlist}
+                                liked={isLikedSongsPlaylist(playlist, index, neteaseLoginStatus)}
+                                state={playlistStates[playlist.id]}
+                                imported={importedRecords[playlist.id]}
+                                disabled={!neteaseEnabled || !neteaseLoginStatus?.loggedIn}
+                                onImport={() => importPlaylistById(playlist.id)}
+                              />
                             ))}
                           </div>
                         )}
