@@ -8053,7 +8053,7 @@ fn run_inner() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(mut child) = guard.take() {
                         let _ = child.kill();
                     }
-                }
+                };
             }
         })
         .invoke_handler(tauri::generate_handler![
