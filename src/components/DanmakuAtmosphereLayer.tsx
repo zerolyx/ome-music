@@ -251,7 +251,10 @@ function motionDurationFactor(motion: Exclude<DanmakuMotionStyle, "mixed">): num
 }
 
 function fontSizeValue(size: DanmakuSettings["fontSize"]): string {
-  return size === "small" ? "0.78rem" : size === "large" ? "1.05rem" : "0.9rem";
+  // Readable default danmaku sizes (Small 16px / Medium 20px / Large 26px).
+  // The previous defaults (≈12/14/16px) were too small to read, especially at full
+  // screen. Medium is the default and must be comfortably legible.
+  return size === "small" ? "1rem" : size === "large" ? "1.625rem" : "1.3rem";
 }
 
 function intensityOpacity(intensity: DanmakuSettings["emotionalIntensity"]): number {

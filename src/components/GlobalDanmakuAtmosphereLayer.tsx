@@ -239,7 +239,10 @@ function motionDurationFactor(motion: Exclude<DanmakuMotionStyle, "mixed">): num
 }
 
 function fontSizeValue(size: DanmakuSettings["fontSize"]): string {
-  return size === "small" ? "0.76rem" : size === "large" ? "1.02rem" : "0.88rem";
+  // Readable default danmaku sizes (Small 16px / Medium 20px / Large 26px).
+  // Mirrors DanmakuAtmosphereLayer so the same size system applies to both the
+  // in-video danmaku and the ambient atmosphere layer.
+  return size === "small" ? "1rem" : size === "large" ? "1.625rem" : "1.3rem";
 }
 
 function intensityOpacity(intensity: DanmakuSettings["emotionalIntensity"]): number {

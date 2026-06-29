@@ -862,6 +862,7 @@ fn list_tracks(state: State<'_, AppState>) -> Result<Vec<TrackDto>, String> {
     let mut tracks = load_tracks(&db)?;
     drop(db);
     proxy_bilibili_track_covers(&state, &mut tracks)?;
+    proxy_netease_track_covers(&state, &mut tracks)?;
     Ok(tracks)
 }
 
@@ -1731,14 +1732,19 @@ async fn search_netease_songs(
         &[("keywords", query), ("limit", "20"), ("type", "1")],
     )
     .await?;
-    let songs = value
+    let mut songs: Vec<SourceSongDto> = value
         .get("result")
         .and_then(|result| result.get("songs"))
         .and_then(|songs| songs.as_array())
         .cloned()
-        .unwrap_or_default();
-
-    Ok(songs.iter().map(source_song_from_search_json).collect())
+        .unwrap_or_default()
+        .iter()
+        .map(source_song_from_search_json)
+        .collect();
+    // Route every cover through the ome-media:// proxy so the WebView can render
+    // it regardless of protocol (http vs https) or CDN cross-origin behaviour.
+    proxy_netease_song_covers(&state, &mut songs)?;
+    Ok(songs)
 }
 
 #[tauri::command]
@@ -1747,7 +1753,9 @@ async fn get_netease_playlist(
     payload: SourcePlaylistPayload,
 ) -> Result<SourcePlaylistDto, String> {
     let config = resolve_netease_source_config(&state, None)?;
-    fetch_netease_playlist(&config, &payload.playlist_id).await
+    let mut playlist = fetch_netease_playlist(&config, &payload.playlist_id).await?;
+    proxy_netease_song_covers(&state, &mut playlist.tracks)?;
+    Ok(playlist)
 }
 
 #[tauri::command]
@@ -1762,7 +1770,9 @@ async fn get_netease_liked_songs(
         .filter(|value| login.logged_in && !login.expired && !value.trim().is_empty())
         .ok_or_else(|| "Sign in to your music source to try again.".to_string())?;
     let ids = fetch_netease_liked_song_ids(&config, &user_id, limit.unwrap_or(100)).await?;
-    fetch_netease_songs_by_ids(&config, &ids).await
+    let mut songs = fetch_netease_songs_by_ids(&config, &ids).await?;
+    proxy_netease_song_covers(&state, &mut songs)?;
+    Ok(songs)
 }
 
 #[tauri::command]
@@ -1784,9 +1794,11 @@ async fn import_netease_playlist(
     payload: SourcePlaylistPayload,
 ) -> Result<SourcePlaylistDto, String> {
     let config = resolve_netease_source_config(&state, None)?;
-    let playlist = fetch_netease_playlist(&config, &payload.playlist_id).await?;
+    let mut playlist = fetch_netease_playlist(&config, &payload.playlist_id).await?;
     let db = state.db.lock().map_err(|error| error.to_string())?;
     import_source_playlist_to_db(&db, &playlist)?;
+    drop(db);
+    proxy_netease_song_covers(&state, &mut playlist.tracks)?;
     Ok(playlist)
 }
 
@@ -1800,7 +1812,11 @@ async fn import_netease_song(
     let db = state.db.lock().map_err(|error| error.to_string())?;
     let track = parsed_track_from_source_song(&song);
     upsert_track(&db, &track)?;
-    load_tracks(&db)
+    let mut tracks = load_tracks(&db)?;
+    drop(db);
+    proxy_netease_track_covers(&state, &mut tracks)?;
+    proxy_bilibili_track_covers(&state, &mut tracks)?;
+    Ok(tracks)
 }
 
 #[tauri::command]
@@ -1896,7 +1912,13 @@ async fn get_netease_playable_url(
     payload: SourceSongPayload,
 ) -> Result<PlayableUrlDto, String> {
     let config = resolve_netease_source_config(&state, None)?;
-    fetch_netease_playable_url_with_level(&config, &payload.song_id, payload.level.as_deref()).await
+    fetch_netease_playable_url_with_level(
+        &config,
+        &payload.song_id,
+        payload.level.as_deref(),
+        Some(state.inner()),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -4861,6 +4883,29 @@ fn proxy_bilibili_song_cover(
     Ok(())
 }
 
+// NetEase album covers (p1.music.126.net) are usually public HTTPS, but in some
+// regions / for some songs the API returns http:// or protocol-relative URLs that
+// the WebView CSP refuses, or the CDN returns 403 for cross-origin requests. Route
+// every NetEase cover through the ome-media:// proxy so covers always render.
+fn proxy_netease_song_covers(
+    state: &State<'_, AppState>,
+    songs: &mut [SourceSongDto],
+) -> Result<(), String> {
+    for song in songs.iter_mut().filter(|song| {
+        song.source.as_deref() == Some("netease") || song.source.as_deref().is_none()
+    }) {
+        let cover = song.cover_url.trim();
+        if cover.is_empty()
+            || cover.starts_with("ome-media:")
+            || cover.contains("ome-media.localhost")
+        {
+            continue;
+        }
+        song.cover_url = register_media_proxy(state.inner(), cover, "image")?;
+    }
+    Ok(())
+}
+
 fn proxy_bilibili_song_covers(
     state: &State<'_, AppState>,
     songs: &mut [SourceSongDto],
@@ -4882,6 +4927,28 @@ fn proxy_bilibili_track_covers(
         {
             track.cover_url = register_media_proxy(state.inner(), &track.cover_url, "image")?;
         }
+    }
+    Ok(())
+}
+
+// Same idea as proxy_bilibili_track_covers but for NetEase tracks loaded from the
+// library. The DB stores the original NetEase cover URL (https://p1.music.126.net
+// or http://m*.music.126.net), which the WebView CSP may refuse or the CDN may
+// serve with cross-origin restrictions. Re-proxy on every load so covers always
+// render and stale ome-media:// tokens never survive a reload.
+fn proxy_netease_track_covers(
+    state: &State<'_, AppState>,
+    tracks: &mut [TrackDto],
+) -> Result<(), String> {
+    for track in tracks.iter_mut().filter(|track| track.source == "netease") {
+        let cover = track.cover_url.trim();
+        if cover.is_empty()
+            || cover.starts_with("ome-media:")
+            || cover.contains("ome-media.localhost")
+        {
+            continue;
+        }
+        track.cover_url = register_media_proxy(state.inner(), cover, "image")?;
     }
     Ok(())
 }
@@ -5006,11 +5073,23 @@ async fn respond_bilibili_media(
 
     let mut response = None;
     for url in &entry.urls {
+        let lower_url = url.to_ascii_lowercase();
+        // Only Bilibili CDNs (bilivideo, bilivideo.com, hdslb.com, akamaized.net
+        // paths owned by Bilibili) require the Bilibili Referer/Origin pair. NetEase
+        // music CDNs (music.126.net) and image CDNs do not need — and should not
+        // receive — these headers.
+        let is_bilibili_host = lower_url.contains("bilibili")
+            || lower_url.contains("bilivideo")
+            || lower_url.contains("hdslb.com")
+            || lower_url.contains("akamaized.net");
         let mut remote = client
             .get(url)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36")
-            .header("Referer", "https://www.bilibili.com/")
-            .header("Origin", "https://www.bilibili.com");
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36");
+        if is_bilibili_host {
+            remote = remote
+                .header("Referer", "https://www.bilibili.com/")
+                .header("Origin", "https://www.bilibili.com");
+        }
         if let Some(range) = requested_range.as_deref() {
             remote = remote.header(reqwest::header::RANGE, range);
         }
@@ -5768,13 +5847,14 @@ async fn fetch_netease_playable_url(
     config: &ResolvedNeteaseSourceConfig,
     song_id: &str,
 ) -> Result<PlayableUrlDto, String> {
-    fetch_netease_playable_url_with_level(config, song_id, None).await
+    fetch_netease_playable_url_with_level(config, song_id, None, None).await
 }
 
 async fn fetch_netease_playable_url_with_level(
     config: &ResolvedNeteaseSourceConfig,
     song_id: &str,
     requested_level: Option<&str>,
+    proxy_state: Option<&AppState>,
 ) -> Result<PlayableUrlDto, String> {
     let requested_level = requested_level
         .map(str::trim)
@@ -5788,10 +5868,16 @@ async fn fetch_netease_playable_url_with_level(
         });
     let has_token = config.token.is_some();
     let login_status = fetch_netease_login_status(config).await.ok();
+    // Distinguish "login status known" from "login status unknown (API failed)".
+    // When the status API is unreachable we must NOT pretend the cookie is a valid
+    // session: surface a cookie_expired reason so the user can re-sign-in, and still
+    // attempt playback with the cookie we have (NetEase sometimes serves playable
+    // URLs even when /login/status is briefly unavailable).
+    let login_status_known = login_status.is_some();
     let is_logged_in = login_status
         .as_ref()
         .map(|status| status.logged_in && !status.expired)
-        .unwrap_or(has_token);
+        .unwrap_or(false);
     let user_profile = login_status;
     let vip_status = fetch_netease_vip_status(config).await.ok();
     let is_member = vip_status.as_ref().is_some_and(|status| status.is_member);
@@ -5888,12 +5974,24 @@ async fn fetch_netease_playable_url_with_level(
 
         if let Some(url) = url {
             if !trial_only {
+                // NetEase audio CDNs are commonly served over plain http://
+                // (m*.music.126.net), which the WebView CSP `media-src` blocks.
+                // Route every successful URL through the ome-media:// proxy so the
+                // audio element can load it, and so we can attach the right
+                // headers/Referer for the NetEase CDN.
+                let proxied_url = match proxy_state {
+                    Some(state) => register_media_proxy(state, &url, "audio")
+                        .unwrap_or_else(|_| url.clone()),
+                    None => url.clone(),
+                };
                 final_debug.attempts = attempts;
+                final_debug.has_url = true;
+                final_debug.reason = None;
                 return Ok(PlayableUrlDto {
                     song_id: song_id.to_string(),
                     unavailable: false,
                     reason: None,
-                    url: Some(url),
+                    url: Some(proxied_url),
                     video_url: None,
                     debug: Some(final_debug),
                     audio_candidates: Vec::new(),
@@ -5905,9 +6003,15 @@ async fn fetch_netease_playable_url_with_level(
     }
 
     if final_debug.reason.is_none() {
+        // Order matters: not_logged_in (no cookie at all) → cookie_expired
+        // (cookie present but status API confirms it is no longer a session) →
+        // url_null (we have a cookie and could not determine session state, but
+        // the API still did not return a playable URL).
         final_debug.reason = Some(
-            if config.token.is_none() {
+            if !has_token {
                 "not_logged_in"
+            } else if login_status_known && !is_logged_in {
+                "cookie_expired"
             } else {
                 "url_null"
             }

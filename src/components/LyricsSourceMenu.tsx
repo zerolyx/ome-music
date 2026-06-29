@@ -375,11 +375,21 @@ function neteaseStatusLabel({
   loginStatus: NetEaseLoginStatus | null;
   neteaseConfig: MusicSourceConfig | null;
 }): string {
+  // Carefully separate four distinct states:
+  //   1. Source enabled?
+  //   2. Service (managed runtime) ready?
+  //   3. User signed in (loginStatus.loggedIn && !expired)?
+  //   4. Session expired (loginStatus.expired)?
+  // "可用 / Available" only means the API service is reachable; it must NOT be
+  // mistaken for "signed in". Previously a service-ready state masked a missing
+  // login, so the search page told users to sign in even when they were signed in.
   if (!neteaseConfig?.enabled) return "\u5173\u95ed";
   if (serviceStatus && !serviceStatus.running && !serviceStatus.apiPackageFound)
     return "\u9700\u91cd\u65b0\u5b89\u88c5";
-  if (serviceStatus?.running) return loginStatus?.loggedIn ? "\u5df2\u8fde\u63a5" : "\u53ef\u7528";
-  return neteaseConfig?.enabled ? "\u53ef\u7528" : "\u5173\u95ed";
+  if (loginStatus?.expired) return "\u767b\u5f55\u5df2\u8fc7\u671f";
+  if (loginStatus?.loggedIn) return "\u5df2\u767b\u5f55";
+  if (serviceStatus?.running) return "\u672a\u767b\u5f55";
+  return "\u53ef\u7528";
 }
 
 function danmakuLabel(settings: DanmakuSettings): string {

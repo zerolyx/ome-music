@@ -53,9 +53,11 @@ import {
   saveNeteaseSourceConfig,
   testBilibiliSourceConnection,
   testNeteaseSourceConnection,
+  type BilibiliDanmakuDebug,
   type BilibiliLoginStatus,
   type BilibiliSourceConfig,
   type NetEaseLoginStatus,
+  type NetEasePlaybackDebug,
   type NetEaseQrLogin,
   type NetEaseServiceStage,
   type NetEaseServiceStatus,
@@ -89,6 +91,10 @@ interface ProviderSettingsPanelProps {
   onClose: () => void;
   onLibraryChanged?: (tracks: Track[]) => void;
   onRestartOnboarding?: () => void;
+  // Last NetEase playback resolve diagnostics + last Bilibili danmaku fetch
+  // diagnostics, surfaced in the Advanced section so failures are never silent.
+  neteasePlaybackDebug?: NetEasePlaybackDebug | null;
+  bilibiliDanmakuDebug?: BilibiliDanmakuDebug | null;
 }
 
 type SettingsSection =
@@ -156,6 +162,8 @@ export function ProviderSettingsPanel({
   onClose,
   onLibraryChanged,
   onRestartOnboarding,
+  neteasePlaybackDebug = null,
+  bilibiliDanmakuDebug = null,
 }: ProviderSettingsPanelProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>(
     focus === "music" ? "sources" : focus === "atmosphere" ? "atmosphere" : "overview",
@@ -1506,6 +1514,14 @@ export function ProviderSettingsPanel({
                         sensitive values stay masked.
                       </p>
                     </div>
+                    <MusicSourceDebugCard
+                      neteasePlaybackDebug={neteasePlaybackDebug}
+                      neteaseServiceStatus={neteaseServiceStatus}
+                      neteaseLoginStatus={neteaseLoginStatus}
+                      bilibiliLoginStatus={bilibiliLoginStatus}
+                      bilibiliDanmakuDebug={bilibiliDanmakuDebug}
+                      musicSourceConfig={musicSourceConfig}
+                    />
                   </div>
                 )}
 
@@ -1894,13 +1910,23 @@ export function ProviderSettingsPanel({
                           label="Login / 登录"
                           value={
                             neteaseLoginStatus?.loggedIn
-                              ? `Connected${neteaseLoginStatus.nickname ? ` as ${neteaseLoginStatus.nickname}` : ""}`
-                              : (neteaseLoginStatus?.message ?? "Not connected")
+                              ? `Signed in${neteaseLoginStatus.nickname ? ` as ${neteaseLoginStatus.nickname}` : ""}`
+                              : neteaseLoginStatus?.expired
+                                ? "Session expired — please re-sign in"
+                                : musicSourceConfig.hasToken
+                                  ? "Cookie present, status unknown"
+                                  : "Signed out"
                           }
                         />
                         <StatusLine
                           label="Membership / 会员"
-                          value={neteaseVipStatus?.message ?? "Not checked"}
+                          value={
+                            neteaseVipStatus?.isMember
+                              ? `Member${neteaseVipStatus.level ? ` (${neteaseVipStatus.level})` : ""}`
+                              : neteaseVipStatus
+                                ? "Non-member"
+                                : "Unknown — sign in to check"
+                          }
                         />
                         <div className="flex gap-2 sm:col-span-2">
                           <button
@@ -3020,6 +3046,126 @@ function StatusLine({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-sm font-semibold text-[color:var(--settings-text-secondary)]">
         {value}
       </p>
+    </div>
+  );
+}
+
+// Music source diagnostics card. Surfaces the last NetEase playback resolve and
+// the last Bilibili danmaku fetch alongside source/service/login state, so a
+// failure never stays silent and the user can copy a masked diagnostic text to
+// share with support. Cookies/tokens are already masked by the backend; we never
+// print raw credentials here.
+function MusicSourceDebugCard({
+  neteasePlaybackDebug,
+  neteaseServiceStatus,
+  neteaseLoginStatus,
+  bilibiliLoginStatus,
+  bilibiliDanmakuDebug,
+  musicSourceConfig,
+}: {
+  neteasePlaybackDebug: NetEasePlaybackDebug | null;
+  neteaseServiceStatus: NetEaseServiceStatus | null;
+  neteaseLoginStatus: NetEaseLoginStatus | null;
+  bilibiliLoginStatus: BilibiliLoginStatus | null;
+  bilibiliDanmakuDebug: BilibiliDanmakuDebug | null;
+  musicSourceConfig: MusicSourceConfig;
+}) {
+  const neteaseStage = neteaseServiceStatus?.stage ?? "not_started";
+  const triedLevels = neteasePlaybackDebug?.attempts
+    ?.map((attempt) => attempt.level)
+    .filter(Boolean)
+    .join(" → ");
+
+  const lines: string[] = [
+    "=== Ome Music · Music Source Diagnostics ===",
+    "",
+    "[NetEase Source]",
+    `  enabled         : ${musicSourceConfig.enabled ? "yes" : "no"}`,
+    `  service stage   : ${neteaseStage}`,
+    `  service running : ${neteaseServiceStatus?.running ? "yes" : "no"}`,
+    `  base url        : ${musicSourceConfig.baseUrl || "(unset)"}`,
+    `  has cookie      : ${musicSourceConfig.hasToken ? "yes" : "no"}`,
+    `  masked cookie   : ${musicSourceConfig.maskedToken || "(none)"}`,
+    `  login           : ${
+      neteaseLoginStatus?.loggedIn
+        ? `signed in${neteaseLoginStatus.nickname ? ` as ${neteaseLoginStatus.nickname}` : ""}`
+        : neteaseLoginStatus?.expired
+          ? "expired"
+          : musicSourceConfig.hasToken
+            ? "cookie present, status unknown"
+            : "signed out"
+    }`,
+    "",
+    "[NetEase Last Playback Resolve]",
+    neteasePlaybackDebug
+      ? `  song id         : ${neteasePlaybackDebug.requestedSongId}`
+      : "  (no playback resolve recorded yet)",
+    neteasePlaybackDebug ? `  requested level : ${neteasePlaybackDebug.requestedLevel}` : null,
+    neteasePlaybackDebug ? `  endpoint        : ${neteasePlaybackDebug.endpoint}` : null,
+    neteasePlaybackDebug
+      ? `  response code   : ${neteasePlaybackDebug.responseCode ?? "(none)"}`
+      : null,
+    neteasePlaybackDebug
+      ? `  has playable url: ${neteasePlaybackDebug.hasUrl ? "yes" : "no"}`
+      : null,
+    neteasePlaybackDebug
+      ? `  returned level  : ${neteasePlaybackDebug.returnedLevel ?? "(none)"}`
+      : null,
+    neteasePlaybackDebug
+      ? `  vip status      : ${neteasePlaybackDebug.vipStatus ?? "(none)"}`
+      : null,
+    triedLevels ? `  tried levels    : ${triedLevels}` : null,
+    neteasePlaybackDebug ? `  reason code     : ${neteasePlaybackDebug.reason ?? "(none)"}` : null,
+    neteasePlaybackDebug ? `  message         : ${neteasePlaybackDebug.message ?? "(none)"}` : null,
+    "",
+    "[Bilibili Source]",
+    `  login           : ${
+      bilibiliLoginStatus?.loggedIn
+        ? `signed in${bilibiliLoginStatus.nickname ? ` as ${bilibiliLoginStatus.nickname}` : ""}`
+        : bilibiliLoginStatus
+          ? "signed out"
+          : "unknown"
+    }`,
+    bilibiliDanmakuDebug ? `  bvid            : ${bilibiliDanmakuDebug.bvid}` : null,
+    bilibiliDanmakuDebug ? `  cid             : ${bilibiliDanmakuDebug.cid || "(none)"}` : null,
+    bilibiliDanmakuDebug ? `  danmaku count   : ${bilibiliDanmakuDebug.parsedDanmakuCount}` : null,
+    bilibiliDanmakuDebug
+      ? `  from cache      : ${bilibiliDanmakuDebug.fromCache ? "yes" : "no"}`
+      : null,
+    bilibiliDanmakuDebug ? `  error           : ${bilibiliDanmakuDebug.error ?? "(none)"}` : null,
+  ].filter((line): line is string => line !== null);
+
+  const diagnosticsText = lines.join("\n");
+
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(diagnosticsText).catch(() => {
+      /* clipboard may be unavailable; the visible block still serves the user */
+    });
+  };
+
+  return (
+    <div className="settings-surface space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-white/74">
+            音乐源诊断 / Music Source Diagnostics
+          </p>
+          <p className="mt-1 text-xs leading-5 text-white/36">
+            最近一次网易云播放解析与 Bilibili 弹幕拉取的诊断摘要。Cookie / Token
+            已脱敏，可安全复制。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="app-transition inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-white/[0.08] px-3 text-[11px] font-semibold text-white/72 hover:bg-white/[0.13] hover:text-white"
+        >
+          复制 / Copy
+        </button>
+      </div>
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-2xl bg-black/30 p-3 font-mono text-[11px] leading-5 text-white/56">
+        {diagnosticsText}
+      </pre>
     </div>
   );
 }

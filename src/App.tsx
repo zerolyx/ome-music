@@ -167,6 +167,12 @@ export default function App() {
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [playableSrc, setPlayableSrc] = useState("");
   const [videoAtmosphereSrc, setVideoAtmosphereSrc] = useState("");
+  // Auto-retry nonce: when the audio element errors out on a remote (proxied)
+  // URL, we bump this to force the resolvePlayable effect to re-fetch a fresh
+  // playable URL instead of stranding the user on a stale/expired ome-media://
+  // token. Capped via retryCountRef to avoid infinite loops.
+  const [playbackRetryNonce, setPlaybackRetryNonce] = useState(0);
+  const playbackRetryCountRef = useRef(0);
   const [isVoiceDucking, setVoiceDucking] = useState(false);
   const [lyrics, setLyrics] = useState<LyricLine[]>([]);
   const [lyricCacheKey, setLyricCacheKey] = useState<string | null>(null);
@@ -461,7 +467,10 @@ export default function App() {
     }
 
     // If we already have a playable URL resolved for this track at the current quality, keep it across isPlaying toggles.
+    // Skip this guard when a retry is requested (playbackRetryNonce changed) so a
+    // stale/expired ome-media:// URL can be replaced with a fresh resolve.
     if (
+      playbackRetryNonce === 0 &&
       playableSrcForTrackIdRef.current?.trackId === currentTrack.id &&
       playableSrcForTrackIdRef.current?.quality === playbackQuality
     )
@@ -515,6 +524,10 @@ export default function App() {
       .then(({ audioUrl, videoUrl }) => {
         if (playableRequestRef.current !== requestId) return;
         playableSrcForTrackIdRef.current = { trackId: currentTrack.id, quality: playbackQuality };
+        // A successful resolve resets the retry counter so future genuine errors
+        // can retry again.
+        playbackRetryCountRef.current = 0;
+        setPlaybackRetryNonce(0);
         setPlayableSrc(audioUrl);
         setVideoAtmosphereSrc(videoUrl ?? "");
       })
@@ -525,7 +538,7 @@ export default function App() {
         setIsPlaying(false);
         setLibraryError(error instanceof Error ? error.message : playbackReasonMessage());
       });
-  }, [currentTrack, isPlaying, playbackQuality]);
+  }, [currentTrack, isPlaying, playbackQuality, playbackRetryNonce]);
 
   useEffect(() => {
     let cancelled = false;
@@ -667,10 +680,27 @@ export default function App() {
     const handleError = () => {
       const track = currentTrackRef.current;
       if (!track || !playableSrcRef.current) return;
-      // 清理已解析 URL 的缓存标记，使 resolve effect 重新触发，
-      // 解决签名 URL / 代理 token 过期后播放中断却无法恢复的问题。
+      // The cached proxied URL (ome-media:// token) may have expired or the remote
+      // CDN refused the request. For remote tracks we attempt one automatic
+      // re-resolve before giving up, so users do not have to manually re-search or
+      // re-click a track when a Bilibili / NetEase media token expires mid-session.
+      const failedSrc = playableSrcRef.current;
+      const looksLikeProxiedRemoteUrl =
+        isRemoteTrack(track) &&
+        (failedSrc.startsWith("ome-media:") || failedSrc.includes("ome-media.localhost"));
+      // Drop the cached prepared entry so the resolve effect fetches a fresh URL.
+      preparedPlayableRef.current.delete(track.id);
       playableSrcForTrackIdRef.current = null;
       setPlayableSrc("");
+      if (looksLikeProxiedRemoteUrl && playbackRetryCountRef.current < 2) {
+        playbackRetryCountRef.current += 1;
+        setLibraryError(null);
+        // Bump the nonce to force resolvePlayable to re-run with a fresh fetch.
+        setPlaybackRetryNonce((value) => value + 1);
+        return;
+      }
+      playbackRetryCountRef.current = 0;
+      setPlaybackRetryNonce(0);
       setIsPlaying(false);
       setLibraryError(playbackReasonMessage(track.unavailableReason));
     };
@@ -1363,6 +1393,8 @@ export default function App() {
             focus={settingsFocus}
             playbackQuality={playbackQuality}
             onPlaybackQualityChange={changePlaybackQuality}
+            neteasePlaybackDebug={playbackDebug}
+            bilibiliDanmakuDebug={danmakuDebug}
             onClose={() => {
               setProviderSettingsOpen(false);
               void neteaseAuthProvider
