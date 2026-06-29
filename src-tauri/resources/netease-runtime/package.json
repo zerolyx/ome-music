@@ -1,0 +1,10 @@
+{
+  "name": "ome-music-netease-runtime",
+  "version": "0.3.4",
+  "private": true,
+  "description": "Pinned manifest for the bundled NetEase Cloud Music API runtime used by the Ome Music Windows installer. Installed via `npm ci --omit=dev` from the committed package-lock.json.",
+  "license": "MIT",
+  "dependencies": {
+    "NeteaseCloudMusicApi": "4.32.0"
+  }
+}

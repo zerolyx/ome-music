@@ -17,11 +17,17 @@ Ome Music should stay small, readable, and easy to release. This document is the
    - `npm run build`
    - `cargo check` from `src-tauri`
    - `npm run lint`
-4. Open a pull request for the release maintenance patch.
-5. Merge only after CI passes.
-6. Create a version tag, for example `v0.3.2`.
-7. Confirm the `Release Windows Build` workflow generates the NSIS installer.
-8. Download the installer from GitHub Releases and launch it on Windows before announcing the release.
+   - `npm run format:check`
+   - `npm run docs:check`
+4. If the managed NetEase runtime version changed, regenerate the lockfile and commit it:
+   - `npm install --package-lock-only --omit=dev --prefix "src-tauri/resources/netease-runtime"`
+5. If the bundled Node.js runtime version changed, update both `NODE_VERSION` and `NODE_SHA256` in `.github/workflows/release.yml` (the SHA256 is published at `https://nodejs.org/dist/v<NODE_VERSION>/SHASUMS256.txt`).
+6. Open a pull request for the release maintenance patch.
+7. Merge only after CI passes.
+8. Create a version tag, for example `v0.3.4`.
+9. Confirm the `Release Windows Build` workflow generates the NSIS installer and the `release-sha256-checksums` artifact.
+10. Verify the published installer's SHA256 against the checksum artifact before announcing the release.
+11. Download the installer from GitHub Releases and launch it on Windows before announcing the release.
 
 ## Repository Hygiene
 

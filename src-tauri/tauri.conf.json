@@ -31,9 +31,7 @@
         "scope": [
           "$APPDATA/com.ome.music/**",
           "$LOCALAPPDATA/com.ome.music/**",
-          "$HOME/Music/**",
-          "$HOME/Downloads/**",
-          "$DOWNLOAD/**"
+          "$HOME/Music/**"
         ]
       }
     }

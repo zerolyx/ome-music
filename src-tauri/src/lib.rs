@@ -24,6 +24,7 @@ use walkdir::WalkDir;
 const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "wav", "m4a"];
 const INITIAL_SCHEMA: &str = include_str!("../migrations/001_initial_schema.sql");
 const MIGRATION_002: &str = include_str!("../migrations/002_mood_note_rename_and_indexes.sql");
+const MIGRATION_003: &str = include_str!("../migrations/003_authorized_music_directories.sql");
 const LLM_KEYRING_SERVICE: &str = "ome.music.provider";
 const LLM_KEYRING_ACCOUNT: &str = "local";
 const NETEASE_KEYRING_SERVICE: &str = "ome.music.source.netease";
@@ -922,6 +923,17 @@ async fn import_music_folder(
 
     let directory_label = folder_path.to_string_lossy().to_string();
 
+    // Save the user-selected directory to the authorized registry so future
+    // scan_music_directory calls can validate against it.
+    {
+        let db = state.db.lock().map_err(|error| error.to_string())?;
+        db.execute(
+            "INSERT OR IGNORE INTO authorized_music_directories (directory_path) VALUES (?1)",
+            params![&directory_label],
+        )
+        .map_err(|error| error.to_string())?;
+    }
+
     // Discovery + tag parsing is CPU/IO heavy. Run it off the async executor so the
     // Tauri command loop stays responsive; only the DB upserts touch the connection.
     let discovered = tauri::async_runtime::spawn_blocking(move || {
@@ -956,7 +968,38 @@ async fn import_music_folder(
 }
 
 #[tauri::command]
-fn scan_music_directory(path: String) -> Result<Vec<LocalAudioFile>, String> {
+fn scan_music_directory(
+    path: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Vec<LocalAudioFile>, String> {
+    // Security: reject paths that have not been authorized by the user through
+    // the system folder picker (import_music_folder) or that are not under the
+    // default Music directory.
+    let db = state.db.lock().map_err(|error| error.to_string())?;
+    let authorized: Vec<String> = db
+        .prepare("SELECT directory_path FROM authorized_music_directories")
+        .map_err(|error| error.to_string())?
+        .query_map([], |row| row.get(0))
+        .map_err(|error| error.to_string())?
+        .filter_map(Result::ok)
+        .collect();
+    drop(db);
+
+    let requested = Path::new(&path);
+    let music_dir = app.path().audio_dir().map_err(|error| error.to_string())?;
+    // A path is authorized only if it is equal to or nested under an
+    // authorized directory, or under the default Music directory. We never
+    // authorize ancestors of authorized directories.
+    let is_authorized = authorized.iter().any(|dir| requested.starts_with(dir))
+        || requested.starts_with(&music_dir);
+
+    if !is_authorized {
+        return Err(
+            "This folder has not been authorized by the user. / 该目录未经用户授权。".to_string(),
+        );
+    }
+
     Ok(discover_audio_files(Path::new(&path))
         .into_iter()
         .filter_map(|path| {
@@ -2705,6 +2748,8 @@ fn initialize_database(app: &tauri::App) -> Result<Connection, String> {
         .map_err(|error| error.to_string())?;
     ensure_mood_entries_note_text(&db)?;
     db.execute_batch(MIGRATION_002)
+        .map_err(|error| error.to_string())?;
+    db.execute_batch(MIGRATION_003)
         .map_err(|error| error.to_string())?;
     ensure_track_columns(&db)?;
     ensure_profile_tables(&db)?;

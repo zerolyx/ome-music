@@ -536,7 +536,9 @@ export class BilibiliMusicProvider {
 
 export class BilibiliAccountSessionProvider {
   getSupportedLoginMethods(): LoginMethod[] {
-    return ["qr", "password", "phone_sms", "cookie_import", "webview_login"];
+    // Bilibili account/password and SMS verification are handled through Secure Web Login.
+    // Only QR, Cookie Import, and Secure Web Login are shown in the UI.
+    return ["qr", "cookie_import", "webview_login"];
   }
 
   async createQrLogin(): Promise<NetEaseQrLogin> {
