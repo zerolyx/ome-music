@@ -3,7 +3,13 @@ import { LyricsSourceMenu } from "./components/LyricsSourceMenu";
 import { NowPlayingHero } from "./components/NowPlayingHero";
 import { OnboardingOverlay, resetOnboarding } from "./components/OnboardingOverlay";
 import { OmeRadioPanel } from "./components/OmeRadioPanel";
-import { PlayerControls, PLAYBACK_SPEEDS, type PlaybackSpeed } from "./components/PlayerControls";
+import {
+  PlayerControls,
+  PLAYBACK_SPEEDS,
+  qualityLabel,
+  type PlaybackSpeed,
+} from "./components/PlayerControls";
+import { QueueDrawer, loadRecommendSimilar, saveRecommendSimilar } from "./components/QueueDrawer";
 import { TopSearch } from "./components/TopSearch";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import {
@@ -279,6 +285,10 @@ export default function App() {
   // state just toggles the player-bar queue button active state so the
   // interaction is wired and ready.
   const [isQueueDrawerOpen, setQueueDrawerOpen] = useState(false);
+  // Recommend-similar toggle in the queue drawer footer. Persisted so the
+  // preference survives restarts; future phases read it when picking the
+  // next track. No logic yet — this is just the user-visible Taste Signal.
+  const [recommendSimilar, setRecommendSimilar] = useState<boolean>(() => loadRecommendSimilar());
 
   const currentIndex = useMemo(
     () => tracks.findIndex((track) => track.id === currentTrackId),
@@ -1164,24 +1174,31 @@ export default function App() {
 
   const toggleQueueDrawer = () => setQueueDrawerOpen((value) => !value);
 
-  // Like / unlike the current track. Calls the Rust `set_track_liked` command,
+  const toggleRecommendSimilar = (value: boolean) => {
+    setRecommendSimilar(value);
+    saveRecommendSimilar(value);
+  };
+
+  // Like / unlike a track by id. Calls the Rust `set_track_liked` command,
   // which both persists the `liked` flag to the DB AND records a `liked`/
   // `unliked` playback event — the latter feeds the listening-memory /
   // radio scoring pipeline (a Taste Signal), so no separate event is needed
   // here. The returned track list replaces the local library so the heart
   // state syncs to search results, the queue, and the playlist drawer too.
-  const toggleLike = async () => {
-    const track = currentTrackRef.current;
+  // Generalized from the cover-button handler so the queue drawer rows can
+  // toggle likes independently of the currently playing track.
+  const toggleLikeForTrack = async (trackId: string) => {
+    const track = tracks.find((item) => item.id === trackId);
     if (!track) return;
     // Optimistically flip the heart so the UI feels instant, then reconcile
     // with the DB result. If the DB call fails we revert.
     const previousLiked = track.liked;
     setTracks((value) =>
-      value.map((item) => (item.id === track.id ? { ...item, liked: !previousLiked } : item)),
+      value.map((item) => (item.id === trackId ? { ...item, liked: !previousLiked } : item)),
     );
     try {
       const updatedTracks = await setTrackLiked(
-        track.id,
+        trackId,
         !previousLiked,
         Math.floor(progressSecondsRef.current),
       );
@@ -1190,8 +1207,53 @@ export default function App() {
       console.error("failed to toggle like", error);
       // Revert on failure.
       setTracks((value) =>
-        value.map((item) => (item.id === track.id ? { ...item, liked: previousLiked } : item)),
+        value.map((item) => (item.id === trackId ? { ...item, liked: previousLiked } : item)),
       );
+    }
+  };
+
+  // Queue operations. The "queue" here is the session play queue (the local
+  // `tracks` array) — these never touch the underlying DB library, so a
+  // cleared queue can always be refilled by re-importing. Removing or
+  // clearing the currently playing track stops playback cleanly.
+  const removeTrackFromQueue = (trackId: string) => {
+    const wasCurrent = trackId === currentTrackId;
+    setTracks((value) => value.filter((item) => item.id !== trackId));
+    setAgentQueue((value) => value.filter((item) => item.id !== trackId));
+    if (wasCurrent) {
+      lastPlayEventKeyRef.current = null;
+      setCurrentTrackId(null);
+      setProgressSeconds(0);
+      setIsPlaying(false);
+    }
+  };
+
+  const clearQueue = () => {
+    setTracks([]);
+    setAgentQueue([]);
+    shuffleOrderRef.current = [];
+    shufflePositionRef.current = 0;
+    playHistoryRef.current = [];
+    lastPlayEventKeyRef.current = null;
+    setCurrentTrackId(null);
+    setProgressSeconds(0);
+    setIsPlaying(false);
+  };
+
+  // Like every unliked track in the queue. Runs sequentially so we don't
+  // hammer the DB; the last returned full-list is authoritative.
+  const likeAllInQueue = async () => {
+    const targets = tracks.filter((track) => !track.liked).map((track) => track.id);
+    if (targets.length === 0) return;
+    setTracks((value) => value.map((track) => ({ ...track, liked: true })));
+    try {
+      let updated: Track[] | null = null;
+      for (const id of targets) {
+        updated = await setTrackLiked(id, true, 0);
+      }
+      if (updated) setTracks(updated);
+    } catch (error) {
+      console.error("failed to like all in queue", error);
     }
   };
 
@@ -1563,7 +1625,10 @@ export default function App() {
           error={libraryError}
           onImport={importFolder}
           liked={currentTrack?.liked ?? false}
-          onToggleLike={toggleLike}
+          onToggleLike={() => {
+            const track = currentTrackRef.current;
+            if (track) void toggleLikeForTrack(track.id);
+          }}
           onLessLikeThis={handleLessLikeThis}
           onShare={handleShare}
           onCycleSpeed={cyclePlaybackSpeed}
@@ -1633,6 +1698,24 @@ export default function App() {
         onToggleQueue={toggleQueueDrawer}
         onSetProgress={setProgress}
         onSetVolume={setVolume}
+      />
+      {/* Playlist Drawer — always mounted so the slide-in/out animation
+          runs on both open and close. The drawer reads the queue (the
+          local `tracks` array) and the current track for highlighting. */}
+      <QueueDrawer
+        open={isQueueDrawerOpen}
+        tracks={tracks}
+        currentTrackId={currentTrackId}
+        isPlaying={isPlaying}
+        qualityLabel={qualityLabel(playbackQuality)}
+        recommendSimilar={recommendSimilar}
+        onClose={() => setQueueDrawerOpen(false)}
+        onPlay={playLocalTrack}
+        onRemove={removeTrackFromQueue}
+        onClear={clearQueue}
+        onLikeAll={likeAllInQueue}
+        onToggleLike={toggleLikeForTrack}
+        onToggleRecommendSimilar={toggleRecommendSimilar}
       />
       {isProviderSettingsOpen && (
         <Suspense fallback={<SettingsPanelFallback />}>
