@@ -501,7 +501,16 @@ export default function App() {
   }, [playbackSpeed]);
 
   const reloadLyrics = useCallback(() => {
-    if (!currentTrack) return;
+    // Read the current track from the ref (kept in sync by the effect at
+    // line ~316) instead of closing over `currentTrack`. This keeps the
+    // callback identity stable across metadata-only replacements of the
+    // current track (cover hydration, title normalization, or a like-toggle
+    // that swaps the Track object), so passing it as a prop won't
+    // retrigger child effects, and the progress/lyric reset effect below
+    // (keyed to currentTrackId) won't refire on metadata-only changes.
+    // Track switches are driven by that effect's own currentTrackId dep.
+    const track = currentTrackRef.current;
+    if (!track) return;
     const requestId = lyricRequestRef.current + 1;
     lyricRequestRef.current = requestId;
     setLyrics([]);
@@ -510,7 +519,7 @@ export default function App() {
     setLyricOffsetMs(0);
     setLyricsLoading(true);
 
-    resolveLyrics(currentTrack)
+    resolveLyrics(track)
       .then((resolved) => {
         if (lyricRequestRef.current !== requestId) return;
         setLyricCacheKey(resolved.cacheKey);
@@ -529,15 +538,21 @@ export default function App() {
       .finally(() => {
         if (lyricRequestRef.current === requestId) setLyricsLoading(false);
       });
-  }, [currentTrack]);
+    // Stable identity (latest-ref pattern): reads the current track from the
+    // ref at call time, so it never goes stale and never recreates on
+    // metadata-only currentTrack changes.
+  }, []);
 
   const importLyrics = useCallback(() => {
-    if (!currentTrack) return;
+    // Same stable latest-ref pattern as reloadLyrics — reads the current
+    // track from the ref at call time instead of closing over `currentTrack`.
+    const track = currentTrackRef.current;
+    if (!track) return;
     const requestId = lyricRequestRef.current + 1;
     lyricRequestRef.current = requestId;
     setLyricsLoading(true);
 
-    importLyricsFile(currentTrack)
+    importLyricsFile(track)
       .then((resolved) => {
         if (lyricRequestRef.current !== requestId) return;
         setLyricCacheKey(resolved.cacheKey);
@@ -555,12 +570,20 @@ export default function App() {
       .finally(() => {
         if (lyricRequestRef.current === requestId) setLyricsLoading(false);
       });
-  }, [currentTrack]);
+  }, []);
 
   useEffect(() => {
+    // Track-switch reset: zero the UI progress, clear the play-event key,
+    // and reload lyrics. Keyed to `currentTrackId` (a real track switch)
+    // rather than `currentTrack` object identity, so a metadata-only change
+    // to the current track (cover hydration, title normalization, a
+    // like-toggle swapping the Track object) does NOT reset playback
+    // position to 0. The track object is read from the ref kept in sync by
+    // the effect above. Acceptance: liking a song mid-play keeps progress.
+    const track = currentTrackRef.current;
     setProgressSeconds(0);
     lastPlayEventKeyRef.current = null;
-    if (!currentTrack || (!essentialRestoreDone && isRemoteTrack(currentTrack))) {
+    if (!track || (!essentialRestoreDone && isRemoteTrack(track))) {
       setLyrics([]);
       setTranslatedLyrics([]);
       setLyricWarning(null);
@@ -569,7 +592,7 @@ export default function App() {
       return;
     }
     reloadLyrics();
-  }, [currentTrack, currentTrackId, essentialRestoreDone, reloadLyrics]);
+  }, [currentTrackId, essentialRestoreDone, reloadLyrics]);
 
   useEffect(() => {
     if (!currentTrack) {
@@ -1173,13 +1196,21 @@ export default function App() {
 
   // Cycle through the allowed playback speeds (1 → 1.25 → 1.5 → 2 → 0.5 →
   // 0.75 → 1). Persisted to localStorage; the audio element picks up the new
-  // rate via the dedicated effect below.
+  // rate via the dedicated effect below. Used by the player-bar speed chip
+  // for a quick toggle; the More menu exposes an explicit speed list.
   const cyclePlaybackSpeed = () => {
     const currentIndex = PLAYBACK_SPEEDS.indexOf(playbackSpeed);
     const nextIndex = (currentIndex + 1) % PLAYBACK_SPEEDS.length;
     const next = PLAYBACK_SPEEDS[nextIndex]!;
     setPlaybackSpeed(next);
     window.localStorage.setItem("ome.playback.speed", String(next));
+  };
+
+  // Pick an explicit speed from the More menu's speed list. Same persistence
+  // path as cyclePlaybackSpeed so both entry points stay in sync.
+  const selectPlaybackSpeed = (speed: PlaybackSpeed) => {
+    setPlaybackSpeed(speed);
+    window.localStorage.setItem("ome.playback.speed", String(speed));
   };
 
   const toggleQueueDrawer = () => setQueueDrawerOpen((value) => !value);
@@ -1222,14 +1253,23 @@ export default function App() {
     }
   };
 
-  // Queue operations. The "queue" here is the session play queue (the local
-  // `tracks` array) — these never touch the underlying DB library, so a
-  // cleared queue can always be refilled by re-importing. Removing or
-  // clearing the currently playing track stops playback cleanly.
+  // Queue operations. SAFETY: `tracks` is an overloaded array — it holds
+  // the local library, search results, imports AND the play queue all at
+  // once. Clearing or removing from it would silently wipe the user's
+  // visible library / search results, which is destructive and not what a
+  // "Clear Queue" button should do. So neither Clear nor Remove touches
+  // `tracks`. Clear only stops playback and resets the play history /
+  // agent queue / shuffle order; the loaded list (library + search
+  // results) stays intact and can be re-played. A proper session-queue
+  // separation (separate `queueTracks` state) is deferred to a later phase.
   const removeTrackFromQueue = (trackId: string) => {
     const wasCurrent = trackId === currentTrackId;
-    setTracks((value) => value.filter((item) => item.id !== trackId));
     setAgentQueue((value) => value.filter((item) => item.id !== trackId));
+    // Drop from the play history so next/prev skip it, but do NOT remove the
+    // track from `tracks` — the library / search results must survive queue
+    // edits. shuffleOrderRef holds indices into `tracks`; since `tracks` is
+    // untouched here those indices stay valid, so no shuffle edit is needed.
+    playHistoryRef.current = playHistoryRef.current.filter((id) => id !== trackId);
     if (wasCurrent) {
       lastPlayEventKeyRef.current = null;
       setCurrentTrackId(null);
@@ -1239,7 +1279,9 @@ export default function App() {
   };
 
   const clearQueue = () => {
-    setTracks([]);
+    // Stop playback and reset the play queue machinery — but leave
+    // `tracks` untouched. The library / search results / imports stay so
+    // the user can pick another track to play. No `setTracks([])` here.
     setAgentQueue([]);
     shuffleOrderRef.current = [];
     shufflePositionRef.current = 0;
@@ -1642,7 +1684,8 @@ export default function App() {
           }}
           onLessLikeThis={handleLessLikeThis}
           onShare={handleShare}
-          onCycleSpeed={cyclePlaybackSpeed}
+          playbackSpeed={playbackSpeed}
+          onSelectSpeed={selectPlaybackSpeed}
           onSeekToLyric={setProgress}
         />
       </main>

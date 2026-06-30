@@ -7,7 +7,6 @@ import {
   Share,
   Sparkles,
   ThumbsDown,
-  X,
 } from "lucide-react";
 import clsx from "clsx";
 import type { Track } from "../types/music";
@@ -15,6 +14,7 @@ import type { LyricLine } from "../features/lyrics/lyricsResolver";
 import type { BilibiliDanmakuDebug, DanmakuItem } from "../features/musicSources/provider";
 import { ArtworkImage } from "./ArtworkImage";
 import { DanmakuAtmosphereLayer } from "./DanmakuAtmosphereLayer";
+import { PLAYBACK_SPEEDS, type PlaybackSpeed } from "./PlayerControls";
 
 interface NowPlayingHeroProps {
   track: Track | null;
@@ -35,7 +35,11 @@ interface NowPlayingHeroProps {
   onToggleLike: () => void;
   onLessLikeThis: () => void;
   onShare: () => string;
-  onCycleSpeed: () => void;
+  // Current playback speed (drives the active checkmark in the More menu's
+  // speed list) and a setter that applies an explicit speed directly — no
+  // more blind cycling.
+  playbackSpeed: PlaybackSpeed;
+  onSelectSpeed: (speed: PlaybackSpeed) => void;
   // Click a lyric line to seek the audio to that line's start time. The
   // Lyrics Room is a stage, not a flat list — clicking a line should feel
   // like dropping the needle at that moment, then the room recenters.
@@ -61,7 +65,8 @@ export function NowPlayingHero({
   onToggleLike,
   onLessLikeThis,
   onShare,
-  onCycleSpeed,
+  playbackSpeed,
+  onSelectSpeed,
   onSeekToLyric,
 }: NowPlayingHeroProps) {
   const [isTitleExpanded, setTitleExpanded] = useState(false);
@@ -219,9 +224,12 @@ export function NowPlayingHero({
               </h1>
             </div>
             {/* More button — hidden secondary actions. Opens a light glass
-                popover with Less like this / Playback speed / Share / Add to
-                playlist (stub) / View source (stub). Kept deliberately small
-                so it never competes with the cover or lyrics. */}
+                popover with only the actions that actually work today:
+                Less like this / Playback speed (explicit list) / Share.
+                Half-finished entries (Add to playlist, View source) are
+                intentionally NOT shown — an immersive player shouldn't
+                parade disabled stubs. Kept small so it never competes with
+                the cover or lyrics. */}
             <div ref={moreMenuRef} className="relative shrink-0">
               <button
                 type="button"
@@ -236,25 +244,50 @@ export function NowPlayingHero({
                 <MoreHorizontal className="h-[18px] w-[18px]" />
               </button>
               {isMoreMenuOpen && (
-                <div className="quick-settings-panel settings-scroll absolute right-0 top-11 z-50 w-60 overflow-y-auto rounded-[20px] p-2">
+                <div className="quick-settings-panel settings-scroll absolute right-0 top-11 z-50 w-64 overflow-y-auto rounded-[20px] p-2">
                   <MoreMenuItem
                     icon={ThumbsDown}
                     label="Less like this"
                     sublabel="减少推荐"
                     onClick={handleLessLikeThis}
                   />
-                  <MoreMenuItem
-                    icon={Sparkles}
-                    label="Playback speed"
-                    sublabel="播放速度"
-                    onClick={() => {
-                      setMoreMenuOpen(false);
-                      onCycleSpeed();
-                    }}
-                  />
+                  {/* Playback speed — explicit list, not blind cycling. The
+                      current speed shows a checkmark; picking one applies it
+                      immediately and closes the menu. */}
+                  <div className="px-3 pb-1 pt-2">
+                    <div className="flex items-center gap-2 text-[#4a2108]/50">
+                      <Sparkles className="h-[15px] w-[15px]" />
+                      <span className="text-[13px] font-bold text-[#4a2108]/82">
+                        Playback speed
+                      </span>
+                      <span className="text-[11px] font-semibold text-[#4a2108]/38">播放速度</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 px-2 pb-1.5">
+                    {PLAYBACK_SPEEDS.map((speed) => {
+                      const active = speed === playbackSpeed;
+                      const label = speed === 1 ? "1x" : `${speed}x`;
+                      return (
+                        <button
+                          key={speed}
+                          type="button"
+                          onClick={() => {
+                            onSelectSpeed(speed);
+                            setMoreMenuOpen(false);
+                          }}
+                          aria-pressed={active}
+                          className={`app-transition flex h-8 items-center justify-center rounded-full text-[12px] font-bold tabular-nums ${
+                            active
+                              ? "bg-[#4a2108]/85 text-white"
+                              : "bg-[#4a2108]/[0.05] text-[#4a2108]/62 hover:bg-[#4a2108]/[0.1] hover:text-[#4a2108]/85"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <MoreMenuItem icon={Share} label="Share" sublabel="分享" onClick={handleShare} />
-                  <MoreMenuItem icon={X} label="Add to playlist" sublabel="添加到歌单" disabled />
-                  <MoreMenuItem icon={X} label="View source" sublabel="查看来源" disabled />
                 </div>
               )}
             </div>

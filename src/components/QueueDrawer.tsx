@@ -117,7 +117,7 @@ export function QueueDrawer({
               onClick={onClear}
               disabled={count === 0}
               className="app-transition flex h-8 items-center gap-1.5 rounded-full bg-white/[0.04] px-3 text-[11px] font-semibold text-[#efe4d8]/55 hover:bg-[#7a2d1c]/40 hover:text-[#efe4d8] disabled:cursor-not-allowed disabled:opacity-30"
-              title="Clear queue / 清空"
+              title="Stop & reset playback — your library stays safe / 停止并重置播放，曲库保留"
             >
               <Trash2 className="h-[13px] w-[13px]" />
               Clear
@@ -239,13 +239,16 @@ export function QueueDrawer({
                         />
                       </button>
 
-                      {/* Remove */}
+                      {/* Remove from the play queue (stops if current). The
+                          track itself is NOT deleted — the library / search
+                          results stay intact. A full session-queue separation
+                          lands in a later phase. */}
                       <button
                         type="button"
                         onClick={() => onRemove(track.id)}
                         className="app-transition flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#efe4d8]/30 opacity-0 hover:bg-[#7a2d1c]/40 hover:text-[#efe4d8] group-hover:opacity-100"
                         aria-label="Remove from queue"
-                        title="Remove / 移除"
+                        title="Skip this track — library kept / 跳过此曲，曲库保留"
                       >
                         <X className="h-[14px] w-[14px]" />
                       </button>

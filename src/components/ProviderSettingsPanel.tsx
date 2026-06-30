@@ -302,8 +302,10 @@ function PlaylistShelfCard({
         </div>
       </div>
 
-      {/* Sync status line — quiet per-row feedback replacing the old global
-          message: reading / imported N · Xm ago / failed. */}
+      {/* Status line — quiet per-row feedback. NOTE: "Imported locally" is
+          deliberately honest: this is a one-way local import from NetEase,
+          NOT a two-way cloud sync. The stamp reflects when the local
+          library last received this playlist's tracks. */}
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-[11px] font-medium text-white/40">
           {isReading
@@ -311,7 +313,7 @@ function PlaylistShelfCard({
             : isFailed
               ? `Failed · ${failedReason}`
               : isImported
-                ? `Imported ${importedCount}${importedLabel ? ` · ${importedLabel}` : ""}`
+                ? `Imported locally · ${importedCount} songs${importedLabel ? ` · ${importedLabel}` : ""}`
                 : liked
                   ? "Not imported yet"
                   : "NetEase"}
@@ -323,7 +325,7 @@ function PlaylistShelfCard({
           className="app-transition flex shrink-0 items-center gap-1.5 rounded-full bg-white/[0.08] px-3 py-1.5 text-xs font-semibold text-white/64 hover:bg-white/[0.13] hover:text-white disabled:cursor-wait disabled:opacity-45"
         >
           {isReading && <Loader2 className="h-3 w-3 animate-spin" />}
-          {isReading ? "Reading" : isImported ? "Re-sync" : "Import"}
+          {isReading ? "Reading" : isImported ? "Re-import" : "Import"}
         </button>
       </div>
     </div>
@@ -1214,8 +1216,8 @@ export function ProviderSettingsPanel({
       saveLikedSyncedAt(syncedAt);
       setSourceMessage(
         includePlaylists
-          ? `Synced ${result.likedCount} liked songs and ${result.playlistCount} playlists. Taste notes are ready.`
-          : `Synced ${result.likedCount} liked songs. Taste notes are ready.`,
+          ? `Imported ${result.likedCount} liked songs and ${result.playlistCount} playlists into this library. Taste notes are ready.`
+          : `Imported ${result.likedCount} liked songs into this library. Taste notes are ready.`,
       );
     } catch (error) {
       setSourceMessage(`Could not sync listening memory. ${readError(error)}`);
@@ -2264,20 +2266,21 @@ export function ProviderSettingsPanel({
                           </div>
                         </div>
 
-                        {/* Sync stamps — Liked sync time + total imported count.
-                            Quiet single line so the user always knows whether
-                            "Sync Liked" actually finished and how many playlists
-                            already live in the local library. */}
+                        {/* Local import stamps — one-way local import from
+                            NetEase into this library, NOT a cloud sync. Quiet
+                            single line so the user knows whether the last
+                            "Sync Liked" finished and how many playlists are
+                            already in the local library. */}
                         {((likedSyncedAt && formatRelativeTime(likedSyncedAt)) ||
                           Object.keys(importedRecords).length > 0) && (
                           <p className="text-xs text-white/34">
                             {likedSyncedAt && formatRelativeTime(likedSyncedAt)
-                              ? `Liked synced ${formatRelativeTime(likedSyncedAt)}`
-                              : "Liked not synced yet"}
+                              ? `Liked imported ${formatRelativeTime(likedSyncedAt)}`
+                              : "Liked not imported yet"}
                             {Object.keys(importedRecords).length > 0
                               ? ` · ${Object.keys(importedRecords).length} playlist${
                                   Object.keys(importedRecords).length === 1 ? "" : "s"
-                                } imported`
+                                } imported locally`
                               : ""}
                           </p>
                         )}
