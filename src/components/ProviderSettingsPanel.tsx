@@ -2151,7 +2151,7 @@ export function ProviderSettingsPanel({
                               : neteaseLoginStatus?.expired
                                 ? "Session expired — please re-sign in"
                                 : musicSourceConfig.hasToken
-                                  ? "Cookie present, status unknown"
+                                  ? "Not signed in (cookie stored)"
                                   : "Signed out"
                           }
                         />
@@ -2414,9 +2414,11 @@ export function ProviderSettingsPanel({
                   <div className="flex flex-col gap-3 pt-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="text-sm text-white/44">
                       {activeSection === "sources"
-                        ? musicSourceConfig.hasToken
-                          ? "Session stored on this device. 登录状态已保存在本机。"
-                          : "Local library stays ready. 本地曲库保持可用。"
+                        ? neteaseLoginStatus?.loggedIn
+                          ? "Signed in to NetEase Cloud Music. 网易云账号已登录。"
+                          : musicSourceConfig.hasToken
+                            ? "Local service ready, sign-in unverified. 本地服务已就绪，登录状态未确认。"
+                            : "Local library stays ready. 本地曲库保持可用。"
                         : config.configured
                           ? "Current source is connected. 当前来源已连接。"
                           : "Local text is used until connected. 未连接时使用本地文本。"}

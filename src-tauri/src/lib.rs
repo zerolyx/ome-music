@@ -3530,15 +3530,27 @@ fn save_netease_token(token: &str) -> Result<(), String> {
         return Err("The NetEase session credential was empty.".to_string());
     }
 
-    // Reject plaintext fallback: sessions must live in the OS keyring.
+    // Sessions live in the OS keyring as the primary store.
     keyring::Entry::new(NETEASE_KEYRING_SERVICE, NETEASE_KEYRING_ACCOUNT)
         .map_err(|error| error.to_string())?
         .set_password(&normalized)
         .map_err(|error| error.to_string())?;
 
-    // Clean up any legacy plaintext fallback from older builds.
+    // Mirror the credential to the legacy plaintext fallback file too.
+    // We used to delete this file after a successful keyring write, but that
+    // created a real-world P0: when the OS keyring service transiently fails
+    // to read (Windows Credential Manager restart, Linux Secret Service
+    // contention, etc.), `read_netease_token` had no fallback and returned
+    // None — which the playback path then reported as `not_logged_in`,
+    // surfacing "Sign in needed" even though the user was signed in. Keeping
+    // the mirror lets a keyring read failure degrade gracefully instead of
+    // being misclassified as "user is not signed in".
     if let Some(path) = netease_token_fallback_path() {
-        let _ = fs::remove_file(path);
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let encoded = general_purpose::STANDARD.encode(normalized.as_bytes());
+        let _ = fs::write(&path, encoded);
     }
     Ok(())
 }
@@ -5923,17 +5935,26 @@ async fn fetch_netease_playable_url_with_level(
     requested_level: Option<&str>,
     proxy_state: Option<&AppState>,
 ) -> Result<PlayableUrlDto, String> {
+    // P0 fix: `resolve_netease_source_config` may have read the keyring at a
+    // transient-failure moment and returned `token: None`, even though the user
+    // is actually signed in. Before concluding anything about login state,
+    // re-read the keyring once more here. This closes the gap where the
+    // settings page showed "Signed in" (snapshot taken earlier) but playback
+    // said "Sign in needed" (keyring read failed at this moment).
+    let effective_token = config.token.clone().or_else(read_netease_token);
+    let has_token = effective_token.is_some();
+    // Build a local config with the recovered token so downstream requests
+    // actually carry the cookie.
+    let effective_config = ResolvedNeteaseSourceConfig {
+        token: effective_token,
+        ..config.clone()
+    };
+    let config = &effective_config;
+
     let requested_level = requested_level
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| {
-            if config.token.is_some() {
-                "hires"
-            } else {
-                "standard"
-            }
-        });
-    let has_token = config.token.is_some();
+        .unwrap_or(if has_token { "hires" } else { "standard" });
     let login_status = fetch_netease_login_status(config).await.ok();
     // Distinguish "login status known" from "login status unknown (API failed)".
     // When the status API is unreachable we must NOT pretend the cookie is a valid

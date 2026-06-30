@@ -131,11 +131,20 @@ export function LyricsSourceMenu({
     (track?.source === "bilibili" && Boolean(bilibiliConfig?.enabled));
 
   return (
-    <div ref={rootRef} data-danmaku-safe-zone="settings" className="fixed right-8 top-8 z-50">
+    <div
+      ref={rootRef}
+      data-danmaku-safe-zone="settings"
+      // UI subtraction (v0.3.7): the top-right Quick Settings trigger used to
+      // be a solid bordered shadowed button always shouting from the corner.
+      // It now rests faint (opacity ~45%) and only brightens on hover/focus,
+      // so the corner stops competing with the cover/lyrics focal point.
+      // Position, size and behavior are unchanged.
+      className="fixed right-8 top-8 z-50 opacity-45 transition-opacity duration-500 ease-out hover:opacity-100 focus-within:opacity-100"
+    >
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="quick-settings-trigger app-transition relative flex h-9 w-9 items-center justify-center rounded-[12px] border border-white/20 bg-white/[0.12] text-[#4a2108]/38 shadow-[0_10px_32px_rgba(74,33,8,0.08)] backdrop-blur-2xl hover:bg-white/[0.22] hover:text-[#4a2108]/68"
+        className="quick-settings-trigger app-transition relative flex h-9 w-9 items-center justify-center rounded-[12px] border border-white/10 bg-white/[0.06] text-[#4a2108]/34 shadow-[0_6px_18px_rgba(74,33,8,0.05)] backdrop-blur-2xl hover:bg-white/[0.2] hover:text-[#4a2108]/68"
         aria-label="Quick Settings"
         aria-expanded={open}
       >

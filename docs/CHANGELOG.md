@@ -27,6 +27,17 @@ Stability release. No new features. Focuses on fixing the NetEase login/playback
 - Real-time login propagation: `onNetEaseLoginChanged` / `onBilibiliLoginChanged` callbacks now refresh the App top-level `sourceLoginStatus`, Settings panel, and VIP state immediately on QR scan success — users no longer need to close and reopen Settings to see "Signed in".
 - "NetEase source ready" label corrected to "本地网易云服务已启动" so users no longer conflate service-ready with account-signed-in.
 
+### Fixed (final v0.3.7 re-release)
+
+These fixes ship in the re-cut v0.3.7 tag after acceptance found the first cut still had a real-world P0 and several P1 polish gaps.
+
+- NetEase "signed in but playback says Sign in needed" root cause fixed. The OS keyring can transiently fail to read (Windows Credential Manager restart, Linux Secret Service contention) and `read_netease_token` then returned `None`, which the playback path misclassified as `not_logged_in` — while the App shell's cached `sourceLoginStatus` still showed "Signed in" from an earlier snapshot. Three changes close the gap: (1) `save_netease_token` now mirrors the cookie to the legacy plaintext fallback file instead of deleting it after a successful keyring write, so a keyring read failure degrades gracefully; (2) `fetch_netease_playable_url_with_level` re-reads the token at the playback entry point (`config.token.or_else(read_netease_token)`) so a transient resolve-time miss no longer becomes a "not signed in" verdict; (3) the Settings panel Login line now distinguishes "Signed in" / "Session expired" / "Not signed in (cookie stored)" / "Signed out" so source-ready never masquerades as signed-in.
+- Playback failure now refreshes the App shell's cached `sourceLoginStatus` when the reason is `not_logged_in` / `cookie_missing`, so the Settings page and the playback notice can no longer disagree at the same time.
+- Overlay exclusivity hardened with a `useEffect` safety net: if Queue and Settings ever end up open in the same render, the most recently opened one wins and the other is forced off — guaranteeing they can never visually stack.
+- Subtitle / danmaku bottom clipping fixed: `.ambient-danmaku-line` changed from `overflow: hidden` to `overflow: visible` (long lines kept in check by `max-width` + `white-space: nowrap`), and lyric lines bumped to `leading-[1.18]` + `min-h-[8.5rem]` + `py-3` so descenders and the text glow are never cropped at larger sizes or during arc vertical motion.
+- Curved motion refined: default danmaku `motionStyle` is now `arc` (was `drift`); the `arc` / `ambient-arc` keyframes were retuned from a sharp "dip then rise" to a soft sinusoidal "rise → soft peak → settle" with rotation following the curve tangent, so motion reads as emotion in the air rather than a rail. Lyric-room `yShift` (7→9) and `rotate` (0.7→0.95) nudged so the spatial arc reads more strongly while staying calm.
+- Main UI subtraction extended: TopSearch and the top-right Quick Settings trigger now rest faint (opacity ~55% / ~45%) and brighten only on hover/focus, with lighter shadow/border on the trigger. Position, size and behavior are unchanged, so discoverability stays intact while the cover/lyrics focal point stops competing with always-on chrome.
+
 ### Notes
 
 - This is an unsigned development build; Windows SmartScreen may warn.

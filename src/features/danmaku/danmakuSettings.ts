@@ -34,7 +34,11 @@ export const defaultDanmakuSettings: DanmakuSettings = {
   speed: "slow",
   direction: "rtl",
   fontSize: "medium",
-  motionStyle: "drift",
+  // Arc is the default — it's the softest, most curved motion, reading as
+  // "emotion drifting across the room" rather than a flat ticker. Drift /
+  // classic stay available for users who want a straighter rail; arc is the
+  // calm default that matches the product's immersive tone.
+  motionStyle: "arc",
   entranceStyle: "fade",
   emotionalIntensity: "quiet",
   filterRepeated: true,

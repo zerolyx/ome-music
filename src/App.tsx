@@ -1231,6 +1231,18 @@ export default function App() {
     setProviderSettingsOpen(true);
   };
 
+  // P1 overlay exclusivity safety net: even though every open path already
+  // closes the other overlay, a defensive effect guarantees the invariant at
+  // the React state level. If both booleans ever end up true in the same
+  // render (e.g. a future call site forgets to close the sibling), the most
+  // recently opened one wins and the other is forced off. This is what
+  // prevents Queue and Settings from visually stacking on top of each other.
+  useEffect(() => {
+    if (isQueueDrawerOpen && isProviderSettingsOpen) {
+      setQueueDrawerOpen(false);
+    }
+  }, [isQueueDrawerOpen, isProviderSettingsOpen]);
+
   // Live login-state mirror from the settings panel into the App shell.
   // Stabilized with useCallback so the panel's propagation effect doesn't
   // re-run on every render. This closes the P0 gap where the panel showed
@@ -1478,6 +1490,17 @@ export default function App() {
       if (!playable.url || playable.unavailable) {
         if (neteaseSelectionRef.current === requestId)
           setLibraryError(playbackReasonMessage(playable.reason));
+        // P0 fix: when playback reports `not_logged_in`, the App shell's cached
+        // `sourceLoginStatus` may still show "Signed in" from an earlier
+        // snapshot. Refresh it now so the settings page / onboarding and the
+        // playback failure stay consistent, instead of the user seeing
+        // "signed in" + "Sign in needed" at the same time.
+        if (playable.reason === "not_logged_in" || playable.reason === "cookie_missing") {
+          void neteaseAuthProvider
+            .getLoginStatus()
+            .then(setSourceLoginStatus)
+            .catch(() => setSourceLoginStatus(null));
+        }
         return null;
       }
       const updatedTracks = await neteaseProvider.importSong(song.id);

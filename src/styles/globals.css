@@ -738,9 +738,14 @@ button {
     left: 0;
     top: 1px;
     max-width: min(34vw, 520px);
-    overflow: hidden;
+    /* Visible (not hidden) so descenders, the pill padding, and the text glow
+       are never clipped. Long lines are kept in check by max-width +
+       white-space nowrap on the parent corridor; the previous overflow:hidden
+       + text-overflow:ellipsis cut the bottom of glyphs at larger sizes and
+       during arc vertical motion. */
+    overflow: visible;
     white-space: nowrap;
-    text-overflow: ellipsis;
+    text-overflow: clip;
     border-radius: 999px;
     padding: 0.2rem 0.68rem;
     color: rgba(255, 248, 240, 0.94);
@@ -858,56 +863,58 @@ button {
 }
 
 /* Arc — the recommended "emotion sweeping across the room" motion. Unlike the
-   straight-line classic/drift, the item rides a soft quadratic Y curve (dip
-   then rise) with a slight rotation that follows the curve tangent, so it
-   reads as floating along a curved path rather than sliding on a rail. */
+   straight-line classic/drift, the item rides a soft sinusoidal Y curve with
+   a rotation that follows the curve tangent, so it reads as floating along a
+   curved path rather than sliding on a rail. The curve is tuned to feel like
+   air carrying a thought: a gentle rise into the room, a soft peak mid-travel,
+   then a quiet settle on the way out — never a sharp dip-then-jump. */
 @keyframes danmaku-arc-rtl {
   0% {
     opacity: 0;
-    transform: translate3d(56vw, 0, 0) rotate(2deg);
+    transform: translate3d(56vw, 2px, 0) rotate(1.4deg);
   }
-  10% {
+  12% {
     opacity: 1;
-    transform: translate3d(42vw, 12px, 0) rotate(1deg);
+    transform: translate3d(40vw, -10px, 0) rotate(0.6deg);
   }
-  35% {
-    transform: translate3d(20vw, 24px, 0) rotate(-1deg);
+  32% {
+    transform: translate3d(22vw, -18px, 0) rotate(-0.6deg);
   }
-  60% {
-    transform: translate3d(0vw, 14px, 0) rotate(-1.5deg);
+  54% {
+    transform: translate3d(2vw, -14px, 0) rotate(-1.2deg);
   }
-  82% {
-    opacity: 0.9;
-    transform: translate3d(calc(-20vw - 1rem), -6px, 0) rotate(0.5deg);
+  76% {
+    opacity: 0.92;
+    transform: translate3d(calc(-18vw - 1rem), -4px, 0) rotate(-0.4deg);
   }
   100% {
     opacity: 0;
-    transform: translate3d(calc(-100% - 2rem), -14px, 0) rotate(-1deg);
+    transform: translate3d(calc(-100% - 2rem), 8px, 0) rotate(0.8deg);
   }
 }
 
 @keyframes danmaku-arc-ltr {
   0% {
     opacity: 0;
-    transform: translate3d(calc(-100% - 2rem), 0, 0) rotate(-2deg);
+    transform: translate3d(calc(-100% - 2rem), 2px, 0) rotate(-1.4deg);
   }
-  10% {
+  12% {
     opacity: 1;
-    transform: translate3d(calc(-42vw - 1rem), 12px, 0) rotate(-1deg);
+    transform: translate3d(calc(-40vw - 1rem), -10px, 0) rotate(-0.6deg);
   }
-  35% {
-    transform: translate3d(calc(-20vw - 1rem), 24px, 0) rotate(1deg);
+  32% {
+    transform: translate3d(calc(-22vw - 1rem), -18px, 0) rotate(0.6deg);
   }
-  60% {
-    transform: translate3d(0vw, 14px, 0) rotate(1.5deg);
+  54% {
+    transform: translate3d(0vw, -14px, 0) rotate(1.2deg);
   }
-  82% {
-    opacity: 0.9;
-    transform: translate3d(20vw, -6px, 0) rotate(-0.5deg);
+  76% {
+    opacity: 0.92;
+    transform: translate3d(18vw, -4px, 0) rotate(0.4deg);
   }
   100% {
     opacity: 0;
-    transform: translate3d(56vw, -14px, 0) rotate(1deg);
+    transform: translate3d(56vw, 8px, 0) rotate(-0.8deg);
   }
 }
 
@@ -1090,56 +1097,59 @@ button {
   }
 }
 
-/* Ambient arc — same soft quadratic Y curve as the in-video arc, but traveling
-   across the full window. X start/end use the ambient travel convention; the
-   midpoints use vw so the curve reads at any window size. */
+/* Ambient arc — same soft sinusoidal Y curve as the in-video arc, but
+   traveling across the full window. X start/end use the ambient travel
+   convention; the midpoints use vw so the curve reads at any window size.
+   The curve is a gentle rise → soft peak → settle, mirroring the in-video
+   arc so danmaku and ambient atmosphere share one emotional motion
+   language. */
 @keyframes ambient-arc-rtl {
   0% {
     opacity: 0;
-    transform: translate3d(var(--ambient-travel), 0, 0) rotate(2deg);
+    transform: translate3d(var(--ambient-travel), 2px, 0) rotate(1.4deg);
   }
-  10% {
+  12% {
     opacity: 1;
-    transform: translate3d(60vw, 12px, 0) rotate(1deg);
+    transform: translate3d(58vw, -10px, 0) rotate(0.6deg);
   }
-  35% {
-    transform: translate3d(30vw, 24px, 0) rotate(-1deg);
+  32% {
+    transform: translate3d(32vw, -18px, 0) rotate(-0.6deg);
   }
-  60% {
-    transform: translate3d(0vw, 14px, 0) rotate(-1.5deg);
+  54% {
+    transform: translate3d(4vw, -14px, 0) rotate(-1.2deg);
   }
-  82% {
-    opacity: 0.9;
-    transform: translate3d(-30vw, -6px, 0) rotate(0.5deg);
+  76% {
+    opacity: 0.92;
+    transform: translate3d(-26vw, -4px, 0) rotate(-0.4deg);
   }
   100% {
     opacity: 0;
-    transform: translate3d(calc(-100% - 1.5rem), -14px, 0) rotate(-1deg);
+    transform: translate3d(calc(-100% - 1.5rem), 8px, 0) rotate(0.8deg);
   }
 }
 
 @keyframes ambient-arc-ltr {
   0% {
     opacity: 0;
-    transform: translate3d(calc(-100% - 1.5rem), 0, 0) rotate(-2deg);
+    transform: translate3d(calc(-100% - 1.5rem), 2px, 0) rotate(-1.4deg);
   }
-  10% {
+  12% {
     opacity: 1;
-    transform: translate3d(-60vw, 12px, 0) rotate(-1deg);
+    transform: translate3d(-58vw, -10px, 0) rotate(-0.6deg);
   }
-  35% {
-    transform: translate3d(-30vw, 24px, 0) rotate(1deg);
+  32% {
+    transform: translate3d(-32vw, -18px, 0) rotate(0.6deg);
   }
-  60% {
-    transform: translate3d(0vw, 14px, 0) rotate(1.5deg);
+  54% {
+    transform: translate3d(-4vw, -14px, 0) rotate(1.2deg);
   }
-  82% {
-    opacity: 0.9;
-    transform: translate3d(30vw, -6px, 0) rotate(-0.5deg);
+  76% {
+    opacity: 0.92;
+    transform: translate3d(26vw, -4px, 0) rotate(0.4deg);
   }
   100% {
     opacity: 0;
-    transform: translate3d(var(--ambient-travel), -14px, 0) rotate(1deg);
+    transform: translate3d(var(--ambient-travel), 8px, 0) rotate(-0.8deg);
   }
 }
 

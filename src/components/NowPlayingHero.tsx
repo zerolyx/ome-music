@@ -477,7 +477,7 @@ function LyricsRoom({
     <>
       <div
         ref={scrollRef}
-        className="lyrics-scroll h-[58vh] touch-pan-y overflow-y-auto overscroll-contain py-[24vh] pr-8"
+        className="lyrics-scroll h-[58vh] touch-pan-y overflow-y-auto overscroll-contain px-2 py-[24vh] pr-8"
         onWheel={(event) => event.stopPropagation()}
       >
         {lyrics.map((line, index) => {
@@ -501,15 +501,16 @@ function LyricsRoom({
           const xShift = isCurrent ? 0 : dir * Math.min(distance, 4) * 6;
           // Vertical curve: lines drift away from the current line along Y,
           // which together with the X fan reads as a curved/arc stage rather
-          // than a flat list. Capped so far lines stay on-screen.
-          const yShift = isCurrent ? 0 : dir * Math.min(distance, 4) * 7;
+          // than a flat list. Bumped the factor so the arc curvature reads
+          // more strongly while staying capped and calm.
+          const yShift = isCurrent ? 0 : dir * Math.min(distance, 4) * 9;
           // True depth into the screen — the stage has preserve-3d, so this
           // composes with the container's perspective(1200px) rotateY(-3deg)
           // to make nearby lines feel close and far lines recede.
           const zShift = isCurrent ? 0 : isNearby ? -38 : -86;
-          // Gentle rotate following the curve tangent, slightly stronger so
-          // the arc reads. Capped to stay calm.
-          const rotate = isCurrent ? 0 : dir * Math.min(distance, 3) * 0.7;
+          // Gentle rotate following the curve tangent. Slightly stronger so
+          // the arc reads as a path, not a stack. Capped to stay calm.
+          const rotate = isCurrent ? 0 : dir * Math.min(distance, 3) * 0.95;
 
           return (
             <button
@@ -523,7 +524,7 @@ function LyricsRoom({
                 filter: blur > 0 ? `blur(${blur}px)` : undefined,
               }}
               className={clsx(
-                "app-transition m-0 flex min-h-[7.75rem] w-full origin-center cursor-pointer items-center border-0 bg-transparent p-0 text-left text-balance text-4xl font-black leading-[1.04] duration-700 ease-out lg:text-5xl xl:text-7xl",
+                "app-transition m-0 flex min-h-[8.5rem] w-full origin-center cursor-pointer items-center border-0 bg-transparent px-1 py-3 text-left text-balance text-4xl font-black leading-[1.18] duration-700 ease-out lg:text-5xl xl:text-7xl",
                 isCurrent ? "text-[#4a2108]" : "text-[#4a2108] hover:text-[#4a2108]/70",
               )}
               title={`Jump to ${formatTime(line.startTime)}`}

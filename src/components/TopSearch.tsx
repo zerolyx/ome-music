@@ -221,7 +221,12 @@ export function TopSearch({
     <div
       ref={rootRef}
       data-danmaku-safe-zone="search"
-      className="fixed left-1/2 top-5 z-40 w-[min(34vw,560px)] min-w-[300px] max-w-[calc(100vw-8rem)] -translate-x-1/2 max-md:left-6 max-md:right-20 max-md:w-auto max-md:min-w-0 max-md:max-w-none max-md:translate-x-0"
+      // UI subtraction (v0.3.7): the search bar is the largest always-on chrome
+      // competing with the cover/lyrics focal point. It now stays faint at rest
+      // (opacity ~55%) and only brightens when the user approaches it — hover
+      // or focus-within. Position, width and behavior are unchanged, so
+      // discoverability and the open-results flow stay intact.
+      className="fixed left-1/2 top-5 z-40 w-[min(34vw,560px)] min-w-[300px] max-w-[calc(100vw-8rem)] -translate-x-1/2 opacity-55 transition-opacity duration-500 ease-out hover:opacity-100 focus-within:opacity-100 max-md:left-6 max-md:right-20 max-md:w-auto max-md:min-w-0 max-md:max-w-none max-md:translate-x-0"
     >
       <div className="search-glass flex h-10 items-center gap-2.5 rounded-full px-3.5">
         <Search className="h-3.5 w-3.5 shrink-0 text-[#4a2108]/28" />
