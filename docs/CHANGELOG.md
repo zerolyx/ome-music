@@ -6,6 +6,35 @@ This project follows small, traceable releases. Keep entries short and focused o
 
 - No unreleased changes yet.
 
+## [0.3.6] - 2026-06-30
+
+This is the latest recommended public download. Older releases are deprecated and no longer recommended.
+
+### Added
+
+- Player Dock functional keys: unified `PlaybackMode` cycle (curator → loop → repeat-one → shuffle), like button on the cover with local persistence + Taste Signal, and a light glass "More" menu.
+- Like / Less like this taste signals feed the local listening-memory pipeline.
+- Playback speed controls: explicit 6-option selection grid (0.5 / 0.75 / 1 / 1.25 / 1.5 / 2x) in the More menu, persisted to `ome.playback.speed` and surviving restarts and track switches.
+- Queue Drawer: right-side slide-over glass panel with click-to-play, current-track highlight + equalizer animation, row-level like/remove (hover) and list-level like-all / clear / recommend-similar toggle.
+- Lyrics Room alpha: spatial stage with three depth tiers (current / nearby / far), radial drift, micro-rotation, breathing animation, click-a-line-to-seek, and a soft no-lyrics empty state.
+- Hidden Lyric Tools: bottom-right hotspot cluster that appears only on hover; Translation reveals translated lyrics (data-permitting); Romanization / Word-by-word stay disabled until a data pipeline exists.
+- Playlist Shelf: card grid replacing the old Listening Memory table, per-playlist progress state machine (reading / imported locally N · relative time / failed), persisted local import records, and heuristic identification of the NetEase "我喜欢的音乐" entry.
+
+### Fixed
+
+- Restored stable NetEase search, cover display, login-state detection, and playback pipeline (from PR #12).
+- Restored Bilibili replay hydration for cover, video atmosphere, audio, and danmaku (from PR #12).
+- Prevented playback progress and lyric position from resetting on metadata-only liked updates: `reloadLyrics` / `importLyrics` now read `currentTrackRef.current` (latest-ref stable pattern), and the track-switch reset effect is keyed to `currentTrackId` (a real track switch) instead of `currentTrack` object identity.
+- Queue safety: Clear / Remove no longer touch the overloaded `tracks` array (local library + search results + imports), so clearing or removing from the queue never wipes the visible library or search results.
+- Hidden half-finished More-menu stubs (Add to playlist, View source) so the immersive player no longer parades disabled entries.
+
+### Notes
+
+- This is an unsigned development build; Windows SmartScreen may warn.
+- The Windows installer bundles the managed NetEase runtime; users do not need Node.js, npm, Rust, or command line tools.
+- Playlist Shelf records a one-way local import from NetEase, NOT a two-way cloud sync.
+- Bumped version to 0.3.6.
+
 ## [0.3.5] - 2026-06-29
 
 ### Fixed
