@@ -1,0 +1,103 @@
+name: 错误报告 / Bug Report
+description: Report a reproducible problem in Ome Music.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Ome Music.
+
+        Please do not report security vulnerabilities here. For security issues, follow SECURITY.md.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述 / Description
+      description: 请清楚描述发生了什么。 / Clearly describe what happened.
+      placeholder: 例如：网易云已登录，但播放会员歌曲时提示 Sign in needed。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to Reproduce
+      description: 请写出稳定复现步骤。 / List the steps needed to reproduce the issue.
+      placeholder: |
+        1. 打开 Ome Music
+        2. 登录网易云
+        3. 搜索某首歌
+        4. 点击播放
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为 / Expected Behavior
+      description: 你期望发生什么？ / What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为 / Actual Behavior
+      description: 实际发生了什么？ / What actually happened?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影响范围 / Area
+      multiple: true
+      options:
+        - NetEase Cloud Music / 网易云音乐
+        - Bilibili music source / B 站音乐源
+        - Local music / 本地音乐
+        - Lyrics Room / 歌词房间
+        - Queue / 播放队列
+        - Playlist Shelf / 歌单架
+        - Installer / 安装包
+        - UI / 界面
+        - Other / 其他
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Ome Music 版本 / Version
+      placeholder: 例如：v0.3.6
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统 / Operating System
+      options:
+        - Windows 11
+        - Windows 10
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / Logs
+      description: 如果有错误日志、截图、诊断信息，请粘贴在这里。请不要粘贴 Cookie、Token、密码或隐私信息。
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图 / Screenshots
+      description: 可以拖入截图帮助说明问题。 / Drag screenshots here if helpful.
+    validations:
+      required: false

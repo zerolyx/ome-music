@@ -1,0 +1,62 @@
+name: 功能建议 / Feature Request
+description: Suggest an improvement for Ome Music.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping shape Ome Music.
+
+        Please keep feature requests focused. Ome Music aims to stay small, quiet, immersive, and music-first.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题？ / Problem
+      description: 请描述当前体验中缺少什么，或哪里不够好。 / Describe the problem or missing experience.
+      placeholder: 例如：播放列表和设置浮层会重叠，界面不够安静。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你的建议 / Proposed Solution
+      description: 你希望 Ome Music 怎么改？ / What would you like Ome Music to do?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 相关区域 / Area
+      multiple: true
+      options:
+        - Playback / 播放
+        - Music source / 音乐源
+        - Lyrics Room / 歌词房间
+        - Danmaku / 弹幕
+        - Queue / 播放队列
+        - Playlist / 歌单
+        - Installer / 安装包
+        - UI / 界面
+        - Other / 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案 / Alternatives
+      description: 你考虑过其他方案吗？ / Have you considered alternatives?
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 参考资料 / Additional Context
+      description: 可以贴截图、参考链接、设计说明等。 / Add screenshots, links, or notes if helpful.
+    validations:
+      required: false
