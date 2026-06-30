@@ -24,7 +24,7 @@ Ome Music should stay small, readable, and easy to release. This document is the
 5. If the bundled Node.js runtime version changed, update both `NODE_VERSION` and `NODE_SHA256` in `.github/workflows/release.yml` (the SHA256 is published at `https://nodejs.org/dist/v<NODE_VERSION>/SHASUMS256.txt`).
 6. Open a pull request for the release maintenance patch.
 7. Merge only after CI passes.
-8. Create a version tag, for example `v0.3.5`.
+8. Create a version tag, for example `v0.3.6`.
 9. Confirm the `Release Windows Build` workflow generates the NSIS installer and the `release-sha256-checksums` artifact.
 10. Verify the published installer's SHA256 against the checksum artifact before announcing the release.
 11. Download the installer from GitHub Releases and launch it on Windows before announcing the release.

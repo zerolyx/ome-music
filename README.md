@@ -16,6 +16,8 @@ You do not need to know Node.js, Rust, Vite, URLs, packaging, or command lines t
 
 The current build is unsigned, so Windows SmartScreen may show a warning. Choose **More info** and **Run anyway** only if you downloaded it from this repository.
 
+Older releases are deprecated and no longer recommended. Always download the latest version from the Releases page.
+
 ## What You Can Do
 
 - Play local music from your computer.
