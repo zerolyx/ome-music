@@ -36,6 +36,10 @@ _codex_backups/
 # App artifacts
 artifacts/
 release/
+# Downloaded release assets (installer + checksums) used for local verification.
+# Must never be committed — they are large binaries and are published via the
+# GitHub Release, not the repo.
+release-v*/
 *.msi
 *.exe
 *.dmg
