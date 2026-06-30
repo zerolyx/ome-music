@@ -167,6 +167,22 @@ export default function App() {
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [playableSrc, setPlayableSrc] = useState("");
   const [videoAtmosphereSrc, setVideoAtmosphereSrc] = useState("");
+  // Auto-retry nonce: when the audio element errors out on a remote (proxied)
+  // URL, we bump this to force the resolvePlayable effect to re-fetch a fresh
+  // playable URL instead of stranding the user on a stale/expired ome-media://
+  // token. Capped per (trackId + quality + source) to avoid infinite loops.
+  //
+  // Retry budget rules:
+  //   - Resolving a fresh URL does NOT reset the counter — only the audio
+  //     element reaching canplay / playing / loadeddata does. Otherwise a
+  //     URL that resolves but immediately errors could loop forever.
+  //   - Switching tracks or the user pressing play manually resets the
+  //     counter so genuine user retries always get a fresh budget.
+  //   - After 2 consecutive errors without canplay, we stop retrying and
+  //     surface the real reason via playbackReasonMessage.
+  const [playbackRetryNonce, setPlaybackRetryNonce] = useState(0);
+  const playbackRetryCountRef = useRef(0);
+  const playbackRetryKeyRef = useRef<string>("");
   const [isVoiceDucking, setVoiceDucking] = useState(false);
   const [lyrics, setLyrics] = useState<LyricLine[]>([]);
   const [lyricCacheKey, setLyricCacheKey] = useState<string | null>(null);
@@ -234,6 +250,24 @@ export default function App() {
   useEffect(() => {
     playableSrcRef.current = playableSrc;
   }, [playableSrc]);
+
+  // Mirror playbackQuality into a ref so the audio-error handler (which is
+  // bound once at mount) can read the latest quality when computing the
+  // retry key without re-subscribing on every quality change.
+  const playbackQualityRef = useRef(playbackQuality);
+  useEffect(() => {
+    playbackQualityRef.current = playbackQuality;
+  }, [playbackQuality]);
+
+  // Reset the playback retry budget when the current track changes. The
+  // per-key check in handleError also covers this, but resetting explicitly
+  // here keeps the budget fresh for the new track even if the user never
+  // presses play manually.
+  useEffect(() => {
+    playbackRetryCountRef.current = 0;
+    playbackRetryKeyRef.current = "";
+    setPlaybackRetryNonce(0);
+  }, [currentTrackId]);
 
   useEffect(() => {
     if (!currentTrack) return;
@@ -461,7 +495,10 @@ export default function App() {
     }
 
     // If we already have a playable URL resolved for this track at the current quality, keep it across isPlaying toggles.
+    // Skip this guard when a retry is requested (playbackRetryNonce changed) so a
+    // stale/expired ome-media:// URL can be replaced with a fresh resolve.
     if (
+      playbackRetryNonce === 0 &&
       playableSrcForTrackIdRef.current?.trackId === currentTrack.id &&
       playableSrcForTrackIdRef.current?.quality === playbackQuality
     )
@@ -515,6 +552,13 @@ export default function App() {
       .then(({ audioUrl, videoUrl }) => {
         if (playableRequestRef.current !== requestId) return;
         playableSrcForTrackIdRef.current = { trackId: currentTrack.id, quality: playbackQuality };
+        // NOTE: do NOT reset playbackRetryCountRef here. A successful resolve
+        // only means we got a URL — it does not mean the URL actually plays.
+        // Resetting here would let a URL that resolves but immediately errors
+        // loop resolve/proxy/error forever. The counter is reset only when the
+        // audio element reaches canplay / playing / loadeddata, or when the
+        // user manually presses play, or when the track changes.
+        setPlaybackRetryNonce(0);
         setPlayableSrc(audioUrl);
         setVideoAtmosphereSrc(videoUrl ?? "");
       })
@@ -525,7 +569,7 @@ export default function App() {
         setIsPlaying(false);
         setLibraryError(error instanceof Error ? error.message : playbackReasonMessage());
       });
-  }, [currentTrack, isPlaying, playbackQuality]);
+  }, [currentTrack, isPlaying, playbackQuality, playbackRetryNonce]);
 
   useEffect(() => {
     let cancelled = false;
@@ -664,24 +708,77 @@ export default function App() {
 
     const handleTimeUpdate = () => setProgressSeconds(audio.currentTime);
     const handleEnded = () => handleAudioEndedRef.current();
+    // The audio element reached a real playback-ready state. Only at this
+    // point do we know the resolved URL actually plays, so it is safe to
+    // reset the retry budget. Resetting on resolve-success alone would let a
+    // URL that resolves but immediately errors loop resolve/proxy/error.
+    const handlePlaybackReady = () => {
+      playbackRetryCountRef.current = 0;
+    };
     const handleError = () => {
       const track = currentTrackRef.current;
       if (!track || !playableSrcRef.current) return;
-      // 清理已解析 URL 的缓存标记，使 resolve effect 重新触发，
-      // 解决签名 URL / 代理 token 过期后播放中断却无法恢复的问题。
+      // The cached proxied URL (ome-media:// token) may have expired or the
+      // remote CDN refused the request. For remote tracks we attempt up to
+      // two automatic re-resolves (per track + quality + source) before
+      // surfacing the real reason, so users do not have to manually re-search
+      // or re-click a track when a Bilibili / NetEase media token expires
+      // mid-session.
+      const failedSrc = playableSrcRef.current;
+      const looksLikeProxiedRemoteUrl =
+        isRemoteTrack(track) &&
+        (failedSrc.startsWith("ome-media:") || failedSrc.includes("ome-media.localhost"));
+      // Drop the cached prepared entry so the resolve effect fetches a fresh URL.
+      preparedPlayableRef.current.delete(track.id);
       playableSrcForTrackIdRef.current = null;
       setPlayableSrc("");
+      if (looksLikeProxiedRemoteUrl) {
+        // Retry cap is scoped to (trackId + quality + source). Switching
+        // tracks or changing quality starts a fresh budget; pressing play
+        // manually also resets via togglePlay.
+        const retryKey = `${track.id}:${playbackQualityRef.current}:${track.source}`;
+        if (playbackRetryKeyRef.current !== retryKey) {
+          playbackRetryKeyRef.current = retryKey;
+          playbackRetryCountRef.current = 0;
+        }
+        playbackRetryCountRef.current += 1;
+        if (playbackRetryCountRef.current <= 2) {
+          setLibraryError(null);
+          // Bump the nonce to force resolvePlayable to re-run with a fresh fetch.
+          setPlaybackRetryNonce((value) => value + 1);
+          return;
+        }
+        // Cap exceeded: stop retrying and surface the real reason so the
+        // user can act on it (re-sign-in, switch quality, pick another
+        // track, ...). Do NOT reset the counter here either — let it stay
+        // exceeded until the user explicitly retries or switches tracks.
+        setPlaybackRetryNonce(0);
+        setIsPlaying(false);
+        setLibraryError(
+          playbackReasonMessage(track.unavailableReason) +
+            " (auto-retry exhausted — try playing again, switching quality, or re-signing in.)",
+        );
+        return;
+      }
+      // Non-proxied remote URL or local file failure: no auto-retry.
+      setPlaybackRetryNonce(0);
       setIsPlaying(false);
       setLibraryError(playbackReasonMessage(track.unavailableReason));
     };
 
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("canplay", handlePlaybackReady);
+    audio.addEventListener("playing", handlePlaybackReady);
+    audio.addEventListener("loadeddata", handlePlaybackReady);
     audio.addEventListener("error", handleError);
 
     return () => {
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("canplay", handlePlaybackReady);
+      audio.removeEventListener("playing", handlePlaybackReady);
+      audio.removeEventListener("loadeddata", handlePlaybackReady);
       audio.removeEventListener("error", handleError);
     };
   }, []);
@@ -906,6 +1003,14 @@ export default function App() {
 
   const togglePlay = () => {
     if (!currentTrack) return;
+
+    // A manual play press always gets a fresh retry budget — the user is
+    // explicitly asking us to try again, so we should not strand them on a
+    // stale "auto-retry exhausted" state from a previous failed attempt.
+    const retryKey = `${currentTrack.id}:${playbackQuality}:${currentTrack.source}`;
+    playbackRetryKeyRef.current = retryKey;
+    playbackRetryCountRef.current = 0;
+    setPlaybackRetryNonce(0);
 
     if (!playableSrc) {
       if (isRemoteTrack(currentTrack) && !isTrackUnavailable(currentTrack)) {
@@ -1363,6 +1468,8 @@ export default function App() {
             focus={settingsFocus}
             playbackQuality={playbackQuality}
             onPlaybackQualityChange={changePlaybackQuality}
+            neteasePlaybackDebug={playbackDebug}
+            bilibiliDanmakuDebug={danmakuDebug}
             onClose={() => {
               setProviderSettingsOpen(false);
               void neteaseAuthProvider
