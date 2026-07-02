@@ -12,6 +12,7 @@ import {
 import { QueueDrawer, loadRecommendSimilar, saveRecommendSimilar } from "./components/QueueDrawer";
 import { TopSearch } from "./components/TopSearch";
 import { WindowTitlebar } from "./components/WindowTitlebar";
+import { resolveTrackCover } from "./features/artwork/resolveTrackCover";
 import {
   importMusicFolder,
   isTrackUnavailable,
@@ -73,6 +74,9 @@ const ProviderSettingsPanel = lazy(() =>
     default: module.ProviderSettingsPanel,
   })),
 );
+
+type ActiveOverlay =
+  "none" | "more" | "queue" | "quickSettings" | "settings" | "source" | "lyricsTools";
 const DjCuratorPanel = lazy(() =>
   import("./components/DjCuratorPanel").then((module) => ({ default: module.DjCuratorPanel })),
 );
@@ -126,7 +130,41 @@ function sourceIdForTrack(track: Track): string | null {
   if (track.filePath.startsWith("unavailable:bilibili:")) {
     return track.filePath.replace("unavailable:bilibili:", "");
   }
+  if (track.filePath.startsWith("netease:")) {
+    return track.filePath.replace("netease:", "");
+  }
+  if (track.filePath.startsWith("bilibili:")) {
+    return track.filePath.replace("bilibili:", "");
+  }
   return null;
+}
+
+function trackFromNetEaseSearchResult(song: MusicSourceSong): Track {
+  return {
+    id: `netease-preview-${song.id}`,
+    title: song.title,
+    artist: song.artist,
+    album: song.album,
+    durationSeconds: song.durationSeconds,
+    filePath: `netease:${song.id}`,
+    source: "netease",
+    sourceId: song.id,
+    unavailableReason: song.unavailableReason ?? null,
+    coverUrl: song.coverUrl,
+    genres: [],
+    moods: ["unknown"],
+    language: "unknown",
+    playCount: 0,
+    skipCount: 0,
+    liked: false,
+    importedAt: new Date().toISOString(),
+  };
+}
+
+function needsNeteaseCoverHydration(track: Track): boolean {
+  if (track.source !== "netease" || !sourceIdForTrack(track)) return false;
+  const coverUrl = track.coverUrl?.trim() ?? "";
+  return coverUrl === "" || coverUrl.toLowerCase().startsWith("data:image/svg+xml");
 }
 
 // Public share URL for a track, if one exists. NetEase songs link to
@@ -191,6 +229,7 @@ export default function App() {
   const preparedPlayableRef = useRef<Map<string, { audioUrl: string; videoUrl?: string | null }>>(
     new Map(),
   );
+  const coverHydrationRef = useRef<Set<string>>(new Set());
   const progressSecondsRef = useRef(startupSnapshot?.position ?? 0);
   const currentTrackRef = useRef<Track | null>(null);
   const loopModeRef = useRef<LoopMode>("all");
@@ -247,7 +286,7 @@ export default function App() {
   const [lyricWarning, setLyricWarning] = useState<string | null>(null);
   const [lyricOffsetMs, setLyricOffsetMs] = useState(0);
   const [isLyricsLoading, setLyricsLoading] = useState(false);
-  const [isProviderSettingsOpen, setProviderSettingsOpen] = useState(false);
+  const [activeOverlay, setActiveOverlay] = useState<ActiveOverlay>("none");
   const [settingsFocus, setSettingsFocus] = useState<"all" | "music" | "atmosphere">("music");
   const [playbackDebug, setPlaybackDebug] = useState<NetEasePlaybackDebug | null>(null);
   const [sourceServiceStatus, setSourceServiceStatus] = useState<NetEaseServiceStatus | null>(null);
@@ -286,10 +325,6 @@ export default function App() {
     const stored = Number.parseFloat(window.localStorage.getItem("ome.playback.speed") ?? "1");
     return (PLAYBACK_SPEEDS as readonly number[]).includes(stored) ? (stored as PlaybackSpeed) : 1;
   });
-  // Queue drawer visibility. The drawer itself lands in Phase 2; for now this
-  // state just toggles the player-bar queue button active state so the
-  // interaction is wired and ready.
-  const [isQueueDrawerOpen, setQueueDrawerOpen] = useState(false);
   // Recommend-similar toggle in the queue drawer footer. Persisted so the
   // preference survives restarts; future phases read it when picking the
   // next track. No logic yet — this is just the user-visible Taste Signal.
@@ -303,10 +338,40 @@ export default function App() {
     () => (currentIndex >= 0 ? (tracks[currentIndex] ?? null) : null),
     [currentIndex, tracks],
   );
+  const currentArtwork = useMemo(() => resolveTrackCover(currentTrack), [currentTrack]);
+  const isProviderSettingsOpen = activeOverlay === "settings";
+  const isQueueDrawerOpen = activeOverlay === "queue";
   const currentLyricIndex = useMemo(
     () => getCurrentLyricIndex(lyrics, progressSeconds, lyricOffsetMs),
     [lyrics, lyricOffsetMs, progressSeconds],
   );
+
+  useEffect(() => {
+    const targets = tracks
+      .filter(needsNeteaseCoverHydration)
+      .filter((track) => !coverHydrationRef.current.has(track.id))
+      .slice(0, 48);
+
+    if (targets.length === 0) return;
+
+    for (const target of targets) {
+      const sourceId = sourceIdForTrack(target);
+      if (!sourceId) continue;
+      coverHydrationRef.current.add(target.id);
+      void neteaseProvider
+        .getSongMetadata(sourceId)
+        .then((song) => {
+          const coverUrl = song.coverUrl?.trim();
+          if (!coverUrl) return;
+          setTracks((value) =>
+            value.map((track) => (track.id === target.id ? { ...track, coverUrl } : track)),
+          );
+        })
+        .catch(() => {
+          /* Best-effort cover repair for older imported rows. */
+        });
+    }
+  }, [tracks]);
 
   useEffect(() => {
     progressSecondsRef.current = progressSeconds;
@@ -1214,34 +1279,35 @@ export default function App() {
   };
 
   const toggleQueueDrawer = () => {
-    // Overlay coordination (Part 4): the Queue Drawer and the Settings panel
-    // are mutually exclusive main overlays. Opening one closes the other so the
-    // user is never in two overlapping primary contexts at once.
-    setQueueDrawerOpen((value) => {
-      if (!value) setProviderSettingsOpen(false);
-      return !value;
-    });
+    setActiveOverlay((value) => (value === "queue" ? "none" : "queue"));
   };
 
   // Unified entry into the Settings panel — closes the Queue Drawer so the two
   // never stack. Used by every "open settings" call site below.
   const openProviderSettings = (focus?: "all" | "music" | "atmosphere") => {
     if (focus) setSettingsFocus(focus);
-    setQueueDrawerOpen(false);
-    setProviderSettingsOpen(true);
+    setActiveOverlay("settings");
   };
 
-  // P1 overlay exclusivity safety net: even though every open path already
-  // closes the other overlay, a defensive effect guarantees the invariant at
-  // the React state level. If both booleans ever end up true in the same
-  // render (e.g. a future call site forgets to close the sibling), the most
-  // recently opened one wins and the other is forced off. This is what
-  // prevents Queue and Settings from visually stacking on top of each other.
-  useEffect(() => {
-    if (isQueueDrawerOpen && isProviderSettingsOpen) {
-      setQueueDrawerOpen(false);
-    }
-  }, [isQueueDrawerOpen, isProviderSettingsOpen]);
+  const closeOverlay = useCallback(() => {
+    setActiveOverlay("none");
+  }, []);
+
+  const openMoreOverlay = useCallback(() => {
+    setActiveOverlay("more");
+  }, []);
+
+  const closeMoreOverlay = useCallback(() => {
+    setActiveOverlay((value) => (value === "more" ? "none" : value));
+  }, []);
+
+  const openQuickSettingsOverlay = useCallback(() => {
+    setActiveOverlay("quickSettings");
+  }, []);
+
+  const closeQuickSettingsOverlay = useCallback(() => {
+    setActiveOverlay((value) => (value === "quickSettings" ? "none" : value));
+  }, []);
 
   // Live login-state mirror from the settings panel into the App shell.
   // Stabilized with useCallback so the panel's propagation effect doesn't
@@ -1385,11 +1451,78 @@ export default function App() {
   };
 
   const playLocalTrack = (track: Track) => {
+    if (isTrackUnavailable(track)) {
+      setLibraryError(playbackReasonMessage(track.unavailableReason));
+      return;
+    }
     lastPlayEventKeyRef.current = null;
     setCurrentTrackId(track.id);
     setProgressSeconds(0);
     setIsPlaying(true);
     setLibraryError(null);
+  };
+
+  const playQueueTrack = async (track: Track) => {
+    closeOverlay();
+    if (!isTrackUnavailable(track)) {
+      playLocalTrack(track);
+      return;
+    }
+
+    const sourceId = sourceIdForTrack(track);
+    if (track.source === "netease" && sourceId) {
+      try {
+        const playable = await neteaseProvider.getPlayableUrl(sourceId, { level: playbackQuality });
+        setPlaybackDebug(playable.debug ?? null);
+        if (playable.url && !playable.unavailable) {
+          preparedPlayableRef.current.set(track.id, { audioUrl: playable.url });
+          const hydrated: Track = {
+            ...track,
+            filePath: `netease:${sourceId}`,
+            unavailableReason: null,
+          };
+          setTracks((value) => value.map((item) => (item.id === track.id ? hydrated : item)));
+          playLocalTrack(hydrated);
+          return;
+        }
+        setLibraryError(playbackReasonMessage(playable.reason ?? track.unavailableReason));
+        return;
+      } catch (error) {
+        setLibraryError(
+          error instanceof Error ? error.message : playbackReasonMessage(track.unavailableReason),
+        );
+        return;
+      }
+    }
+
+    if (track.source === "bilibili" && sourceId) {
+      try {
+        const playable = await bilibiliProvider.getPlayableUrl(sourceId);
+        if (playable.url && !playable.unavailable) {
+          preparedPlayableRef.current.set(track.id, {
+            audioUrl: playable.url,
+            videoUrl: playable.videoUrl,
+          });
+          const hydrated: Track = {
+            ...track,
+            filePath: `bilibili:${sourceId}`,
+            unavailableReason: null,
+          };
+          setTracks((value) => value.map((item) => (item.id === track.id ? hydrated : item)));
+          playLocalTrack(hydrated);
+          return;
+        }
+        setLibraryError(playbackReasonMessage(playable.reason ?? track.unavailableReason));
+        return;
+      } catch (error) {
+        setLibraryError(
+          error instanceof Error ? error.message : playbackReasonMessage(track.unavailableReason),
+        );
+        return;
+      }
+    }
+
+    setLibraryError(playbackReasonMessage(track.unavailableReason));
   };
 
   const queueLocalTrack = (track: Track) => {
@@ -1530,12 +1663,67 @@ export default function App() {
   };
 
   const playNetEaseSong = async (song: MusicSourceSong): Promise<boolean> => {
-    const imported = await importNetEaseTrack(song);
-    if (imported) {
-      playLocalTrack(imported);
-      return true;
-    }
-    return false;
+    const requestId = neteaseSelectionRef.current + 1;
+    neteaseSelectionRef.current = requestId;
+    const previewTrack = trackFromNetEaseSearchResult(song);
+
+    setTracks((value) => [
+      previewTrack,
+      ...value.filter(
+        (track) =>
+          track.id !== previewTrack.id &&
+          !(track.source === "netease" && sourceIdForTrack(track) === song.id),
+      ),
+    ]);
+    playLocalTrack(previewTrack);
+
+    void (async () => {
+      try {
+        const status = await ensureNeteaseApiService();
+        if (neteaseSelectionRef.current !== requestId) return;
+        setSourceServiceStatus(status);
+        const updatedTracks = await neteaseProvider.importSong(song.id);
+        if (neteaseSelectionRef.current !== requestId) return;
+        const imported = updatedTracks.find(
+          (track) => track.source === "netease" && sourceIdForTrack(track) === song.id,
+        );
+        if (!imported) return;
+
+        const shouldPromoteCurrentTrack = currentTrackRef.current?.id === previewTrack.id;
+        setTracks((currentTracks) => {
+          const importedSourceId = sourceIdForTrack(imported);
+          const withoutSameSong = currentTracks.filter(
+            (track) =>
+              !(
+                track.id === previewTrack.id ||
+                (track.source === "netease" && sourceIdForTrack(track) === importedSourceId)
+              ),
+          );
+          const libraryRemainder = updatedTracks.filter(
+            (track) =>
+              !(
+                track.id === imported.id ||
+                (track.source === "netease" && sourceIdForTrack(track) === importedSourceId)
+              ),
+          );
+          return [
+            { ...imported, coverUrl: imported.coverUrl || previewTrack.coverUrl },
+            ...withoutSameSong,
+            ...libraryRemainder,
+          ];
+        });
+        if (shouldPromoteCurrentTrack) setCurrentTrackId(imported.id);
+      } catch (error) {
+        if (neteaseSelectionRef.current !== requestId) return;
+        setLibraryError(
+          error instanceof Error
+            ? error.message
+            : "This track is unavailable from the current source.",
+        );
+      }
+    })();
+
+    return true;
   };
 
   const importBilibiliTrack = async (song: MusicSourceSong): Promise<Track | null> => {
@@ -1612,9 +1800,9 @@ export default function App() {
       <div className="fixed inset-0 bg-[#d0c6ba]" />
       {currentTrack && (
         <>
-          {currentTrack.coverUrl ? (
+          {currentArtwork.src ? (
             <img
-              src={currentTrack.coverUrl}
+              src={currentArtwork.src}
               alt=""
               onError={(event) => {
                 event.currentTarget.style.display = "none";
@@ -1640,22 +1828,27 @@ export default function App() {
         onOpenSettings={() => openProviderSettings("music")}
       />
 
-      <LyricsSourceMenu
-        track={currentTrack}
-        localTrackCount={tracks.filter((track) => track.source === "local").length}
-        lyricOffsetMs={lyricOffsetMs}
-        playbackDebug={playbackDebug}
-        serviceStatus={sourceServiceStatus}
-        loginStatus={sourceLoginStatus}
-        playbackQuality={playbackQuality}
-        onReloadLyrics={reloadLyrics}
-        onImportLyrics={importLyrics}
-        onAdjustLyricOffset={adjustLyricOffset}
-        onResetLyricOffset={resetLyricOffset}
-        onPlaybackQualityChange={changePlaybackQuality}
-        onOpenSettings={() => openProviderSettings("music")}
-        onOpenAtmosphereSettings={() => openProviderSettings("atmosphere")}
-      />
+      {(activeOverlay === "none" || activeOverlay === "quickSettings") && (
+        <LyricsSourceMenu
+          track={currentTrack}
+          localTrackCount={tracks.filter((track) => track.source === "local").length}
+          lyricOffsetMs={lyricOffsetMs}
+          playbackDebug={playbackDebug}
+          serviceStatus={sourceServiceStatus}
+          loginStatus={sourceLoginStatus}
+          playbackQuality={playbackQuality}
+          onReloadLyrics={reloadLyrics}
+          onImportLyrics={importLyrics}
+          onAdjustLyricOffset={adjustLyricOffset}
+          onResetLyricOffset={resetLyricOffset}
+          onPlaybackQualityChange={changePlaybackQuality}
+          onOpenSettings={() => openProviderSettings("music")}
+          onOpenAtmosphereSettings={() => openProviderSettings("atmosphere")}
+          open={activeOverlay === "quickSettings"}
+          onOpen={openQuickSettingsOverlay}
+          onClose={closeQuickSettingsOverlay}
+        />
+      )}
 
       {libraryError && currentTrack && (
         <PlaybackNotice
@@ -1723,6 +1916,9 @@ export default function App() {
           playbackSpeed={playbackSpeed}
           onSelectSpeed={selectPlaybackSpeed}
           onSeekToLyric={setProgress}
+          moreOpen={activeOverlay === "more"}
+          onOpenMore={openMoreOverlay}
+          onCloseMore={closeMoreOverlay}
         />
       </main>
 
@@ -1744,7 +1940,7 @@ export default function App() {
         onStartRadio={startRadioSession}
       />
 
-      {showDjPanel && (
+      {showDjPanel && activeOverlay === "none" && (
         <Suspense fallback={<AmbientDjDockFallback />}>
           <DjCuratorPanel
             track={currentTrack}
@@ -1800,8 +1996,8 @@ export default function App() {
         isPlaying={isPlaying}
         qualityLabel={qualityLabel(playbackQuality)}
         recommendSimilar={recommendSimilar}
-        onClose={() => setQueueDrawerOpen(false)}
-        onPlay={playLocalTrack}
+        onClose={closeOverlay}
+        onPlay={playQueueTrack}
         onRemove={removeTrackFromQueue}
         onClear={clearQueue}
         onLikeAll={likeAllInQueue}
@@ -1820,7 +2016,7 @@ export default function App() {
             onNetEaseLoginChanged={handleNetEaseLoginChanged}
             onBilibiliLoginChanged={handleBilibiliLoginChanged}
             onClose={() => {
-              setProviderSettingsOpen(false);
+              closeOverlay();
               void neteaseAuthProvider
                 .getLoginStatus()
                 .then(setSourceLoginStatus)

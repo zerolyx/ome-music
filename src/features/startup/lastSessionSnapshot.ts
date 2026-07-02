@@ -55,7 +55,7 @@ export function snapshotToTrack(snapshot: LastSessionSnapshot): Track {
     source: snapshot.source as Track["source"],
     sourceId: snapshot.sourceId,
     unavailableReason: null,
-    coverUrl: snapshot.coverUrl,
+    coverUrl: stableArtworkUrl(snapshot.coverUrl),
     genres: [],
     moods: ["unknown"],
     language: "unknown",
@@ -75,7 +75,7 @@ export function saveLastSessionSnapshot(track: Track, position: number, volume: 
     title: track.title,
     artist: track.artist,
     album: track.album,
-    coverUrl: track.coverUrl,
+    coverUrl: stableArtworkUrl(track.coverUrl),
     filePath: track.filePath,
     duration: track.durationSeconds,
     position: Math.max(0, Math.floor(position)),
@@ -89,4 +89,15 @@ export function saveLastSessionSnapshot(track: Track, position: number, volume: 
   } catch {
     // A missing snapshot should never affect playback.
   }
+}
+
+function stableArtworkUrl(value: string | null | undefined): string {
+  const url = value?.trim() ?? "";
+  if (!url) return "";
+  const lower = url.toLowerCase();
+  // ome-media URLs are short-lived runtime proxy handles. Persisting them in
+  // the startup snapshot makes the next launch restore a dead cover and fall
+  // back to the cheap placeholder. Keep only stable source/data/file artwork.
+  if (lower.startsWith("ome-media:") || lower.includes("ome-media.localhost")) return "";
+  return url;
 }

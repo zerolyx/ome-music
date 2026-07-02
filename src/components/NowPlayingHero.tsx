@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   FolderOpen,
   Heart,
@@ -11,6 +11,7 @@ import {
 import clsx from "clsx";
 import type { Track } from "../types/music";
 import type { LyricLine } from "../features/lyrics/lyricsResolver";
+import { resolveTrackCover } from "../features/artwork/resolveTrackCover";
 import type { BilibiliDanmakuDebug, DanmakuItem } from "../features/musicSources/provider";
 import { ArtworkImage } from "./ArtworkImage";
 import { DanmakuAtmosphereLayer } from "./DanmakuAtmosphereLayer";
@@ -44,6 +45,9 @@ interface NowPlayingHeroProps {
   // Lyrics Room is a stage, not a flat list — clicking a line should feel
   // like dropping the needle at that moment, then the room recenters.
   onSeekToLyric: (seconds: number) => void;
+  moreOpen: boolean;
+  onOpenMore: () => void;
+  onCloseMore: () => void;
 }
 
 export function NowPlayingHero({
@@ -68,17 +72,19 @@ export function NowPlayingHero({
   playbackSpeed,
   onSelectSpeed,
   onSeekToLyric,
+  moreOpen,
+  onOpenMore,
+  onCloseMore,
 }: NowPlayingHeroProps) {
   const [isTitleExpanded, setTitleExpanded] = useState(false);
-  const [isMoreMenuOpen, setMoreMenuOpen] = useState(false);
   const [likePulse, setLikePulse] = useState(false);
   const [moreToast, setMoreToast] = useState<string | null>(null);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setTitleExpanded(false);
-    setMoreMenuOpen(false);
-  }, [track?.id]);
+    onCloseMore();
+  }, [onCloseMore, track?.id]);
 
   useEffect(() => {
     if (!isTitleExpanded) return;
@@ -92,12 +98,12 @@ export function NowPlayingHero({
   // Close the "more" menu on outside pointer / Esc — mirrors the Quick
   // Settings panel behavior so the two popovers feel consistent.
   useEffect(() => {
-    if (!isMoreMenuOpen) return;
+    if (!moreOpen) return;
     const handlePointerDown = (event: PointerEvent) => {
-      if (!moreMenuRef.current?.contains(event.target as Node)) setMoreMenuOpen(false);
+      if (!moreMenuRef.current?.contains(event.target as Node)) onCloseMore();
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMoreMenuOpen(false);
+      if (event.key === "Escape") onCloseMore();
     };
     window.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("keydown", handleKeyDown);
@@ -105,7 +111,7 @@ export function NowPlayingHero({
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isMoreMenuOpen]);
+  }, [moreOpen, onCloseMore]);
 
   // Auto-dismiss the "more" toast after a short delay — these are light
   // confirmations (share copied, less-like-this recorded), not modals.
@@ -125,13 +131,13 @@ export function NowPlayingHero({
   };
 
   const handleLessLikeThis = () => {
-    setMoreMenuOpen(false);
+    onCloseMore();
     onLessLikeThis();
     setMoreToast("Got it — fewer like this.");
   };
 
   const handleShare = () => {
-    setMoreMenuOpen(false);
+    onCloseMore();
     const message = onShare();
     setMoreToast(message);
   };
@@ -167,16 +173,17 @@ export function NowPlayingHero({
   }
 
   const isBilibiliStage = track.source === "bilibili" && !isLyricsLoading && lyrics.length === 0;
+  const artwork = resolveTrackCover(track);
 
   return (
-    <section className="now-playing-stage relative mx-auto grid w-full max-w-[1780px] grid-cols-1 items-center gap-12 overflow-hidden px-[clamp(2rem,5vw,6rem)] md:grid-cols-[minmax(280px,0.82fr)_minmax(500px,1.38fr)] md:gap-[clamp(3rem,5.6vw,6.5rem)]">
+    <section className="now-playing-stage relative mx-auto grid w-full max-w-[1780px] grid-cols-1 items-center gap-12 overflow-hidden px-[clamp(2rem,5vw,6rem)] md:grid-cols-[minmax(340px,420px)_minmax(560px,1fr)] md:gap-[clamp(5rem,8vw,9rem)]">
       <div
         data-danmaku-safe-zone="left-visual"
         className="left-visual-stack relative z-10 flex min-w-0 flex-col items-center md:items-start"
       >
         <div className="record-sleeve relative">
           <ArtworkImage
-            src={track.coverUrl}
+            src={artwork.src}
             alt={track.album || track.title}
             source={track.source}
             className="h-full w-full rounded-[18px] object-cover"
@@ -201,7 +208,7 @@ export function NowPlayingHero({
           </button>
         </div>
 
-        <div className="mt-6 w-[min(70vw,390px)] text-center md:w-[min(29vw,420px)] md:text-left">
+        <div className="mt-5 w-[min(70vw,390px)] text-center md:w-[min(29vw,420px)] md:text-left">
           <div className="flex items-start gap-2">
             <div
               role="button"
@@ -218,7 +225,7 @@ export function NowPlayingHero({
             >
               <h1
                 title={track.title}
-                className="line-clamp-2 max-h-[2.12em] text-[clamp(1.18rem,1.65vw,1.72rem)] font-bold leading-[1.06] text-[#4a2108]/88 transition-colors duration-300 hover:text-[#4a2108]"
+                className="line-clamp-2 max-h-[2.12em] text-[clamp(1.35rem,2vw,2rem)] font-black leading-[1.06] text-[#4a2108]/88 transition-colors duration-300 hover:text-[#4a2108]"
               >
                 {track.title}
               </h1>
@@ -233,18 +240,18 @@ export function NowPlayingHero({
             <div ref={moreMenuRef} className="relative shrink-0">
               <button
                 type="button"
-                onClick={() => setMoreMenuOpen((value) => !value)}
+                onClick={() => (moreOpen ? onCloseMore() : onOpenMore())}
                 className={`app-transition flex h-9 w-9 items-center justify-center rounded-full text-[#4a2108]/40 hover:bg-[#4a2108]/[0.05] hover:text-[#4a2108]/70 ${
-                  isMoreMenuOpen ? "bg-[#4a2108]/[0.06] text-[#4a2108]/70" : ""
+                  moreOpen ? "bg-[#4a2108]/[0.06] text-[#4a2108]/70" : ""
                 }`}
                 aria-label="More options"
-                aria-expanded={isMoreMenuOpen}
+                aria-expanded={moreOpen}
                 title="More / 更多"
               >
                 <MoreHorizontal className="h-[18px] w-[18px]" />
               </button>
-              {isMoreMenuOpen && (
-                <div className="quick-settings-panel settings-scroll absolute right-0 top-11 z-50 w-64 overflow-y-auto rounded-[20px] p-2">
+              {moreOpen && (
+                <div className="quick-settings-panel settings-scroll absolute bottom-11 right-0 z-50 max-h-[min(52vh,330px)] w-64 overflow-y-auto rounded-[20px] p-2">
                   <MoreMenuItem
                     icon={ThumbsDown}
                     label="Less like this"
@@ -273,7 +280,7 @@ export function NowPlayingHero({
                           type="button"
                           onClick={() => {
                             onSelectSpeed(speed);
-                            setMoreMenuOpen(false);
+                            onCloseMore();
                           }}
                           aria-pressed={active}
                           className={`app-transition flex h-8 items-center justify-center rounded-full text-[12px] font-bold tabular-nums ${
@@ -292,7 +299,7 @@ export function NowPlayingHero({
               )}
             </div>
           </div>
-          <div className="mt-4 space-y-1.5 text-[13px] font-semibold leading-5 text-[#4a2108]/[0.3]">
+          <div className="mt-4 space-y-1.5 text-[13px] font-bold leading-5 text-[#4a2108]/[0.26]">
             <p>{track.artist}</p>
             <p>{track.album}</p>
           </div>
@@ -307,8 +314,10 @@ export function NowPlayingHero({
       <div
         data-danmaku-safe-zone={isBilibiliStage ? undefined : "lyrics"}
         className={clsx(
-          "right-atmosphere-column relative z-10 min-h-0 min-w-0 overflow-hidden",
-          isBilibiliStage ? "flex w-full items-center" : "lyric-stage h-full min-h-[58vh] py-10",
+          "right-atmosphere-column relative z-10 min-h-0 min-w-0",
+          isBilibiliStage
+            ? "flex w-full items-center overflow-hidden"
+            : "lyric-stage h-full min-h-[58vh] overflow-visible py-10",
         )}
       >
         {!isBilibiliStage && (
@@ -343,10 +352,10 @@ export function NowPlayingHero({
           />
         ) : (
           <div className="flex h-[58vh] flex-col justify-center">
-            <p className="text-5xl font-black leading-tight text-[#4a2108]/70 xl:text-7xl">
+            <p className="max-w-[920px] text-balance text-5xl font-black leading-tight text-[#4a2108]/70 xl:text-7xl">
               No matched lyrics for this version.
             </p>
-            <p className="mt-8 max-w-xl text-2xl font-black leading-tight text-[#4a2108]/25 xl:text-4xl">
+            <p className="mt-8 max-w-[720px] text-balance text-2xl font-black leading-tight text-[#4a2108]/25 xl:text-4xl">
               Let the room breathe for a moment.
             </p>
             {lyricWarning && (
@@ -406,7 +415,48 @@ export function NowPlayingHero({
 // Motion is slow (duration-700) and eased so line changes feel like
 // breathing, never jittery. No 3D transforms — just opacity / blur /
 // scale / a hair of rotate, which is enough to suggest depth.
-function LyricsRoom({
+const LYRIC_ROOM_PRESETS = {
+  calm: {
+    curveX: 26,
+    verticalGap: 58,
+    rotate: 2.4,
+    depth: 44,
+    blur: 1.8,
+    minScale: 0.76,
+    minOpacity: 0.12,
+  },
+  arcRoom: {
+    curveX: 46,
+    verticalGap: 74,
+    rotate: 4.2,
+    depth: 62,
+    blur: 2.4,
+    minScale: 0.68,
+    minOpacity: 0.08,
+  },
+  dream: {
+    curveX: 54,
+    verticalGap: 78,
+    rotate: 5.1,
+    depth: 74,
+    blur: 3.1,
+    minScale: 0.66,
+    minOpacity: 0.07,
+  },
+  stage: {
+    curveX: 38,
+    verticalGap: 70,
+    rotate: 3.4,
+    depth: 84,
+    blur: 2.1,
+    minScale: 0.7,
+    minOpacity: 0.1,
+  },
+} as const;
+
+const DEFAULT_LYRIC_ROOM_PRESET = LYRIC_ROOM_PRESETS.arcRoom;
+
+const LyricsRoom = memo(function LyricsRoom({
   lyrics,
   translatedLyrics,
   currentLyricIndex,
@@ -422,6 +472,7 @@ function LyricsRoom({
   onSeekToLyric: (seconds: number) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const preset = DEFAULT_LYRIC_ROOM_PRESET;
   // Hidden Lyric Tools — translation toggle only for now (romanization /
   // word-by-word are present but disabled: their data isn't parsed yet).
   // Persisted so the user's reveal preference survives across tracks.
@@ -473,45 +524,47 @@ function LyricsRoom({
     return closest?.text ?? null;
   })();
 
+  const visualLines = useMemo(
+    () =>
+      lyrics.map((line, index) => {
+        const offset = index - currentLyricIndex;
+        const distance = Math.abs(offset);
+        const signed = offset === 0 ? 0 : Math.sign(offset);
+        const cappedDistance = Math.min(distance, 6);
+        const arcDirection = signed * (1 - Math.min(distance, 5) * 0.05);
+        const curveX = signed * Math.min(220, Math.pow(cappedDistance, 1.24) * preset.curveX);
+        const curveY = offset * preset.verticalGap;
+        const zDepth = -Math.min(360, Math.pow(cappedDistance, 1.15) * preset.depth);
+        const rotateZ = signed * Math.min(18, Math.pow(cappedDistance, 0.96) * preset.rotate);
+        const rotateX = signed * Math.min(10, cappedDistance * 1.25);
+        const scale = Math.max(preset.minScale, 1 - cappedDistance * 0.075);
+        const opacity =
+          distance === 0
+            ? 1
+            : Math.max(preset.minOpacity, 0.66 - Math.pow(cappedDistance, 1.04) * 0.12);
+        const blur =
+          distance === 0 ? 0 : Math.min(14, Math.pow(cappedDistance, 1.08) * preset.blur);
+
+        return {
+          line,
+          index,
+          isCurrent: distance === 0,
+          opacity,
+          blur,
+          transform: `translate3d(${curveX}px, ${curveY}px, ${zDepth}px) rotateX(${rotateX}deg) rotateZ(${-rotateZ * arcDirection}deg) scale(${scale})`,
+        };
+      }),
+    [currentLyricIndex, lyrics, preset],
+  );
+
   return (
     <>
       <div
         ref={scrollRef}
-        className="lyrics-scroll h-[58vh] touch-pan-y overflow-y-auto overscroll-contain px-2 py-[24vh] pr-8"
+        className="lyrics-scroll h-[58vh] touch-pan-y overflow-y-auto overflow-x-visible overscroll-contain px-2 py-[24vh] pr-8"
         onWheel={(event) => event.stopPropagation()}
       >
-        {lyrics.map((line, index) => {
-          const offset = index - currentLyricIndex; // signed: <0 above, >0 below
-          const distance = Math.abs(offset);
-          const isCurrent = distance === 0;
-          const isNearby = distance >= 1 && distance <= 2;
-
-          const opacity = isCurrent
-            ? 0.98
-            : isNearby
-              ? 0.4
-              : Math.max(0.1, 0.28 - distance * 0.025);
-          const blur = isCurrent ? 0 : isNearby ? 3 : 8;
-          const scale = isCurrent ? 1 : isNearby ? 0.88 : 0.76;
-          // Direction follows sign(offset): above lines fan up-and-back,
-          // below lines fan down-and-back, so the current line is the focal
-          // point of a soft curve wrapping around the listener.
-          const dir = Math.sign(offset);
-          // Horizontal fan (kept from the previous radial drift, capped).
-          const xShift = isCurrent ? 0 : dir * Math.min(distance, 4) * 6;
-          // Vertical curve: lines drift away from the current line along Y,
-          // which together with the X fan reads as a curved/arc stage rather
-          // than a flat list. Bumped the factor so the arc curvature reads
-          // more strongly while staying capped and calm.
-          const yShift = isCurrent ? 0 : dir * Math.min(distance, 4) * 9;
-          // True depth into the screen — the stage has preserve-3d, so this
-          // composes with the container's perspective(1200px) rotateY(-3deg)
-          // to make nearby lines feel close and far lines recede.
-          const zShift = isCurrent ? 0 : isNearby ? -38 : -86;
-          // Gentle rotate following the curve tangent. Slightly stronger so
-          // the arc reads as a path, not a stack. Capped to stay calm.
-          const rotate = isCurrent ? 0 : dir * Math.min(distance, 3) * 0.95;
-
+        {visualLines.map(({ line, index, isCurrent, opacity, blur, transform }) => {
           return (
             <button
               type="button"
@@ -519,18 +572,18 @@ function LyricsRoom({
               data-lyric-index={index}
               onClick={() => onSeekToLyric(line.startTime)}
               style={{
-                transform: `translate3d(${xShift}px, ${yShift}px, ${zShift}px) scale(${scale}) rotate(${rotate}deg)`,
+                transform,
                 opacity,
                 filter: blur > 0 ? `blur(${blur}px)` : undefined,
               }}
               className={clsx(
-                "app-transition m-0 flex min-h-[8.5rem] w-full origin-center cursor-pointer items-center border-0 bg-transparent px-1 py-3 text-left text-balance text-4xl font-black leading-[1.18] duration-700 ease-out lg:text-5xl xl:text-7xl",
+                "lyric-room-line app-transition m-0 flex min-h-[8.5rem] w-full origin-center cursor-pointer items-center overflow-visible border-0 bg-transparent px-1 py-4 text-left text-balance text-4xl font-black leading-[1.14] duration-700 ease-out lg:text-5xl xl:text-7xl",
                 isCurrent ? "text-[#4a2108]" : "text-[#4a2108] hover:text-[#4a2108]/70",
               )}
               title={`Jump to ${formatTime(line.startTime)}`}
               aria-current={isCurrent ? "true" : undefined}
             >
-              <span className="flex flex-col">
+              <span className="lyric-room-line-inner flex flex-col overflow-visible">
                 <span>{line.text}</span>
                 {isCurrent && currentTranslatedText && (
                   <span className="mt-3 text-lg font-semibold leading-snug text-[#4a2108]/55 lg:text-xl xl:text-2xl">
@@ -567,7 +620,7 @@ function LyricsRoom({
       </div>
     </>
   );
-}
+});
 
 // A single hidden-tool pill. Compact, calm — just a one-character label so
 // the cluster reads as a whisper, not a toolbar. Active state is a soft fill;
@@ -622,6 +675,9 @@ function MoreMenuItem({
   onClick?: () => void;
   disabled?: boolean;
 }) {
+  const displaySublabel =
+    label === "Less like this" ? "减少推荐" : label === "Share" ? "分享" : sublabel;
+
   return (
     <button
       type="button"
@@ -633,7 +689,7 @@ function MoreMenuItem({
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-bold text-[#4a2108]/82">{label}</span>
         <span className="block truncate text-[11px] font-semibold text-[#4a2108]/38">
-          {sublabel}
+          {displaySublabel}
         </span>
       </span>
     </button>
@@ -690,9 +746,9 @@ function BilibiliVideoAtmosphere({
   }, [progressSeconds, src]);
 
   return (
-    <div className="bilibili-atmosphere-stage relative aspect-video w-full max-h-[50vh] overflow-hidden rounded-[24px] bg-[#32190f]/12 shadow-[0_30px_86px_rgba(74,33,8,0.18)]">
+    <div className="bilibili-atmosphere-stage relative aspect-video w-full overflow-hidden rounded-[28px] bg-[#32190f]/10 shadow-[0_30px_86px_rgba(74,33,8,0.14)]">
       <ArtworkImage
-        src={track.coverUrl}
+        src={resolveTrackCover(track).src}
         alt=""
         source="bilibili"
         className="absolute inset-0 h-full w-full scale-[1.03] object-cover opacity-45 blur-[3px] saturate-75"
@@ -715,12 +771,12 @@ function BilibiliVideoAtmosphere({
             );
           }}
           className={clsx(
-            "absolute inset-0 z-[1] h-full w-full object-cover blur-[1.4px] saturate-[0.92] contrast-[0.97] sepia-[0.08] transition-opacity duration-700",
-            videoReady ? "opacity-[0.82]" : "opacity-0",
+            "absolute inset-0 z-[1] h-full w-full object-cover blur-[1.8px] saturate-[0.86] contrast-[0.94] sepia-[0.12] transition-opacity duration-700",
+            videoReady ? "opacity-[0.74]" : "opacity-0",
           )}
         />
       )}
-      <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(74,38,21,0.08),rgba(74,38,21,0.24)),radial-gradient(circle_at_center,transparent_38%,rgba(45,20,11,0.32)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(245,230,214,0.08),rgba(74,38,21,0.25)),radial-gradient(circle_at_center,transparent_34%,rgba(45,20,11,0.36)_100%)]" />
       <DanmakuAtmosphereLayer
         items={danmakuItems}
         currentTime={progressSeconds}

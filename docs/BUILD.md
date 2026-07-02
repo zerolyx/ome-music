@@ -48,7 +48,10 @@ Uninstalling Ome Music preserves user data (library, login sessions, settings, c
 
 ## GitHub Release Build
 
-The `Release Windows Build` workflow runs when a tag matching `v*` is pushed.
+The `Release Windows Build` workflow publishes a GitHub Release only when a tag
+matching `v*` is pushed. Manual `workflow_dispatch` runs are for validation
+only: they build the Windows installer and upload it as a workflow artifact, but
+they do not create or update a GitHub Release.
 
 Example:
 
@@ -57,20 +60,21 @@ git tag v0.3.7
 git push origin v0.3.7
 ```
 
-The workflow should create a GitHub Release and upload the Windows NSIS installer.
+The tagged workflow should create a GitHub Release and upload the Windows NSIS installer.
+Use the manual workflow first when validating a re-cut or failed release candidate.
 
 ### Managed NetEase runtime supply chain
 
 The Windows installer bundles a managed Node.js + `NeteaseCloudMusicApi` runtime. The release workflow hardens this supply chain:
 
-- The Node.js archive is pinned to an exact version (`NODE_VERSION`) and verified against a committed SHA256 (`NODE_SHA256`) before extraction.
+- The Node.js archive is pinned to an exact version and verified against a committed SHA256 in `scripts/prepare-netease-runtime.ps1` before extraction.
 - The `NeteaseCloudMusicApi` version is pinned exactly (no caret) in `src-tauri/resources/netease-runtime/package.json`.
 - The managed runtime is installed with `npm ci --omit=dev` from the committed `package-lock.json`, so every release resolves the same transitive dependency tree.
 - SHA256 checksums for every installer artifact are written to the workflow log and uploaded as the `release-sha256-checksums` artifact.
 
 When bumping the Node.js runtime:
 
-1. Update `NODE_VERSION` and `NODE_SHA256` together in `.github/workflows/release.yml`. The hash is published at `https://nodejs.org/dist/v<NODE_VERSION>/SHASUMS256.txt`.
+1. Update `$nodeVersion` and `$nodeSha256` together in `scripts/prepare-netease-runtime.ps1`. The hash is published at `https://nodejs.org/dist/v<NODE_VERSION>/SHASUMS256.txt`.
 2. When bumping `NeteaseCloudMusicApi`, update the pinned version in `src-tauri/resources/netease-runtime/package.json` and regenerate the lockfile locally with:
 
    ```bash

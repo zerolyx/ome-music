@@ -93,17 +93,34 @@ export function PlayerControls({
   return (
     <footer
       data-danmaku-safe-zone="controls"
-      className="fixed inset-x-0 bottom-0 z-30 h-24 text-[#4a2108]"
+      className="player-dock-controls fixed bottom-[clamp(1.9rem,4.8vh,4rem)] left-[clamp(2rem,5vw,6rem)] z-30 w-[min(29vw,420px)] min-w-[320px] max-w-[calc(100vw-3rem)] text-[#4a2108]"
     >
-      <div className="absolute inset-x-10 bottom-8 grid grid-cols-[1fr_auto_1fr] items-center">
-        {/* Left cluster: playback mode + (conditional) speed indicator.
-            Kept small and quiet — these are secondary controls, the visual
-            center is the play button. The speed chip is hidden while at the
-            default 1x (the explicit speed list lives in the hero's More menu,
-            so the bottom bar no longer parades it at rest); it reappears as a
-            quiet state indicator only when the user has chosen a non-default
-            speed, so they always see when the room is not running at 1x. */}
-        <div className="flex items-center gap-2">
+      {/* Dock progress: kept inside the left player column so the room no
+          longer reads as a full-width transport bar. */}
+      <div className="mb-5">
+        <input
+          type="range"
+          min={0}
+          max={maxSeconds}
+          value={progress}
+          onChange={(event) => onSetProgress(Number(event.target.value))}
+          className="cinema-progress"
+          aria-label="Playback progress"
+        />
+        <div className="mt-3 flex items-center justify-between gap-3 text-xs font-semibold tabular-nums text-[#4a2108]/[0.48]">
+          <span>{formatDuration(progress)}</span>
+          {badge && (
+            <span className="rounded-full bg-[#4a2108]/[0.07] px-2 py-0.5 text-[10px] font-bold tracking-wide text-[#4a2108]/55">
+              {badge}
+            </span>
+          )}
+          <span>-{formatDuration(remaining)}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center">
+        {/* Left: playback mode + non-default speed indicator. */}
+        <div className="flex items-center justify-start gap-1.5">
           <button
             type="button"
             onClick={onCyclePlaybackMode}
@@ -127,8 +144,8 @@ export function PlayerControls({
           )}
         </div>
 
-        {/* Center cluster: transport controls (the visual anchor). */}
-        <div className="flex items-center justify-center gap-7">
+        {/* Center: transport controls, the visual anchor of the dock. */}
+        <div className="flex items-center justify-center gap-5">
           <button
             type="button"
             onClick={onPrevious}
@@ -162,60 +179,40 @@ export function PlayerControls({
           </button>
         </div>
 
-        {/* Right cluster: queue toggle + volume. */}
-        <div className="flex items-center justify-end gap-3">
+        {/* Right: queue. Volume sits below like the reference player. */}
+        <div className="flex items-center justify-end">
           <button
             type="button"
             onClick={onToggleQueue}
             className={`player-icon-button ${isQueueDrawerOpen ? "is-active" : ""}`}
             aria-label="Toggle queue"
-            title="Queue / 播放列表"
+            title="Queue / 播放队列"
           >
             <ListMusic className="h-[17px] w-[17px]" />
           </button>
-          <button
-            type="button"
-            onClick={() => onSetVolume(isMuted ? 0.72 : 0)}
-            className="player-icon-button"
-            aria-label={isMuted ? "Unmute" : "Mute"}
-            title={isMuted ? "Unmute" : "Mute"}
-          >
-            {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-          </button>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={volume}
-            onChange={(event) => onSetVolume(Number(event.target.value))}
-            className="cinema-range hidden w-24 sm:block"
-            aria-label="Volume"
-          />
         </div>
       </div>
 
-      {/* Bottom progress strip: full-width seek + time + quality badge. */}
-      <div className="absolute inset-x-0 bottom-0">
+      <div className="mt-8 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => onSetVolume(isMuted ? 0.72 : 0)}
+          className="player-volume-button"
+          aria-label={isMuted ? "Unmute" : "Mute"}
+          title={isMuted ? "Unmute" : "Mute"}
+        >
+          {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+        </button>
         <input
           type="range"
           min={0}
-          max={maxSeconds}
-          value={progress}
-          onChange={(event) => onSetProgress(Number(event.target.value))}
-          className="cinema-progress"
-          aria-label="Playback progress"
+          max={1}
+          step={0.01}
+          value={volume}
+          onChange={(event) => onSetVolume(Number(event.target.value))}
+          className="cinema-range flex-1"
+          aria-label="Volume"
         />
-        <div className="pointer-events-none absolute bottom-5 right-8 flex items-center gap-2 text-xs font-semibold tabular-nums text-[#4a2108]/[0.52]">
-          {badge && (
-            <span className="rounded-full bg-[#4a2108]/[0.06] px-2 py-0.5 text-[10px] font-bold tracking-wide">
-              {badge}
-            </span>
-          )}
-          <span>
-            {formatDuration(progress)} / -{formatDuration(remaining)}
-          </span>
-        </div>
       </div>
     </footer>
   );
@@ -225,9 +222,9 @@ function playbackModeMeta(mode: PlaybackMode): { Icon: typeof Repeat; label: str
   switch (mode) {
     case "curator":
       // Curator mode: taste-based next-track recommendations. Icon is a soft
-      // sparkle, NOT anything labelled "AI" — the room is a music room, not a
+      // sparkle, NOT anything labelled as a model — the room is a music room, not a
       // tech demo.
-      return { Icon: Sparkles, label: "Curator / 策展推荐" };
+      return { Icon: Sparkles, label: "Radio / 私人电台" };
     case "repeat-one":
       return { Icon: Repeat1, label: "Repeat One / 单曲循环" };
     case "shuffle":

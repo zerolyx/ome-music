@@ -239,6 +239,9 @@ export interface BilibiliQrCheck {
 export interface NetEaseLoginStatus {
   loggedIn: boolean;
   expired: boolean;
+  loginStatusKnown: boolean;
+  hasCookie: boolean;
+  maskedCookie: string;
   nickname?: string | null;
   userId?: string | null;
   avatarUrl?: string | null;
@@ -762,7 +765,14 @@ export class NetEaseAccountSessionProvider implements NetEaseAuthProvider {
 
   async loginWithPassword(credentials: SourcePasswordCredentials): Promise<NetEaseLoginStatus> {
     if (!isTauriRuntime()) {
-      return { loggedIn: true, expired: false, message: "Connected." };
+      return {
+        loggedIn: true,
+        expired: false,
+        loginStatusKnown: true,
+        hasCookie: true,
+        maskedCookie: "MUSIC_U=demo****demo",
+        message: "Connected.",
+      };
     }
     return invoke<NetEaseLoginStatus>("login_netease_with_password", { payload: credentials });
   }
@@ -774,14 +784,28 @@ export class NetEaseAccountSessionProvider implements NetEaseAuthProvider {
 
   async loginWithSmsCode(payload: SourceSmsLoginPayload): Promise<NetEaseLoginStatus> {
     if (!isTauriRuntime()) {
-      return { loggedIn: true, expired: false, message: "Connected." };
+      return {
+        loggedIn: true,
+        expired: false,
+        loginStatusKnown: true,
+        hasCookie: true,
+        maskedCookie: "MUSIC_U=demo****demo",
+        message: "Connected.",
+      };
     }
     return invoke<NetEaseLoginStatus>("login_netease_with_sms_code", { payload });
   }
 
   async importCookie(cookie: string): Promise<NetEaseLoginStatus> {
     if (!isTauriRuntime()) {
-      return { loggedIn: true, expired: false, message: "Connected." };
+      return {
+        loggedIn: true,
+        expired: false,
+        loginStatusKnown: true,
+        hasCookie: true,
+        maskedCookie: "MUSIC_U=demo****demo",
+        message: "Connected.",
+      };
     }
     return invoke<NetEaseLoginStatus>("import_netease_cookie", { payload: { cookie } });
   }
@@ -791,6 +815,9 @@ export class NetEaseAccountSessionProvider implements NetEaseAuthProvider {
       return {
         loggedIn: false,
         expired: false,
+        loginStatusKnown: true,
+        hasCookie: false,
+        maskedCookie: "",
         message: "Sign in to your music source to try again.",
       };
     }
@@ -808,7 +835,14 @@ export class NetEaseAccountSessionProvider implements NetEaseAuthProvider {
 
   async logout(): Promise<NetEaseLoginStatus> {
     if (!isTauriRuntime()) {
-      return { loggedIn: false, expired: false, message: "Signed out." };
+      return {
+        loggedIn: false,
+        expired: false,
+        loginStatusKnown: true,
+        hasCookie: false,
+        maskedCookie: "",
+        message: "Signed out.",
+      };
     }
     return invoke<NetEaseLoginStatus>("logout_netease");
   }

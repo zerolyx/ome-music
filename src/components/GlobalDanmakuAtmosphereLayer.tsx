@@ -181,7 +181,7 @@ export function GlobalDanmakuAtmosphereLayer({
           <div
             key={line.key}
             data-ambient-danmaku-key={line.key}
-            className="ambient-danmaku-corridor fixed overflow-hidden"
+            className="ambient-danmaku-corridor fixed overflow-visible"
             style={style}
           >
             <span
@@ -260,13 +260,13 @@ function measureSafeCorridors(avoidLyricsArea: boolean): SafeCorridor[] {
   const viewportHeight = window.innerHeight;
   const edge = Math.max(18, viewportWidth * 0.018);
   const top = Math.max(104, viewportHeight * 0.105);
-  const bottom = viewportHeight - Math.max(108, viewportHeight * 0.12);
+  const bottom = viewportHeight - Math.max(148, viewportHeight * 0.16);
   const minWidth = Math.min(430, viewportWidth * 0.3);
   const safeRects = visibleSafeRects(avoidLyricsArea);
 
   const corridors: SafeCorridor[] = [];
-  for (let laneTop = top; laneTop <= bottom - 32; laneTop += 42) {
-    const laneBottom = laneTop + 32;
+  for (let laneTop = top; laneTop <= bottom - 64; laneTop += 72) {
+    const laneBottom = laneTop + 64;
     const blocked = safeRects
       .filter((rect) => rect.top - 14 < laneBottom && rect.bottom + 14 > laneTop)
       .map(

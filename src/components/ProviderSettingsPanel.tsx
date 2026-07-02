@@ -854,10 +854,15 @@ export function ProviderSettingsPanel({
       ]);
       setNeteaseLoginStatus(login);
       setNeteaseVipStatus(vip);
+      const savedMusicSourceConfig = await getNeteaseSourceConfig();
+      setMusicSourceConfig(savedMusicSourceConfig);
     } catch (error) {
       setNeteaseLoginStatus({
         loggedIn: false,
         expired: true,
+        loginStatusKnown: false,
+        hasCookie: false,
+        maskedCookie: "",
         message: readError(error),
       });
       setNeteaseVipStatus(null);
@@ -1121,8 +1126,12 @@ export function ProviderSettingsPanel({
     try {
       const status = await neteaseAuthProvider.refreshLogin();
       setNeteaseLoginStatus(status);
-      const vip = await neteaseAuthProvider.getVipStatus();
+      const [vip, savedMusicSourceConfig] = await Promise.all([
+        neteaseAuthProvider.getVipStatus(),
+        getNeteaseSourceConfig(),
+      ]);
       setNeteaseVipStatus(vip);
+      setMusicSourceConfig(savedMusicSourceConfig);
       setSourceMessage(status.message);
     } catch (error) {
       setSourceMessage(`Could not refresh the session. ${readError(error)}`);
@@ -2150,7 +2159,7 @@ export function ProviderSettingsPanel({
                               ? `Signed in${neteaseLoginStatus.nickname ? ` as ${neteaseLoginStatus.nickname}` : ""}`
                               : neteaseLoginStatus?.expired
                                 ? "Session expired — please re-sign in"
-                                : musicSourceConfig.hasToken
+                                : neteaseLoginStatus?.hasCookie || musicSourceConfig.hasToken
                                   ? "Not signed in (cookie stored)"
                                   : "Signed out"
                           }
@@ -3335,14 +3344,19 @@ function MusicSourceDebugCard({
     `  service stage   : ${neteaseStage}`,
     `  service running : ${neteaseServiceStatus?.running ? "yes" : "no"}`,
     `  base url        : ${musicSourceConfig.baseUrl || "(unset)"}`,
-    `  has cookie      : ${musicSourceConfig.hasToken ? "yes" : "no"}`,
-    `  masked cookie   : ${musicSourceConfig.maskedToken || "(none)"}`,
+    `  has cookie      : ${
+      (neteaseLoginStatus?.hasCookie ?? musicSourceConfig.hasToken) ? "yes" : "no"
+    }`,
+    `  masked cookie   : ${
+      neteaseLoginStatus?.maskedCookie || musicSourceConfig.maskedToken || "(none)"
+    }`,
+    `  status known    : ${neteaseLoginStatus?.loginStatusKnown === false ? "no" : "yes"}`,
     `  login           : ${
       neteaseLoginStatus?.loggedIn
         ? `signed in${neteaseLoginStatus.nickname ? ` as ${neteaseLoginStatus.nickname}` : ""}`
         : neteaseLoginStatus?.expired
           ? "expired"
-          : musicSourceConfig.hasToken
+          : neteaseLoginStatus?.hasCookie || musicSourceConfig.hasToken
             ? "cookie present, status unknown"
             : "signed out"
     }`,

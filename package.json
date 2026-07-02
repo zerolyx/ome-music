@@ -1,12 +1,13 @@
 {
   "name": "ome-music-player",
   "private": true,
-  "version": "0.3.7",
+  "version": "0.3.8",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
+    "build:tauri": "npm run prepare:netease-runtime && npm run build",
     "preview": "vite preview --host 127.0.0.1",
     "netease:api": "NeteaseCloudMusicApi",
     "size:audit": "node scripts/size-audit.mjs",
@@ -15,6 +16,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.{js,mjs,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{js,mjs,json}\"",
     "tauri": "tauri",
+    "prepare:netease-runtime": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-netease-runtime.ps1",
     "release:windows": "tauri build",
     "desktop": "tauri dev"
   },

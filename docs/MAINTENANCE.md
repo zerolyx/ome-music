@@ -21,13 +21,14 @@ Ome Music should stay small, readable, and easy to release. This document is the
    - `npm run docs:check`
 4. If the managed NetEase runtime version changed, regenerate the lockfile and commit it:
    - `npm install --package-lock-only --omit=dev --prefix "src-tauri/resources/netease-runtime"`
-5. If the bundled Node.js runtime version changed, update both `NODE_VERSION` and `NODE_SHA256` in `.github/workflows/release.yml` (the SHA256 is published at `https://nodejs.org/dist/v<NODE_VERSION>/SHASUMS256.txt`).
+5. If the bundled Node.js runtime version changed, update both `$nodeVersion` and `$nodeSha256` in `scripts/prepare-netease-runtime.ps1` (the SHA256 is published at `https://nodejs.org/dist/v<NODE_VERSION>/SHASUMS256.txt`).
 6. Open a pull request for the release maintenance patch.
 7. Merge only after CI passes.
-8. Create a version tag, for example `v0.3.7`.
-9. Confirm the `Release Windows Build` workflow generates the NSIS installer and the `release-sha256-checksums` artifact.
-10. Verify the published installer's SHA256 against the checksum artifact before announcing the release.
-11. Download the installer from GitHub Releases and launch it on Windows before announcing the release.
+8. Run the `Release Windows Build` workflow manually first and validate the uploaded installer artifact. Manual runs must not publish a GitHub Release.
+9. Create a version tag, for example `v0.3.7`, only after manual installer validation passes.
+10. Confirm the tagged `Release Windows Build` workflow generates the NSIS installer and the `release-sha256-checksums` artifact.
+11. Verify the published installer's SHA256 against the checksum artifact before announcing the release.
+12. Download the installer from GitHub Releases and launch it on Windows before announcing the release.
 
 ## Repository Hygiene
 
@@ -50,7 +51,8 @@ The default CI workflow should answer:
 
 The release workflow should answer:
 
-- Can the Windows NSIS installer be produced from a tag?
+- Can the Windows NSIS installer be produced as a manual validation artifact?
+- Can a tag push publish the validated installer without creating accidental `main` releases?
 
 ## Version Policy
 

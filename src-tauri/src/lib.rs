@@ -394,6 +394,9 @@ pub struct SourceWebLoginPayload {
 pub struct NeteaseLoginStatusDto {
     logged_in: bool,
     expired: bool,
+    login_status_known: bool,
+    has_cookie: bool,
+    masked_cookie: String,
     nickname: Option<String>,
     user_id: Option<String>,
     avatar_url: Option<String>,
@@ -1456,17 +1459,19 @@ async fn check_netease_qr_login(
     .to_string();
 
     let login_status = if code == 803 {
-        let cookie = merge_cookie_headers(
-            value.get("cookie").and_then(|cookie| cookie.as_str()),
-            response.set_cookie.as_deref(),
-        );
+        let cookie = extract_netease_login_cookie(&value, response.set_cookie.as_deref());
         if let Some(cookie) = cookie {
-            save_netease_token(&cookie)?;
+            let saved_cookie = save_and_verify_netease_session(&cookie)?;
+            let mut refreshed_config = resolve_netease_source_config(&state, None)?;
+            refreshed_config.token = Some(saved_cookie);
+            let status = fetch_netease_login_status(&refreshed_config).await?;
+            if !status.logged_in {
+                return Err(status.message);
+            }
+            Some(status)
         } else {
             return Err("扫码登录成功但未能获取会话凭证，请重试。 / Sign-in confirmed but the session cookie was missing.".to_string());
         }
-        let refreshed_config = resolve_netease_source_config(&state, None)?;
-        Some(fetch_netease_login_status(&refreshed_config).await?)
     } else {
         None
     };
@@ -1488,8 +1493,9 @@ async fn import_netease_cookie(
     if cookie.is_empty() {
         return Err("Cookie is required.".to_string());
     }
-    save_netease_token(cookie)?;
-    let config = resolve_netease_source_config(&state, None)?;
+    let saved_cookie = save_and_verify_netease_session(cookie)?;
+    let mut config = resolve_netease_source_config(&state, None)?;
+    config.token = Some(saved_cookie);
     fetch_netease_login_status(&config).await
 }
 
@@ -1657,8 +1663,14 @@ async fn get_netease_login_status(
 async fn refresh_netease_login(
     state: State<'_, AppState>,
 ) -> Result<NeteaseLoginStatusDto, String> {
-    let config = resolve_netease_source_config(&state, None)?;
-    let _ = request_netease_json(&config, "/login/refresh", &[]).await;
+    let mut config = resolve_netease_source_config(&state, None)?;
+    if let Ok(response) = request_netease_json_response(&config, "/login/refresh", &[]).await {
+        if let Some(updated_cookie) =
+            persist_merged_netease_cookie(config.token.as_deref(), response.set_cookie.as_deref())?
+        {
+            config.token = Some(updated_cookie);
+        }
+    }
     fetch_netease_login_status(&config).await
 }
 
@@ -1669,6 +1681,9 @@ fn logout_netease(state: State<'_, AppState>) -> Result<NeteaseLoginStatusDto, S
     Ok(NeteaseLoginStatusDto {
         logged_in: false,
         expired: false,
+        login_status_known: true,
+        has_cookie: false,
+        masked_cookie: String::new(),
         nickname: None,
         user_id: None,
         avatar_url: None,
@@ -1747,12 +1762,23 @@ async fn search_netease_songs(
     }
 
     let config = resolve_netease_source_config(&state, None)?;
-    let value = request_netease_json(
+    let value = match request_netease_json(
         &config,
-        "/search",
+        "/cloudsearch",
         &[("keywords", query), ("limit", "20"), ("type", "1")],
     )
-    .await?;
+    .await
+    {
+        Ok(value) => value,
+        Err(_) => {
+            request_netease_json(
+                &config,
+                "/search",
+                &[("keywords", query), ("limit", "20"), ("type", "1")],
+            )
+            .await?
+        }
+    };
     let mut songs: Vec<SourceSongDto> = value
         .get("result")
         .and_then(|result| result.get("songs"))
@@ -1924,7 +1950,45 @@ async fn get_netease_song_metadata(
     payload: SourceSongPayload,
 ) -> Result<SourceSongDto, String> {
     let config = resolve_netease_source_config(&state, None)?;
-    fetch_netease_song_metadata(&config, &payload.song_id).await
+    let mut song = fetch_netease_song_metadata(&config, &payload.song_id).await?;
+    let raw_cover_url = song.cover_url.clone();
+    repair_netease_track_cover(&state, &payload.song_id, &raw_cover_url)?;
+    proxy_netease_song_cover(&state, &mut song)?;
+    Ok(song)
+}
+
+fn repair_netease_track_cover(
+    state: &State<'_, AppState>,
+    song_id: &str,
+    cover_url: &str,
+) -> Result<(), String> {
+    let normalized_cover = cover_url.trim();
+    if normalized_cover.is_empty()
+        || normalized_cover.starts_with("data:image/svg+xml")
+        || normalized_cover.starts_with("ome-media:")
+        || normalized_cover.contains("ome-media.localhost")
+    {
+        return Ok(());
+    }
+
+    let db = state.db.lock().map_err(|error| error.to_string())?;
+    db.execute(
+        "UPDATE tracks
+         SET cover_url = ?1, updated_at = CURRENT_TIMESTAMP
+         WHERE source = 'netease'
+           AND (source_id = ?2 OR file_path = ?3 OR file_path = ?4 OR id = ?5)
+           AND (cover_url IS NULL OR cover_url = '' OR cover_url LIKE 'data:image/svg+xml%')",
+        params![
+            normalized_cover,
+            song_id,
+            format!("netease:{song_id}"),
+            format!("unavailable:netease:{song_id}"),
+            stable_id(&format!("netease:{song_id}"))
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -3429,12 +3493,12 @@ fn load_netease_source_config(db: &Connection) -> Result<NeteaseSourceConfigDto,
         )
         .optional()
         .map_err(|error| error.to_string())?;
-    let has_token = read_netease_token().is_some();
-    let masked_token = if has_token {
-        "••••••••••••".to_string()
-    } else {
-        "".to_string()
-    };
+    let token = read_netease_token();
+    let has_token = token.is_some();
+    let masked_token = token
+        .as_deref()
+        .map(mask_netease_cookie)
+        .unwrap_or_default();
 
     Ok(match stored {
         Some((enabled, base_url)) => NeteaseSourceConfigDto {
@@ -3530,11 +3594,18 @@ fn save_netease_token(token: &str) -> Result<(), String> {
         return Err("The NetEase session credential was empty.".to_string());
     }
 
-    // Sessions live in the OS keyring as the primary store.
-    keyring::Entry::new(NETEASE_KEYRING_SERVICE, NETEASE_KEYRING_ACCOUNT)
-        .map_err(|error| error.to_string())?
-        .set_password(&normalized)
-        .map_err(|error| error.to_string())?;
+    let fallback_result = write_netease_token_fallback(&normalized);
+    let keyring_result =
+        match keyring::Entry::new(NETEASE_KEYRING_SERVICE, NETEASE_KEYRING_ACCOUNT) {
+            Ok(entry) => match entry.set_password(&normalized) {
+                Ok(()) => Ok(()),
+                Err(error) => {
+                    let _ = entry.delete_credential();
+                    Err(error.to_string())
+                }
+            },
+            Err(error) => Err(error.to_string()),
+        };
 
     // Mirror the credential to the legacy plaintext fallback file too.
     // We used to delete this file after a successful keyring write, but that
@@ -3545,14 +3616,61 @@ fn save_netease_token(token: &str) -> Result<(), String> {
     // surfacing "Sign in needed" even though the user was signed in. Keeping
     // the mirror lets a keyring read failure degrade gracefully instead of
     // being misclassified as "user is not signed in".
-    if let Some(path) = netease_token_fallback_path() {
-        if let Some(parent) = path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        let encoded = general_purpose::STANDARD.encode(normalized.as_bytes());
-        let _ = fs::write(&path, encoded);
+    if keyring_result.is_ok() || fallback_result.is_ok() {
+        return Ok(());
     }
-    Ok(())
+
+    Err("Could not store the NetEase session on this device.".to_string())
+}
+
+fn save_and_verify_netease_session(token: &str) -> Result<String, String> {
+    save_netease_token(token)?;
+    let saved = read_netease_token().ok_or_else(|| {
+        "Sign-in confirmed, but Ome Music could not restore the session. Please try again."
+            .to_string()
+    })?;
+    if !cookie_has_music_u(&saved) {
+        return Err(
+            "Sign-in confirmed, but the returned NetEase session was incomplete. Please try again."
+                .to_string(),
+        );
+    }
+    Ok(saved)
+}
+
+fn write_netease_token_fallback(normalized: &str) -> Result<(), String> {
+    let path = netease_token_fallback_path()
+        .ok_or_else(|| "Could not locate the local NetEase session store.".to_string())?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let encoded = general_purpose::STANDARD.encode(normalized.as_bytes());
+    fs::write(&path, encoded).map_err(|error| error.to_string())
+}
+
+fn cookie_has_music_u(cookie: &str) -> bool {
+    cookie
+        .split(';')
+        .any(|part| part.trim().starts_with("MUSIC_U="))
+}
+
+fn persist_merged_netease_cookie(
+    current_cookie: Option<&str>,
+    set_cookie: Option<&str>,
+) -> Result<Option<String>, String> {
+    let Some(merged_cookie) = merge_cookie_headers(current_cookie, set_cookie) else {
+        return Ok(None);
+    };
+    let had_marker = current_cookie.is_some_and(cookie_has_music_u);
+    let keeps_marker = cookie_has_music_u(&merged_cookie);
+    if had_marker && !keeps_marker {
+        return Ok(current_cookie.map(ToString::to_string));
+    }
+    if current_cookie.is_some_and(|cookie| normalize_cookie_header(cookie) == merged_cookie) {
+        return Ok(Some(merged_cookie));
+    }
+    save_netease_token(&merged_cookie)?;
+    Ok(Some(merged_cookie))
 }
 
 fn read_netease_token() -> Option<String> {
@@ -5014,20 +5132,26 @@ fn proxy_bilibili_track_covers(
     Ok(())
 }
 
-// Same idea as proxy_bilibili_track_covers but for NetEase tracks loaded from the
-// library. The DB stores the original NetEase cover URL (https://p1.music.126.net
-// or http://m*.music.126.net), which the WebView CSP may refuse or the CDN may
-// serve with cross-origin restrictions. Re-proxy on every load so covers always
-// render and stale ome-media:// tokens never survive a reload.
+// NetEase library rows already store stable https://p*.music.126.net cover URLs.
+// Keep those URLs for queue/history rendering instead of replacing them with a
+// short-lived runtime proxy token. The proxy is still useful for search results
+// and playable media, but queue/history artwork should survive reloads and
+// should not fall back to the OME placeholder if a transient proxy request fails.
 fn proxy_netease_track_covers(
     state: &State<'_, AppState>,
     tracks: &mut [TrackDto],
 ) -> Result<(), String> {
-    for track in tracks.iter_mut().filter(|track| track.source == "netease") {
-        if !is_proxyable_remote_url(&track.cover_url) {
-            continue;
-        }
-        track.cover_url = register_media_proxy(state.inner(), &track.cover_url, "image")?;
+    let _ = state;
+    let _ = tracks;
+    Ok(())
+}
+
+fn proxy_netease_song_cover(
+    state: &State<'_, AppState>,
+    song: &mut SourceSongDto,
+) -> Result<(), String> {
+    if is_proxyable_remote_url(&song.cover_url) {
+        song.cover_url = register_media_proxy(state.inner(), &song.cover_url, "image")?;
     }
     Ok(())
 }
@@ -5717,17 +5841,19 @@ async fn complete_netease_session_from_response(
         return Err(friendly_netease_login_error(&value));
     }
 
-    let cookie = merge_cookie_headers(
-        value.get("cookie").and_then(|cookie| cookie.as_str()),
-        response.set_cookie.as_deref(),
-    )
+    let cookie = extract_netease_login_cookie(&value, response.set_cookie.as_deref())
         .ok_or_else(|| {
             "登录成功但未能获取会话凭证，请尝试扫码登录。 / Sign-in succeeded but no session credential was returned. Try scan login.".to_string()
         })?;
-    save_netease_token(&cookie)?;
+    let saved_cookie = save_and_verify_netease_session(&cookie)?;
 
-    let refreshed_config = resolve_netease_source_config(state, None)?;
-    fetch_netease_login_status(&refreshed_config).await
+    let mut refreshed_config = resolve_netease_source_config(state, None)?;
+    refreshed_config.token = Some(saved_cookie);
+    let status = fetch_netease_login_status(&refreshed_config).await?;
+    if !status.logged_in {
+        return Err(status.message);
+    }
+    Ok(status)
 }
 
 fn friendly_netease_login_error(value: &serde_json::Value) -> String {
@@ -5753,6 +5879,22 @@ fn friendly_netease_login_error(value: &serde_json::Value) -> String {
         return message;
     }
     "Could not sign in to this music source.".to_string()
+}
+
+fn extract_netease_login_cookie(
+    value: &serde_json::Value,
+    set_cookie: Option<&str>,
+) -> Option<String> {
+    let body_cookie = value
+        .get("cookie")
+        .and_then(|cookie| cookie.as_str())
+        .or_else(|| {
+            value
+                .get("data")
+                .and_then(|data| data.get("cookie"))
+                .and_then(|cookie| cookie.as_str())
+        });
+    merge_cookie_headers(body_cookie, set_cookie)
 }
 
 fn open_url_with_system(url: &str) -> Result<(), String> {
@@ -5812,6 +5954,8 @@ async fn fetch_netease_playlist(
         tracks.push(song);
     }
 
+    let _ = hydrate_netease_song_covers(config, &mut tracks).await;
+
     Ok(SourcePlaylistDto {
         id: playlist_id.to_string(),
         name,
@@ -5870,6 +6014,38 @@ async fn fetch_netease_songs_by_ids(
     }
 
     Ok(songs)
+}
+
+async fn hydrate_netease_song_covers(
+    config: &ResolvedNeteaseSourceConfig,
+    songs: &mut [SourceSongDto],
+) -> Result<(), String> {
+    let missing_ids = songs
+        .iter()
+        .filter(|song| song.cover_url.trim().is_empty() && !song.id.trim().is_empty())
+        .map(|song| song.id.clone())
+        .collect::<Vec<_>>();
+
+    if missing_ids.is_empty() {
+        return Ok(());
+    }
+
+    let details = fetch_netease_songs_by_ids(config, &missing_ids).await?;
+    let covers_by_id = details
+        .into_iter()
+        .filter(|song| !song.cover_url.trim().is_empty())
+        .map(|song| (song.id, song.cover_url))
+        .collect::<HashMap<_, _>>();
+
+    for song in songs.iter_mut() {
+        if song.cover_url.trim().is_empty() {
+            if let Some(cover_url) = covers_by_id.get(&song.id) {
+                song.cover_url = cover_url.clone();
+            }
+        }
+    }
+
+    Ok(())
 }
 
 async fn fetch_netease_user_playlists(
@@ -6128,6 +6304,9 @@ async fn fetch_netease_login_status(
         return Ok(NeteaseLoginStatusDto {
             logged_in: false,
             expired: false,
+            login_status_known: true,
+            has_cookie: false,
+            masked_cookie: String::new(),
             nickname: None,
             user_id: None,
             avatar_url: None,
@@ -6138,30 +6317,18 @@ async fn fetch_netease_login_status(
     let mut current_config = config.clone();
     let mut current_token = initial_token;
     let mut last_error: Option<String> = None;
+    let mut status_known = false;
 
     for endpoint in ["/login/status", "/user/account"] {
         match request_netease_json_response(&current_config, endpoint, &[]).await {
             Ok(response) => {
-                if let Some(merged_cookie) =
-                    merge_cookie_headers(Some(&current_token), response.set_cookie.as_deref())
-                {
-                    // Guard against the merge silently dropping the MUSIC_U
-                    // session marker. Some upstream responses return a
-                    // Set-Cookie that, after normalization, would replace the
-                    // authenticated session with an anonymous one — which then
-                    // makes every subsequent playback call appear "not logged
-                    // in". Only persist the merge if it preserves the session
-                    // marker that the existing credential carried.
-                    let had_marker = current_token.contains("MUSIC_U=");
-                    let keeps_marker = merged_cookie.contains("MUSIC_U=");
-                    if had_marker && !keeps_marker {
-                        // Keep the existing credential; do not overwrite it
-                        // with a session-stripped merge.
-                    } else if merged_cookie != current_token {
-                        save_netease_token(&merged_cookie)?;
-                        current_token = merged_cookie;
-                        current_config.token = Some(current_token.clone());
-                    }
+                status_known = true;
+                if let Some(updated_cookie) = persist_merged_netease_cookie(
+                    Some(&current_token),
+                    response.set_cookie.as_deref(),
+                )? {
+                    current_token = updated_cookie;
+                    current_config.token = Some(current_token.clone());
                 }
 
                 let value = response.value;
@@ -6183,9 +6350,13 @@ async fn fetch_netease_login_status(
                 let logged_in = nickname.is_some() || user_id.is_some();
 
                 if logged_in {
+                    let has_cookie = cookie_has_music_u(&current_token);
                     return Ok(NeteaseLoginStatusDto {
                         logged_in: true,
                         expired: false,
+                        login_status_known: true,
+                        has_cookie,
+                        masked_cookie: mask_netease_cookie(&current_token),
                         nickname,
                         user_id,
                         avatar_url,
@@ -6204,12 +6375,19 @@ async fn fetch_netease_login_status(
 
     Ok(NeteaseLoginStatusDto {
         logged_in: false,
-        expired: true,
+        expired: status_known,
+        login_status_known: status_known,
+        has_cookie: cookie_has_music_u(&current_token),
+        masked_cookie: mask_netease_cookie(&current_token),
         nickname: None,
         user_id: None,
         avatar_url: None,
         message: last_error.unwrap_or_else(|| {
-            "Your session has expired. Please reconnect NetEase Cloud Music.".to_string()
+            if status_known {
+                "Your session has expired. Please reconnect NetEase Cloud Music.".to_string()
+            } else {
+                "Could not verify the NetEase session. Please try again in a moment.".to_string()
+            }
         }),
     })
 }
@@ -6896,17 +7074,7 @@ fn source_song_from_search_json(value: &serde_json::Value) -> SourceSongDto {
         .and_then(|name| name.as_str())
         .unwrap_or("Unknown Album")
         .to_string();
-    let cover_url = album_value
-        .and_then(|album| {
-            album
-                .get("picUrl")
-                .or_else(|| album.get("pic_str"))
-                .or_else(|| album.get("blurPicUrl"))
-        })
-        .and_then(|url| url.as_str())
-        .filter(|url| !url.is_empty())
-        .map(|url| normalize_netease_image_url(url.to_string()))
-        .unwrap_or_default();
+    let cover_url = netease_cover_url_from_song_json(value);
     let duration_seconds = value
         .get("duration")
         .or_else(|| value.get("dt"))
@@ -6954,17 +7122,7 @@ fn source_song_from_playlist_json(value: &serde_json::Value) -> SourceSongDto {
         .and_then(|name| name.as_str())
         .unwrap_or("Unknown Album")
         .to_string();
-    let cover_url = album_value
-        .and_then(|album| {
-            album
-                .get("picUrl")
-                .or_else(|| album.get("pic_str"))
-                .or_else(|| album.get("blurPicUrl"))
-        })
-        .and_then(|url| url.as_str())
-        .filter(|url| !url.is_empty())
-        .map(|url| normalize_netease_image_url(url.to_string()))
-        .unwrap_or_default();
+    let cover_url = netease_cover_url_from_song_json(value);
     let duration_seconds = value
         .get("dt")
         .or_else(|| value.get("duration"))
@@ -6992,6 +7150,24 @@ fn source_song_from_playlist_json(value: &serde_json::Value) -> SourceSongDto {
         page_index: None,
         source_url: None,
     }
+}
+
+fn netease_cover_url_from_song_json(value: &serde_json::Value) -> String {
+    let album_value = value.get("al").or_else(|| value.get("album"));
+    let candidates = [
+        album_value.and_then(|album| album.get("picUrl")),
+        album_value.and_then(|album| album.get("blurPicUrl")),
+        value.get("picUrl"),
+        value.get("coverUrl"),
+        value.get("cover"),
+    ];
+
+    candidates
+        .into_iter()
+        .filter_map(json_text)
+        .map(normalize_netease_image_url)
+        .find(|url| !url.trim().is_empty())
+        .unwrap_or_default()
 }
 
 fn netease_user_playlist_from_json(value: &serde_json::Value) -> NeteaseUserPlaylistDto {
@@ -8123,8 +8299,9 @@ fn fallback_cover_url(seed: &str) -> String {
 mod tests {
     use super::{
         bilibili_cookie_from_login_url, bilibili_mixin_key, encode_url_component, has_cookie_name,
-        merge_bilibili_cookies, normalize_bilibili_image_url, parse_bilibili_danmaku_xml,
-        request_bilibili_danmaku_xml, wbi_key_from_url, ResolvedBilibiliSourceConfig,
+        extract_netease_login_cookie, merge_bilibili_cookies, normalize_bilibili_image_url,
+        parse_bilibili_danmaku_xml, request_bilibili_danmaku_xml, wbi_key_from_url,
+        ResolvedBilibiliSourceConfig,
     };
 
     #[test]
@@ -8163,6 +8340,37 @@ mod tests {
         assert!(has_cookie_name(&cookie, "buvid3"));
         assert!(has_cookie_name(&cookie, "buvid4"));
         assert_eq!(cookie.matches("buvid3=").count(), 1);
+    }
+
+    #[test]
+    fn extracts_netease_qr_cookie_from_nested_data() {
+        let value = serde_json::json!({
+            "code": 803,
+            "data": {
+                "cookie": "MUSIC_U=session-token; __csrf=csrf-token; Path=/; HttpOnly"
+            }
+        });
+        let cookie = extract_netease_login_cookie(&value, Some("NMTID=device-token; Path=/"))
+            .expect("login cookie");
+
+        assert!(cookie.contains("MUSIC_U=session-token"));
+        assert!(cookie.contains("__csrf=csrf-token"));
+        assert!(cookie.contains("NMTID=device-token"));
+        assert!(!cookie.to_ascii_lowercase().contains("httponly"));
+    }
+
+    #[test]
+    fn preserves_netease_music_u_when_merging_response_cookies() {
+        let value = serde_json::json!({
+            "code": 803,
+            "cookie": "MUSIC_U=session-token; __csrf=old-csrf"
+        });
+        let cookie = extract_netease_login_cookie(&value, Some("__csrf=new-csrf; Path=/"))
+            .expect("merged cookie");
+
+        assert!(cookie.contains("MUSIC_U=session-token"));
+        assert!(cookie.contains("__csrf=new-csrf"));
+        assert_eq!(cookie.matches("MUSIC_U=").count(), 1);
     }
 
     #[test]

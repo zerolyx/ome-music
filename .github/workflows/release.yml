@@ -38,44 +38,10 @@ jobs:
 
       - name: Prepare managed NetEase runtime
         shell: pwsh
-        env:
-          # Pinned Node.js runtime shipped inside the installer.
-          # Update both NODE_VERSION and NODE_SHA256 together when bumping.
-          NODE_VERSION: "22.17.1"
-          NODE_SHA256: "b1fdb5635ba860f6bf71474f2ca882459a582de49b1d869451e3ad188e3943eb"
-        run: |
-          $ErrorActionPreference = "Stop"
-          $nodeZip = "node-v$env:NODE_VERSION-win-x64.zip"
-          $nodeUrl = "https://nodejs.org/dist/v$env:NODE_VERSION/$nodeZip"
+        run: npm run prepare:netease-runtime
 
-          New-Item -ItemType Directory -Force -Path "src-tauri/resources/node" | Out-Null
-          New-Item -ItemType Directory -Force -Path "src-tauri/resources/netease-runtime" | Out-Null
-
-          Write-Host "Downloading Node.js $env:NODE_VERSION runtime..."
-          Invoke-WebRequest -Uri $nodeUrl -OutFile $nodeZip
-
-          # Supply-chain hardening: verify the downloaded archive matches the pinned SHA256.
-          $actualHash = (Get-FileHash -Algorithm SHA256 -Path $nodeZip).Hash.ToLower()
-          $expectedHash = $env:NODE_SHA256.ToLower()
-          if ($actualHash -ne $expectedHash) {
-            Write-Error "Node.js archive SHA256 mismatch.`nExpected: $expectedHash`nActual:   $actualHash`nRefusing to continue the release build."
-            exit 1
-          }
-          Write-Host "Node.js archive SHA256 verified: $actualHash"
-
-          Expand-Archive -Path $nodeZip -DestinationPath ".node-runtime" -Force
-          Copy-Item ".node-runtime/node-v$env:NODE_VERSION-win-x64/node.exe" "src-tauri/resources/node/node.exe" -Force
-
-          # The managed NetEase runtime manifests (package.json + package-lock.json) are committed
-          # to the repository with NeteaseCloudMusicApi pinned to an exact version. Using `npm ci`
-          # guarantees reproducible installs that match the lockfile.
-          if (-not (Test-Path "src-tauri/resources/netease-runtime/package-lock.json")) {
-            Write-Error "Managed runtime lockfile not found. Run `npm install --package-lock-only --omit=dev` locally and commit src-tauri/resources/netease-runtime/package-lock.json."
-            exit 1
-          }
-          npm ci --omit=dev --prefix "src-tauri/resources/netease-runtime"
-
-      - name: Build Windows release
+      - name: Build and publish tagged Windows release
+        if: startsWith(github.ref, 'refs/tags/v')
         id: tauri_build
         uses: tauri-apps/tauri-action@v0
         env:
@@ -111,6 +77,11 @@ jobs:
           prerelease: false
           args: --target x86_64-pc-windows-msvc
 
+      - name: Build Windows installer artifact
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: npm run tauri -- build --target x86_64-pc-windows-msvc
+
       - name: Generate SHA256 checksums
         shell: pwsh
         run: |
@@ -139,3 +110,15 @@ jobs:
           name: release-sha256-checksums
           path: sha256-checksums.txt
           if-no-files-found: ignore
+
+      - name: Upload manual build artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ome-music-windows-manual-build
+          path: |
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/**/*.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.msi
+          if-no-files-found: error

@@ -1,11 +1,12 @@
 import { useEffect } from "react";
+import type React from "react";
 import { Heart, ListMusic, Sparkles, Trash2, X } from "lucide-react";
 import clsx from "clsx";
 import type { Track } from "../types/music";
+import { resolveTrackCover } from "../features/artwork/resolveTrackCover";
 import { formatDuration } from "../utils/format";
 import { ArtworkImage } from "./ArtworkImage";
 
-// Source tag label — short, consistent with the rest of the room.
 function sourceTagLabel(source: Track["source"]): string {
   switch (source) {
     case "netease":
@@ -34,13 +35,6 @@ interface QueueDrawerProps {
   onToggleRecommendSimilar: (value: boolean) => void;
 }
 
-// Playlist Drawer — a right-side slide-over glass panel. It is the room's
-// "what's on the turntable next" surface: current queue, click-to-play,
-// soft highlight on the playing track, like / remove per row, plus the
-// two list-level actions (Like all / Clear). Kept deliberately quiet —
-// thin scrollbar, soft shadow, no table-like grid lines. Closes on Esc
-// and on backdrop click (the backdrop never covers the left Player Dock
-// any more than necessary; on small screens it grows to full width).
 export function QueueDrawer({
   open,
   tracks,
@@ -56,7 +50,6 @@ export function QueueDrawer({
   onToggleLike,
   onToggleRecommendSimilar,
 }: QueueDrawerProps) {
-  // Esc closes — mirrors the More menu and Quick Settings behavior.
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -70,29 +63,26 @@ export function QueueDrawer({
 
   return (
     <div className="pointer-events-none fixed inset-0 z-40">
-      {/* Backdrop — fades in, click to close. Soft so the room still breathes. */}
       <button
         type="button"
         aria-label="Close queue"
         tabIndex={open ? 0 : -1}
         onClick={onClose}
         className={clsx(
-          "absolute inset-0 bg-[#120b08]/28 backdrop-blur-[2px] transition-opacity duration-300",
+          "absolute inset-0 bg-[#120b08]/14 backdrop-blur-[1px] transition-opacity duration-300",
           open ? "pointer-events-auto opacity-100" : "opacity-0",
         )}
       />
 
-      {/* Panel — slides in from the right. */}
       <aside
         role="dialog"
-        aria-label="Queue / 播放列表"
+        aria-label="Queue / 播放队列"
         aria-hidden={!open}
         className={clsx(
-          "pointer-events-auto absolute right-0 top-0 flex h-full w-[min(420px,92vw)] flex-col border-l border-white/20 bg-[#1f1813]/72 text-[#efe4d8] shadow-[0_30px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl transition-transform duration-300 ease-out",
+          "pointer-events-auto absolute right-0 top-0 flex h-full w-[min(420px,92vw)] flex-col border-l border-white/12 bg-[#231914]/82 text-[#efe4d8] shadow-[0_30px_86px_rgba(38,18,10,0.34)] backdrop-blur-xl transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "translate-x-full",
         )}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-5 pb-3 pt-5">
           <div className="flex items-center gap-2.5">
             <ListMusic className="h-[18px] w-[18px] text-[#efe4d8]/55" />
@@ -107,7 +97,7 @@ export function QueueDrawer({
               onClick={onLikeAll}
               disabled={count === 0}
               className="app-transition flex h-8 items-center gap-1.5 rounded-full bg-white/[0.06] px-3 text-[11px] font-semibold text-[#efe4d8]/75 hover:bg-white/[0.12] hover:text-[#efe4d8] disabled:cursor-not-allowed disabled:opacity-40"
-              title="Like all / 收藏全部"
+              title="Like all / 全部喜欢"
             >
               <Heart className="h-[13px] w-[13px]" />
               Like all
@@ -117,7 +107,7 @@ export function QueueDrawer({
               onClick={onClear}
               disabled={count === 0}
               className="app-transition flex h-8 items-center gap-1.5 rounded-full bg-white/[0.04] px-3 text-[11px] font-semibold text-[#efe4d8]/55 hover:bg-[#7a2d1c]/40 hover:text-[#efe4d8] disabled:cursor-not-allowed disabled:opacity-30"
-              title="Stop & reset playback — your library stays safe / 停止并重置播放，曲库保留"
+              title="Stop and reset playback. Your library stays safe. / 停止并清空队列，曲库保留"
             >
               <Trash2 className="h-[13px] w-[13px]" />
               Clear
@@ -134,37 +124,54 @@ export function QueueDrawer({
         </div>
         <p className="px-5 pb-3 text-[11px] font-medium text-[#efe4d8]/40">播放列表 / 播放队列</p>
 
-        {/* Track list */}
         <div className="settings-scroll min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">
           {count === 0 ? (
             <div className="flex h-40 flex-col items-center justify-center px-6 text-center">
               <p className="text-sm font-semibold text-[#efe4d8]/45">The queue is quiet.</p>
-              <p className="mt-1.5 text-xs text-[#efe4d8]/30">队列已空，挑些歌加进来吧。</p>
+              <p className="mt-1.5 text-xs text-[#efe4d8]/30">队列是空的，挑一首歌放进来吧。</p>
             </div>
           ) : (
             <ul className="space-y-0.5">
               {tracks.map((track) => {
                 const isCurrent = track.id === currentTrackId;
                 const unavailable = track.filePath.startsWith("unavailable:");
+                const canRetrySource =
+                  unavailable &&
+                  (Boolean(track.sourceId) ||
+                    track.filePath.startsWith("unavailable:netease:") ||
+                    track.filePath.startsWith("unavailable:bilibili:"));
+                const artwork = resolveTrackCover(track);
+                const handleRowKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onPlay(track);
+                  }
+                };
+
                 return (
                   <li key={track.id}>
                     <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => onPlay(track)}
+                      onKeyDown={handleRowKeyDown}
                       className={clsx(
-                        "group relative flex items-center gap-3 rounded-[14px] px-2.5 py-2 transition-colors duration-200",
+                        "group relative flex cursor-pointer items-center gap-3 rounded-[14px] px-2.5 py-2 outline-none transition-colors duration-200 focus-visible:bg-white/[0.07]",
                         isCurrent ? "bg-white/[0.08]" : "hover:bg-white/[0.04]",
                       )}
                     >
-                      {/* Cover */}
-                      <button
-                        type="button"
-                        onClick={() => onPlay(track)}
+                      <div
                         className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[10px]"
-                        aria-label={`Play ${track.title}`}
-                        title={unavailable ? "Unavailable" : `Play ${track.title}`}
-                        disabled={unavailable}
+                        title={
+                          unavailable
+                            ? canRetrySource
+                              ? "Retry this source"
+                              : "Unavailable"
+                            : `Play ${track.title}`
+                        }
                       >
                         <ArtworkImage
-                          src={track.coverUrl}
+                          src={artwork.src}
                           alt={track.album || track.title}
                           source={track.source}
                           className="h-full w-full object-cover"
@@ -178,15 +185,9 @@ export function QueueDrawer({
                             </span>
                           </span>
                         )}
-                      </button>
+                      </div>
 
-                      {/* Title / artist / tags */}
-                      <button
-                        type="button"
-                        onClick={() => onPlay(track)}
-                        disabled={unavailable}
-                        className="min-w-0 flex-1 text-left"
-                      >
+                      <div className="min-w-0 flex-1 text-left">
                         <p
                           className={clsx(
                             "truncate text-[13px] font-semibold leading-tight",
@@ -208,22 +209,23 @@ export function QueueDrawer({
                             </span>
                           )}
                           {unavailable && (
-                            <span className="text-[9px] font-bold uppercase tracking-wide text-[#7a2d1c]/70">
-                              Unavailable
+                            <span className="text-[9px] font-bold uppercase tracking-wide text-[#e8a08f]/75">
+                              {canRetrySource ? "Retry source" : "Unavailable"}
                             </span>
                           )}
                         </div>
-                      </button>
+                      </div>
 
-                      {/* Duration */}
                       <span className="hidden shrink-0 text-[11px] font-semibold tabular-nums text-[#efe4d8]/35 sm:block">
                         {formatDuration(track.durationSeconds)}
                       </span>
 
-                      {/* Like */}
                       <button
                         type="button"
-                        onClick={() => onToggleLike(track.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onToggleLike(track.id);
+                        }}
                         className={clsx(
                           "app-transition flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
                           track.liked
@@ -239,16 +241,15 @@ export function QueueDrawer({
                         />
                       </button>
 
-                      {/* Remove from the play queue (stops if current). The
-                          track itself is NOT deleted — the library / search
-                          results stay intact. A full session-queue separation
-                          lands in a later phase. */}
                       <button
                         type="button"
-                        onClick={() => onRemove(track.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onRemove(track.id);
+                        }}
                         className="app-transition flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#efe4d8]/30 opacity-0 hover:bg-[#7a2d1c]/40 hover:text-[#efe4d8] group-hover:opacity-100"
                         aria-label="Remove from queue"
-                        title="Skip this track — library kept / 跳过此曲，曲库保留"
+                        title="Skip this track. Library kept. / 跳过此曲，曲库保留"
                       >
                         <X className="h-[14px] w-[14px]" />
                       </button>
@@ -260,9 +261,6 @@ export function QueueDrawer({
           )}
         </div>
 
-        {/* Footer: recommend-similar toggle. Subtle — it's a soft preference,
-            not a loud feature. Wires to a persisted flag that future phases
-            read when picking the next track. */}
         <div className="border-t border-white/[0.06] px-5 py-3.5">
           <button
             type="button"
@@ -288,15 +286,13 @@ export function QueueDrawer({
               />
             </span>
           </button>
-          <p className="mt-1.5 text-[10px] text-[#efe4d8]/30">在列表下方推荐你喜欢的相似歌曲</p>
+          <p className="mt-1.5 text-[10px] text-[#efe4d8]/30">在队列末尾延续相近的听感。</p>
         </div>
       </aside>
     </div>
   );
 }
 
-// Tiny local helper kept here so the drawer owns its "recommend similar"
-// persistence shape — mirrors the DanmakuSettings localStorage pattern.
 export const RECOMMEND_SIMILAR_KEY = "ome.queue.recommendSimilar";
 
 export function loadRecommendSimilar(): boolean {
@@ -311,6 +307,6 @@ export function saveRecommendSimilar(value: boolean): void {
   try {
     window.localStorage.setItem(RECOMMEND_SIMILAR_KEY, value ? "1" : "0");
   } catch {
-    /* ignore — non-critical preference */
+    // Non-critical preference.
   }
 }
