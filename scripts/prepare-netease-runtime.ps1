@@ -35,7 +35,24 @@ if (-not (Test-Path $nodeZip) -or $Force) {
   Invoke-WebRequest -Uri $nodeUrl -OutFile $nodeZip
 }
 
-$actualHash = (Get-FileHash -Algorithm SHA256 -Path $nodeZip).Hash.ToLowerInvariant()
+function Get-Sha256Hex {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  $stream = [System.IO.File]::OpenRead($Path)
+  try {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      $hashBytes = $sha256.ComputeHash($stream)
+      return ([System.BitConverter]::ToString($hashBytes) -replace "-", "").ToLowerInvariant()
+    } finally {
+      $sha256.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
+$actualHash = Get-Sha256Hex -Path $nodeZip
 if ($actualHash -ne $nodeSha256.ToLowerInvariant()) {
   throw "Node.js archive SHA256 mismatch. Expected $nodeSha256 but got $actualHash."
 }
