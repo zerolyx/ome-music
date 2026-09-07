@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- preference helpers intentionally live with the queue drawer */
 import { useEffect } from "react";
 import type React from "react";
 import { Heart, ListMusic, Sparkles, Trash2, X } from "lucide-react";
@@ -13,6 +14,8 @@ function sourceTagLabel(source: Track["source"]): string {
       return "NetEase";
     case "bilibili":
       return "Bilibili";
+    case "qqmusic":
+      return "QQ音乐";
     case "local":
     default:
       return "Local";
@@ -149,7 +152,7 @@ export function QueueDrawer({
                 };
 
                 return (
-                  <li key={track.id}>
+                  <li key={track.id} className="queue-row">
                     <div
                       role="button"
                       tabIndex={0}

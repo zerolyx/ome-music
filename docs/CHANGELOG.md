@@ -4,7 +4,105 @@ This project follows small, traceable releases. Keep entries short and focused o
 
 ## [Unreleased]
 
-- No unreleased changes yet.
+> Status: release candidate work — v0.4.0 will be tagged only after manual
+> acceptance (QQ/WeChat scan sign-in, NetEase session stability, window
+> matrix, installer) and a maintainer merge of PR #15. The entries below
+> describe what is already implemented and verified by automated checks.
+
+### Added
+
+- **QQ Music source (PR #15, by @chinoshizuyuki)**: search, playback with
+  per-quality fallback (Hi-Res → Lossless → EXHigh → Higher → Standard) and
+  multi-CDN candidates, lyrics + translated lyrics, playlists, liked songs,
+  user profile, VIP status, QR login, Cookie import, and an official
+  QQ Music WebView2 sign-in window (QQ + WeChat) whose session is validated
+  and persisted entirely inside Rust (Windows Credential Manager).
+- Source settings isolation: each music source (NetEase / Bilibili / QQ
+  Music) is saved and enabled independently; enabling a source never resets
+  the others, and signing in never silently enables a source.
+- Startup only initializes *enabled* sources; disabled sources start no
+  services and open no login checks.
+- Compact player layout at 900px with a shared side-padding baseline;
+  previously the 1040px minimum window inherited a wide fixed-column layout.
+
+### Changed
+
+- **QQ Music sign-in rebuilt around the official WebView (P0 fix)**: the
+  app-owned official sign-in window is now the primary login — after the user
+  confirms on their phone, a backend watcher collects the session via the
+  native WebView2 CookieManager, bootstraps a QQ Music session from QQ account
+  cookies when needed, verifies it against the QQ Music API, stores it in the
+  OS keyring and closes the window automatically (no manual "Extract/Check"
+  steps). A verification failure now saves nothing and reports the real
+  reason; the direct ptlogin QR is demoted to an experimental Advanced entry
+  (QQ servers 403 it on many real networks) with an "Use Official Sign-in"
+  escape hatch, and Cookie import moved into the same Advanced block.
+- NetEase service startup is single-flight (async lock + re-check), health
+  checks verify the API response shape instead of any HTTP 200, and the
+  bundled runtime becomes optional per user configuration.
+- QQ Music credential handling hardened: QR bootstrap cookies live only in
+  Rust memory, WebView2 cookie extraction is Windows-gated with a domain +
+  name allowlist, logs show only presence/length/booleans, and `debug_dump`
+  is test-only and removed from the command surface.
+- Local library rows that point at missing files are surfaced as
+  `file_missing` instead of silently failing at play time.
+- SQLite runs in WAL mode with a busy timeout; legacy column migrations
+  surface errors instead of swallowing them.
+
+### Fixed
+
+- UTF-8-safe cookie masking and login-redirect HTML extraction (no byte
+  slicing panics on non-ASCII input; release builds abort on panic).
+- QQ Music QR polling lifecycle: polls stop on terminal states, die with the
+  settings panel, and a failed verification shows a real reason instead of a
+  misleading "QR expired".
+- QQ Music VIP status reports "unknown" (membership not confirmed) instead
+  of claiming membership from cookie presence alone.
+- Cover stability: library-row covers for Bilibili / QQ Music keep stable
+  CDN URLs instead of short-lived proxy tokens; failed cover hydration
+  retries instead of permanently falling back.
+- Playback / UI: lyric room renders only a window around the active line;
+  queue rows skip off-screen rendering; the Bilibili atmosphere label stops
+  falsely reporting "Preparing" when only cover art is available; danmaku
+  clears on pause; the title dialog retires when an overlay opens; the
+  settings modal closes on Escape / backdrop and is keyboard-accessible.
+
+### Security
+
+- Known Risk recorded in `SECURITY.md`: the bundled
+  `NeteaseCloudMusicApi → music-metadata → file-type` chain has no
+  non-breaking fix; `npm audit fix --force` would force-downgrade to an
+  unmaintained 3.x line and is therefore prohibited.
+- Dependency hardening (2026-09-06): compatible-range `npm audit fix` plus a
+  `vite` 6.4.3 upgrade cleared 9 of the 15 previously reported advisories in
+  both the root tree and the bundled NetEase runtime tree (vite dev-server
+  family, esbuild dev-server, axios 1.18.1, form-data 4.0.6, ip-address
+  10.7.0, js-yaml, brace-expansion, browserslist, postcss-selector-parser).
+  Two accepted risk chains remain, both recorded in `SECURITY.md`:
+  the `music-metadata → file-type` chain (unchanged) and the new
+  `express → qs` chain (no fix within express 4.x; local 127.0.0.1 only).
+
+### CI
+
+- CI now runs `cargo test` (Linux + Windows) and `npm run test`
+  (static regression guards) on every push/PR; Windows job compiles the
+  WebView2-only QQ Music code that Linux CI cannot reach.
+
+## [0.3.8] - 2026-07-09
+
+Maintenance release. No new user-facing features. Focuses on cleaning up the QQ Music settings UI and tightening CI/lint hygiene.
+
+### Changed
+
+- QQ Music settings panel trimmed: removed unused VIP status badge, playlist shelf, test-connection / check-VIP / debug buttons, and the associated dead event handlers and state. The remaining buttons were re-laid into a uniform 2-column grid matching the NetEase and Bilibili cards.
+- `webview2-com` and `windows` crate dependencies moved under `[target.'cfg(windows)'.dependencies]` so Linux CI no longer attempts to compile Windows-only WebView2 cookie-extraction code.
+- Bumped version to 0.3.8.
+
+### Fixed
+
+- Resolved all Rust `unused variable` / `unused assignment` warnings and clippy errors (`needless-range-loop`, `manual-pattern-char-comparison`, `manual-strip`) so `cargo clippy --workspace -- -D warnings` passes clean.
+- Resolved ESLint `@typescript-eslint/no-unused-vars` errors in `LyricsSourceMenu.tsx` and `ProviderSettingsPanel.tsx`.
+- docs:check now passes: README, README.zh-CN, BUILD.md, and CHANGELOG.md all reference the canonical 0.3.8 version.
 
 ## [0.3.7] - 2026-06-30
 

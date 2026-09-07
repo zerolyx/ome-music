@@ -32,10 +32,13 @@ import {
 } from "./features/lyrics/lyricsResolver";
 import {
   ensureNeteaseApiService,
+  getMusicSourceAvailability,
   BilibiliAccountSessionProvider,
   BilibiliMusicProvider,
   NetEaseAccountSessionProvider,
   NetEaseMusicProvider,
+  QQMusicAccountSessionProvider,
+  QQMusicProvider,
   type BilibiliLoginStatus,
   type DanmakuItem,
   type BilibiliDanmakuDebug,
@@ -44,6 +47,7 @@ import {
   type NetEasePlaybackDebug,
   type NetEaseServiceStatus,
   type PlayableUrlOptions,
+  type QQMusicLoginStatus,
   type TasteNotes,
 } from "./features/musicSources/provider";
 import {
@@ -69,6 +73,8 @@ const neteaseProvider = new NetEaseMusicProvider();
 const neteaseAuthProvider = new NetEaseAccountSessionProvider();
 const bilibiliProvider = new BilibiliMusicProvider();
 const bilibiliAuthProvider = new BilibiliAccountSessionProvider();
+const qqmusicProvider = new QQMusicProvider();
+const qqmusicAuthProvider = new QQMusicAccountSessionProvider();
 const ProviderSettingsPanel = lazy(() =>
   import("./components/ProviderSettingsPanel").then((module) => ({
     default: module.ProviderSettingsPanel,
@@ -136,6 +142,9 @@ function sourceIdForTrack(track: Track): string | null {
   if (track.filePath.startsWith("bilibili:")) {
     return track.filePath.replace("bilibili:", "");
   }
+  if (track.filePath.startsWith("unavailable:qqmusic:")) {
+    return track.filePath.replace("unavailable:qqmusic:", "");
+  }
   return null;
 }
 
@@ -176,15 +185,17 @@ function sourceShareUrl(track: Track): string | null {
     return `https://music.163.com/#/song?id=${sourceId}`;
   }
   if (track.source === "bilibili" && sourceId) {
-    // Bilibili sourceId is stored as "{bvid}:{cid}" — extract the bvid.
     const bvid = sourceId.split(":")[0];
     return bvid ? `https://www.bilibili.com/video/${bvid}` : null;
+  }
+  if (track.source === "qqmusic" && sourceId) {
+    return `https://y.qq.com/n/ryqq/songDetail/${sourceId}`;
   }
   return null;
 }
 
 function isRemoteTrack(track: Track): boolean {
-  return track.source === "netease" || track.source === "bilibili";
+  return track.source === "netease" || track.source === "bilibili" || track.source === "qqmusic";
 }
 
 function playbackReasonMessage(reason?: string | null): string {
@@ -193,7 +204,8 @@ function playbackReasonMessage(reason?: string | null): string {
     case "cookie_missing":
       return "Sign in to your music source to try again.";
     case "cookie_expired":
-      return "Your session has expired. Please reconnect NetEase Cloud Music.";
+    case "session_expired":
+      return "Your session has expired. Please reconnect your music source.";
     case "vip_required":
       return "This track needs an active membership from the current source.";
     case "trial_only":
@@ -206,7 +218,13 @@ function playbackReasonMessage(reason?: string | null): string {
       return "This track is unavailable from the current source.";
     case "playurl_failed":
     case "audio_stream_missing":
-      return "This Bilibili track is unavailable from the current source.";
+      return "This track is unavailable from the current source.";
+    case "sign_invalid":
+      return "Request signature expired. Please try again.";
+    case "rate_limited":
+      return "Too many requests. Please wait a moment.";
+    case "timeout":
+      return "The music source request timed out.";
     case "api_failed":
       return "The music source could not be reached just now.";
     default:
@@ -221,6 +239,7 @@ export default function App() {
   const playableRequestRef = useRef(0);
   const bilibiliSelectionRef = useRef(0);
   const neteaseSelectionRef = useRef(0);
+  const qqmusicSelectionRef = useRef(0);
   const [startupSnapshot] = useState(() => loadLastSessionSnapshot());
   const [restoredSnapshotTrack] = useState<Track | null>(() =>
     startupSnapshot ? snapshotToTrack(startupSnapshot) : null,
@@ -292,6 +311,7 @@ export default function App() {
   const [sourceServiceStatus, setSourceServiceStatus] = useState<NetEaseServiceStatus | null>(null);
   const [sourceLoginStatus, setSourceLoginStatus] = useState<NetEaseLoginStatus | null>(null);
   const [bilibiliLoginStatus, setBilibiliLoginStatus] = useState<BilibiliLoginStatus | null>(null);
+  const [qqmusicLoginStatus, setQQMusicLoginStatus] = useState<QQMusicLoginStatus | null>(null);
   const [tasteNotes, setTasteNotes] = useState<TasteNotes | null>(null);
   const [danmakuItems, setDanmakuItems] = useState<DanmakuItem[]>([]);
   const [danmakuDebug, setDanmakuDebug] = useState<BilibiliDanmakuDebug | null>(null);
@@ -347,6 +367,13 @@ export default function App() {
   );
 
   useEffect(() => {
+    // Best-effort cover repair for older imported rows. A failed metadata
+    // request does NOT permanently mark the row: the id is only recorded in
+    // `coverHydrationRef` after a successful resolve (or when the track has
+    // no sourceId to retry), so a transient network failure retries on the
+    // next render pass instead of stranding the cover on the placeholder
+    // until restart. Re-requests are cheap (batch of 48, memoized per id)
+    // and stop once a cover arrives.
     const targets = tracks
       .filter(needsNeteaseCoverHydration)
       .filter((track) => !coverHydrationRef.current.has(track.id))
@@ -356,19 +383,23 @@ export default function App() {
 
     for (const target of targets) {
       const sourceId = sourceIdForTrack(target);
-      if (!sourceId) continue;
-      coverHydrationRef.current.add(target.id);
+      if (!sourceId) {
+        coverHydrationRef.current.add(target.id);
+        continue;
+      }
       void neteaseProvider
         .getSongMetadata(sourceId)
         .then((song) => {
           const coverUrl = song.coverUrl?.trim();
+          coverHydrationRef.current.add(target.id);
           if (!coverUrl) return;
           setTracks((value) =>
             value.map((track) => (track.id === target.id ? { ...track, coverUrl } : track)),
           );
         })
         .catch(() => {
-          /* Best-effort cover repair for older imported rows. */
+          // Keep the id out of the set: a transient failure retries on the
+          // next `tracks` change instead of falling back permanently.
         });
     }
   }, [tracks]);
@@ -490,44 +521,92 @@ export default function App() {
 
     const backgroundTimer = window.setTimeout(() => {
       markStartup("providersInitStartedAt");
-      void Promise.allSettled([
-        ensureNeteaseApiService()
-          .then((status) => {
-            if (!cancelled) setSourceServiceStatus(status);
-          })
-          .catch(() => {
-            if (!cancelled) setSourceServiceStatus(null);
-          }),
-        neteaseAuthProvider
-          .getLoginStatus()
-          .then((login) => {
-            if (!cancelled) setSourceLoginStatus(login);
-          })
-          .catch(() => {
-            if (!cancelled) setSourceLoginStatus(null);
-          }),
-        bilibiliAuthProvider
-          .getLoginStatus()
-          .then((login) => {
-            if (!cancelled) setBilibiliLoginStatus(login);
-          })
-          .catch(() => {
-            if (!cancelled) setBilibiliLoginStatus(null);
-          }),
-        neteaseProvider
-          .getLatestTasteNotes()
-          .then((notes) => {
-            if (!cancelled) setTasteNotes(notes);
-          })
-          .catch(() => {
-            if (!cancelled) setTasteNotes(null);
-          }),
-      ]).finally(() => {
-        if (!cancelled) {
-          markStartup("providersReadyAt");
-          reportStartup("Ome background ready");
+      const initializeEnabledProviders = async () => {
+        const availability = await getMusicSourceAvailability();
+        if (cancelled) return;
+
+        const tasks: Promise<unknown>[] = [
+          neteaseProvider
+            .getLatestTasteNotes()
+            .then((notes) => {
+              if (!cancelled) setTasteNotes(notes);
+            })
+            .catch(() => {
+              if (!cancelled) setTasteNotes(null);
+            }),
+        ];
+
+        if (availability.netease) {
+          tasks.push(
+            ensureNeteaseApiService()
+              .then((status) => {
+                if (!cancelled) setSourceServiceStatus(status);
+              })
+              .catch(() => {
+                if (!cancelled) setSourceServiceStatus(null);
+              }),
+            neteaseAuthProvider
+              .getLoginStatus()
+              .then((login) => {
+                if (!cancelled) setSourceLoginStatus(login);
+              })
+              .catch(() => {
+                if (!cancelled) setSourceLoginStatus(null);
+              }),
+          );
+        } else {
+          setSourceServiceStatus(null);
+          setSourceLoginStatus(null);
         }
-      });
+
+        if (availability.bilibili) {
+          tasks.push(
+            bilibiliAuthProvider
+              .getLoginStatus()
+              .then((login) => {
+                if (!cancelled) setBilibiliLoginStatus(login);
+              })
+              .catch(() => {
+                if (!cancelled) setBilibiliLoginStatus(null);
+              }),
+          );
+        } else {
+          setBilibiliLoginStatus(null);
+        }
+
+        if (availability.qqmusic) {
+          tasks.push(
+            qqmusicAuthProvider
+              .getLoginStatus()
+              .then((login) => {
+                if (!cancelled) setQQMusicLoginStatus(login);
+              })
+              .catch(() => {
+                if (!cancelled) setQQMusicLoginStatus(null);
+              }),
+          );
+        } else {
+          setQQMusicLoginStatus(null);
+        }
+
+        await Promise.allSettled(tasks);
+      };
+
+      void initializeEnabledProviders()
+        .catch(() => {
+          if (!cancelled) {
+            setSourceServiceStatus(null);
+            setSourceLoginStatus(null);
+            setBilibiliLoginStatus(null);
+            setQQMusicLoginStatus(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            markStartup("providersReadyAt");
+            reportStartup("Ome background ready");
+          }
+        });
     }, 1700);
 
     return () => {
@@ -535,7 +614,7 @@ export default function App() {
       window.clearTimeout(restoreTimer);
       window.clearTimeout(backgroundTimer);
     };
-  }, [restoredSnapshotTrack]);
+  }, [restoredSnapshotTrack, startupSnapshot]);
 
   useEffect(() => {
     setRadioSession((session) => updateRadioSessionPlayback(session, currentTrackId, isPlaying));
@@ -588,8 +667,8 @@ export default function App() {
       .then((resolved) => {
         if (lyricRequestRef.current !== requestId) return;
         setLyricCacheKey(resolved.cacheKey);
-        setLyrics(parseLrc(resolved.lyrics));
-        setTranslatedLyrics(parseLrc(resolved.translatedLyrics ?? ""));
+        setLyrics(parseLrc(resolved.lyrics, track));
+        setTranslatedLyrics(parseLrc(resolved.translatedLyrics ?? "", track));
         setLyricWarning(resolved.warning ?? null);
         setLyricOffsetMs(resolved.offsetMs);
       })
@@ -621,8 +700,8 @@ export default function App() {
       .then((resolved) => {
         if (lyricRequestRef.current !== requestId) return;
         setLyricCacheKey(resolved.cacheKey);
-        setLyrics(parseLrc(resolved.lyrics));
-        setTranslatedLyrics(parseLrc(resolved.translatedLyrics ?? ""));
+        setLyrics(parseLrc(resolved.lyrics, track));
+        setTranslatedLyrics(parseLrc(resolved.translatedLyrics ?? "", track));
         setLyricWarning(resolved.warning ?? null);
         setLyricOffsetMs(resolved.offsetMs);
       })
@@ -714,6 +793,19 @@ export default function App() {
           throw new Error(playbackReasonMessage(result.reason));
         }
         return { audioUrl: result.url, videoUrl: result.videoUrl };
+      }
+
+      const qqmusicSourceId =
+        currentTrack.source === "qqmusic" ? sourceIdForTrack(currentTrack) : null;
+      if (qqmusicSourceId) {
+        const result = await qqmusicProvider.getPlayableUrl(qqmusicSourceId, {
+          level: playbackQuality,
+        });
+        if (playableRequestRef.current === requestId) setPlaybackDebug(null);
+        if (!result.url || result.unavailable) {
+          throw new Error(playbackReasonMessage(result.reason));
+        }
+        return { audioUrl: result.url };
       }
 
       const src = toPlayableSrc(currentTrack);
@@ -1222,13 +1314,13 @@ export default function App() {
     setIsPlaying(true);
   };
 
-  const setProgress = (seconds: number) => {
+  const setProgress = useCallback((seconds: number) => {
     const audio = audioRef.current;
     if (audio) {
       audio.currentTime = seconds;
     }
     setProgressSeconds(seconds);
-  };
+  }, []);
 
   const adjustLyricOffset = (deltaMs: number) => {
     if (!lyricCacheKey) return;
@@ -1795,6 +1887,56 @@ export default function App() {
     return false;
   };
 
+  const importQQMusicTrack = async (song: MusicSourceSong): Promise<Track | null> => {
+    const requestId = qqmusicSelectionRef.current + 1;
+    qqmusicSelectionRef.current = requestId;
+    setLibraryError(null);
+    try {
+      const playable = await qqmusicProvider.getPlayableUrl(song.id, {
+        level: playbackQuality,
+      });
+      if (qqmusicSelectionRef.current !== requestId) return null;
+      setPlaybackDebug(null);
+      if (!playable.url || playable.unavailable) {
+        if (qqmusicSelectionRef.current === requestId)
+          setLibraryError(playbackReasonMessage(playable.reason));
+        return null;
+      }
+      const updatedTracks = await qqmusicProvider.importSong(song.id);
+      if (qqmusicSelectionRef.current !== requestId) return null;
+      setTracks(updatedTracks);
+      const imported = updatedTracks.find(
+        (track) => track.source === "qqmusic" && sourceIdForTrack(track) === song.id,
+      );
+      if (!imported) {
+        if (qqmusicSelectionRef.current === requestId)
+          setLibraryError("This QQ Music track is unavailable from the current source.");
+        return null;
+      }
+      if (playable.url) {
+        preparedPlayableRef.current.set(imported.id, { audioUrl: playable.url });
+      }
+      return imported;
+    } catch (error) {
+      if (qqmusicSelectionRef.current !== requestId) return null;
+      setLibraryError(
+        error instanceof Error
+          ? error.message
+          : "This QQ Music track is unavailable from the current source.",
+      );
+      return null;
+    }
+  };
+
+  const playQQMusicSong = async (song: MusicSourceSong): Promise<boolean> => {
+    const imported = await importQQMusicTrack(song);
+    if (imported) {
+      playLocalTrack(imported);
+      return true;
+    }
+    return false;
+  };
+
   return (
     <div className="startup-shell relative h-[100dvh] max-h-[100dvh] min-h-0 overflow-hidden bg-[#d0c6ba] text-[#4a2108]">
       <div className="fixed inset-0 bg-[#d0c6ba]" />
@@ -1825,7 +1967,7 @@ export default function App() {
         onPlayLocal={playLocalTrack}
         onPlayNetEase={playNetEaseSong}
         onPlayBilibili={playBilibiliSong}
-        onOpenSettings={() => openProviderSettings("music")}
+        onPlayQQMusic={playQQMusicSong}
       />
 
       {(activeOverlay === "none" || activeOverlay === "quickSettings") && (
@@ -1836,14 +1978,22 @@ export default function App() {
           playbackDebug={playbackDebug}
           serviceStatus={sourceServiceStatus}
           loginStatus={sourceLoginStatus}
+          bilibiliLoginStatus={bilibiliLoginStatus}
+          qqmusicLoginStatus={qqmusicLoginStatus}
           playbackQuality={playbackQuality}
           onReloadLyrics={reloadLyrics}
           onImportLyrics={importLyrics}
           onAdjustLyricOffset={adjustLyricOffset}
           onResetLyricOffset={resetLyricOffset}
           onPlaybackQualityChange={changePlaybackQuality}
-          onOpenSettings={() => openProviderSettings("music")}
-          onOpenAtmosphereSettings={() => openProviderSettings("atmosphere")}
+          onOpenSettings={() => {
+            setSettingsFocus("music");
+            setActiveOverlay("settings");
+          }}
+          onOpenAtmosphereSettings={() => {
+            setSettingsFocus("atmosphere");
+            setActiveOverlay("settings");
+          }}
           open={activeOverlay === "quickSettings"}
           onOpen={openQuickSettingsOverlay}
           onClose={closeQuickSettingsOverlay}
@@ -1877,6 +2027,7 @@ export default function App() {
           localTrackCount={tracks.filter((track) => track.source === "local").length}
           neteaseLoggedIn={Boolean(sourceLoginStatus?.loggedIn)}
           bilibiliLoggedIn={Boolean(bilibiliLoginStatus?.loggedIn)}
+          qqmusicLoggedIn={Boolean(qqmusicLoginStatus?.loggedIn)}
           onClose={() => setShowOnboarding(false)}
           onImportMusic={importFolder}
           onOpenNeteaseSettings={() => {
@@ -1886,6 +2037,11 @@ export default function App() {
           onOpenBilibiliSettings={() => {
             setShowOnboarding(false);
             openProviderSettings("music");
+          }}
+          onOpenQQMusicSettings={() => {
+            setShowOnboarding(false);
+            setSettingsFocus("music");
+            setActiveOverlay("settings");
           }}
         />
       )}
@@ -1919,19 +2075,23 @@ export default function App() {
           moreOpen={activeOverlay === "more"}
           onOpenMore={openMoreOverlay}
           onCloseMore={closeMoreOverlay}
+          overlayOpen={activeOverlay !== "none"}
         />
       </main>
 
-      {currentTrack?.source === "bilibili" && isPlaying && danmakuItems.length > 0 && (
-        <Suspense fallback={null}>
-          <GlobalDanmakuAtmosphereLayer
-            items={danmakuItems}
-            currentTime={progressSeconds}
-            isPlaying={isPlaying}
-            trackId={currentTrack.id}
-          />
-        </Suspense>
-      )}
+      {currentTrack?.source === "bilibili" &&
+        isPlaying &&
+        danmakuItems.length > 0 &&
+        activeOverlay === "none" && (
+          <Suspense fallback={null}>
+            <GlobalDanmakuAtmosphereLayer
+              items={danmakuItems}
+              currentTime={progressSeconds}
+              isPlaying={isPlaying}
+              trackId={currentTrack.id}
+            />
+          </Suspense>
+        )}
 
       <OmeRadioPanel
         session={radioSession}
@@ -2025,6 +2185,10 @@ export default function App() {
                 .getLoginStatus()
                 .then(setBilibiliLoginStatus)
                 .catch(() => setBilibiliLoginStatus(null));
+              void qqmusicAuthProvider
+                .getLoginStatus()
+                .then(setQQMusicLoginStatus)
+                .catch(() => setQQMusicLoginStatus(null));
             }}
             onLibraryChanged={(updatedTracks) => {
               setTracks(updatedTracks);
@@ -2099,6 +2263,7 @@ function PlaybackNotice({
         {(reason === "not_logged_in" ||
           reason === "cookie_missing" ||
           reason === "cookie_expired" ||
+          reason === "session_expired" ||
           reason === "vip_required" ||
           reason === "trial_only") && (
           <button
@@ -2124,6 +2289,7 @@ function playbackNoticeLabel(reason?: string | null): string {
     case "cookie_missing":
       return "Sign in needed";
     case "cookie_expired":
+    case "session_expired":
       return "Reconnect source";
     case "no_copyright":
       return "Copyright limited";
@@ -2136,6 +2302,12 @@ function playbackNoticeLabel(reason?: string | null): string {
     case "playurl_failed":
     case "audio_stream_missing":
       return "Source quiet";
+    case "rate_limited":
+      return "Rate limited";
+    case "sign_invalid":
+      return "Signature invalid";
+    case "timeout":
+      return "Request timeout";
     default:
       return "Unable to play";
   }
