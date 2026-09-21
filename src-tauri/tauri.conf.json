@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Ome Music",
+  "version": "0.3.8",
+  "identifier": "com.ome.music",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build:tauri",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Ome Music",
+        "width": 1280,
+        "height": 720,
+        "minWidth": 1040,
+        "minHeight": 640,
+        "theme": "Light",
+        "transparent": true,
+        "decorations": false,
+        "shadow": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: http://asset.localhost https://asset.localhost http://ome-media.localhost ome-media: https:; media-src 'self' asset: http://asset.localhost https://asset.localhost ome-media: http://ome-media.localhost data: blob: https:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:* https:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$HOME/Music/**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "resources": ["resources/"],
+    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "displayLanguageSelector": false,
+        "installerHooks": "nsis-hooks.nsh"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      }
+    }
+  }
+}

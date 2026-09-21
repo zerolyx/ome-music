@@ -1,0 +1,4 @@
+interface:
+  display_name: "DJ Agent Tooling"
+  short_description: "Turn DJ requests into executable music actions"
+  default_prompt: "Use $dj-agent-tooling to make this DJ request execute music actions while staying in character."

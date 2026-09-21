@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tauri App Debug"
+  short_description: "Debug Tauri frontend and Rust command integration"
+  default_prompt: "Use $tauri-app-debug to diagnose this Tauri desktop issue with minimal verification."

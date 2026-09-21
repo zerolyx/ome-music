@@ -1,0 +1,178 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - "LICENSE"
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libgtk-3-dev
+
+      - name: cargo check
+        run: cargo check --workspace
+
+      - name: cargo clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo test
+        run: cargo test --workspace
+
+  rust-windows:
+    name: Rust checks (Windows)
+    # The QQ Music WebView2 cookie extraction code lives under
+    # [target.'cfg(windows)'.dependencies] and is never compiled on Linux.
+    # A Windows job is required so that Windows-only code is type-checked and
+    # tested before every merge (this is the core of the QQ Music sign-in).
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: cargo check
+        run: cargo check --workspace
+
+      - name: cargo test
+        run: cargo test --workspace
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier
+        run: npm run format:check
+
+      # Phase 1A-1a: the behaviour suite used to be a local-only gate, so a PR
+      # could merge with failing Vitest / regression contracts. It now runs in
+      # CI on every PR and push to main.
+      - name: Behaviour tests (regression contracts + Vitest)
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
+
+  # Phase 1A-1c: minimal smoke over the web frontend.
+  #
+  # Boundary, stated explicitly: this exercises the React shell served by
+  # `vite preview`, NOT the Tauri runtime. Anything that depends on the native
+  # shell — local file playback, the NetEase node sidecar, keyring credentials,
+  # the ome-media proxy — cannot be covered here and still needs manual QA.
+  smoke:
+    name: Frontend smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke
+        run: npm run test:smoke
+
+  docs:
+    name: Documentation checks
+    runs-on: ubuntu-latest
+    # Always run docs:check on pull requests so docs-only changes are still
+    # validated before merge. On push to main the workflow only triggers for
+    # non-docs changes (see paths-ignore above), which is fine because the PR
+    # already validated the docs.
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: docs:check
+        run: npm run docs:check

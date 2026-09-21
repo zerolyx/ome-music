@@ -1,0 +1,4 @@
+interface:
+  display_name: "Music Player UI Polish"
+  short_description: "Polish immersive lightweight music player UI"
+  default_prompt: "Use $music-player-ui-polish to fix and visually verify this player UI issue."

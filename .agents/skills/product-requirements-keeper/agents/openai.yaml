@@ -1,0 +1,4 @@
+interface:
+  display_name: "Product Requirements Keeper"
+  short_description: "Guard the lightweight immersive product direction"
+  default_prompt: "Use $product-requirements-keeper to evaluate this feature against the Ome Music product principles."

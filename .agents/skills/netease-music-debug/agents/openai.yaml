@@ -1,0 +1,4 @@
+interface:
+  display_name: "NetEase Music Debug"
+  short_description: "Debug NetEase search playback login and lyrics"
+  default_prompt: "Use $netease-music-debug to trace this NetEase Music problem without exposing private data."
