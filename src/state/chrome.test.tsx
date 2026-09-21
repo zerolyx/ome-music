@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/preact";
+import { act, cleanup, render } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { chromeVisible, initChromeAutoHide, setChromeHover } from "./chrome";
 import { App } from "../app";
