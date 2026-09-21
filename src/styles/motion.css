@@ -21,7 +21,7 @@
 .ready .rail,
 .ready .view-host,
 .ready .player-bar {
-  animation: shell-rise 0.8s var(--ease-signature) both;
+  animation: shell-rise 0.8s var(--ease-signature) backwards;
 }
 .ready .rail {
   animation-delay: 0.08s;
@@ -44,15 +44,18 @@
   }
 }
 
-/* 首页圆盘绽放 + 文案跟进 */
-.ready .home-disc {
-  animation: disc-bloom 1s var(--ease-signature) 0.2s both;
+/* 首页电台舞台：kicker → 唱片绽放 → 文案跟进（旋转在唱片本体，互不冲突） */
+.ready .home-kicker {
+  animation: rise-in 0.8s var(--ease-signature) 0.3s backwards;
+}
+.ready .home-disc-face {
+  animation: disc-bloom 1s var(--ease-signature) 0.42s backwards;
 }
 .ready .home-empty h1 {
-  animation: rise-in 0.8s var(--ease-signature) 0.45s both;
+  animation: rise-in 0.8s var(--ease-signature) 0.62s backwards;
 }
-.ready .home-empty p {
-  animation: rise-in 0.8s var(--ease-signature) 0.6s both;
+.ready .home-hint {
+  animation: rise-in 0.8s var(--ease-signature) 0.74s backwards;
 }
 
 @keyframes disc-bloom {
@@ -93,7 +96,7 @@
 
 /* ============ 视图切换进场 ============ */
 .view-swap {
-  animation: view-in 0.45s var(--ease-signature) both;
+  animation: view-in 0.45s var(--ease-signature) backwards;
 }
 
 @keyframes view-in {

@@ -1,4 +1,6 @@
+import { useEffect } from "preact/hooks";
 import { activeView } from "./state/app";
+import { chromeVisible, initChromeAutoHide } from "./state/chrome";
 import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
 import { ImmersiveCursor } from "./components/ImmersiveCursor";
@@ -9,8 +11,10 @@ import { SettingsView } from "./views/Settings";
 import { PlayerBar } from "./components/PlayerBar";
 
 export function App() {
+  useEffect(() => initChromeAutoHide(), []);
+
   return (
-    <div class="app-shell">
+    <div class={`app-shell ${chromeVisible.value ? "" : "chrome-hidden"}`}>
       <ImmersiveCursor />
       <TitleBar />
       <div class="app-body">

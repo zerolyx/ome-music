@@ -1,12 +1,18 @@
 import { currentTrack, duration, isPlaying, next, position, previous, seek, setVolume, togglePlayback, volume } from "../state/player";
 import { coverUrl } from "../lib/api";
 import { formatDuration } from "../lib/audio";
+import { setChromeHover } from "../state/chrome";
 import { Icon } from "./Icon";
 
 export function PlayerBar() {
   const track = currentTrack.value;
   return (
-    <footer class="player-bar" aria-label="播放条">
+    <footer
+      class="player-bar"
+      aria-label="播放条"
+      onMouseEnter={() => setChromeHover(true)}
+      onMouseLeave={() => setChromeHover(false)}
+    >
       <div class="player-info">
         {track ? (
           <>

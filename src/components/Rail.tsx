@@ -1,4 +1,5 @@
 import { activeView, type View } from "../state/app";
+import { setChromeHover } from "../state/chrome";
 import { Icon } from "./Icon";
 
 const ITEMS: Array<{ view: View; label: string; icon: "home" | "search" | "library" | "settings" }> = [
@@ -10,7 +11,12 @@ const ITEMS: Array<{ view: View; label: string; icon: "home" | "search" | "libra
 
 export function Rail() {
   return (
-    <nav class="rail" aria-label="主导航">
+    <nav
+      class="rail"
+      aria-label="主导航"
+      onMouseEnter={() => setChromeHover(true)}
+      onMouseLeave={() => setChromeHover(false)}
+    >
       {ITEMS.map((item) => (
         <button
           key={item.view}

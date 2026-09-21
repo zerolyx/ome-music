@@ -5,11 +5,16 @@ export function HomeView() {
     <section class="view view-home">
       <div class="home-glow" aria-hidden="true" />
       <div class="home-empty">
-        <div class="home-disc">
-          <Icon name="music-note" size={40} />
+        <p class="home-kicker">OME RADIO · 私人电台</p>
+        <div class="home-disc" aria-hidden="true">
+          <div class="home-disc-face">
+            <span class="home-disc-label">
+              <Icon name="music-note" size={30} />
+            </span>
+          </div>
         </div>
         <h1>电台即将开播</h1>
-        <p>导入音乐后，这里会成为你的私人电台</p>
+        <p class="home-hint">导入音乐后，这里会成为你的私人电台</p>
       </div>
     </section>
   );
