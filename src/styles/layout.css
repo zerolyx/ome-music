@@ -188,3 +188,27 @@
 }
 .slider:hover::-webkit-slider-thumb, .slider:active::-webkit-slider-thumb { opacity: 1; }
 .slider-volume { max-width: 100px; }
+
+/* 设置 */
+.settings-group { margin-bottom: 28px; }
+.settings-label { font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 10px; letter-spacing: 0.04em; }
+.segmented { display: inline-flex; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+.segment { padding: 7px 18px; border-radius: 999px; font-size: 13px; color: var(--text-dim); }
+.segment.is-active { background: var(--accent); color: #fff; }
+
+/* Home */
+.view-home { position: relative; }
+.home-glow {
+  position: absolute; inset: 20% 15%;
+  background: radial-gradient(closest-side, var(--accent-soft), transparent 70%);
+  opacity: var(--glow-opacity);
+  pointer-events: none;
+}
+.home-disc {
+  width: 120px; height: 120px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  color: var(--accent);
+}
