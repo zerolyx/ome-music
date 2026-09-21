@@ -1,5 +1,6 @@
 mod db;
 mod library;
+mod media;
 
 use rusqlite::Connection;
 use std::sync::Mutex;
@@ -30,6 +31,7 @@ pub fn run() {
             });
             Ok(())
         })
+        .register_uri_scheme_protocol("ome-media", |_context, request| media::handle(request))
         .invoke_handler(tauri::generate_handler![
             get_app_version,
             library::list_tracks,
