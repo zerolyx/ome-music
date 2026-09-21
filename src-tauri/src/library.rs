@@ -32,6 +32,7 @@ pub struct ImportResultDto {
     pub added: i64,
     pub updated: i64,
     pub total: i64,
+    pub skipped: i64,
 }
 
 pub struct NewTrack {
@@ -215,6 +216,7 @@ pub async fn import_music_folder(
         let conn = crate::db::open_db(&state_path).map_err(|error| error.to_string())?;
         let mut added = 0i64;
         let mut updated = 0i64;
+        let mut skipped = 0i64;
         for entry in WalkDir::new(&folder).into_iter().filter_map(Result::ok) {
             let path = entry.path();
             if !path.is_file() { continue; }
@@ -228,15 +230,25 @@ pub async fn import_music_folder(
             let existed: i64 = conn
                 .query_row("SELECT COUNT(*) FROM tracks WHERE file_path = ?1", params![path.to_string_lossy()], |row| row.get(0))
                 .map_err(|error| error.to_string())?;
-            let mut track = read_track_metadata(path).ok_or_else(|| format!("无法读取: {}", path.display()))?;
-            track.cover_path = extract_cover(&conn, &covers_dir, path, &track)?;
+            // 单个文件损坏/解析失败只跳过计数，不中止整个导入
+            let Some(mut track) = read_track_metadata(path) else {
+                skipped += 1;
+                continue;
+            };
+            match extract_cover(&conn, &covers_dir, path, &track) {
+                Ok(cover_path) => track.cover_path = cover_path,
+                Err(_) => {
+                    skipped += 1;
+                    continue;
+                }
+            }
             insert_track(&conn, &track).map_err(|error| error.to_string())?;
             if existed > 0 { updated += 1; } else { added += 1; }
         }
         let total: i64 = conn
             .query_row("SELECT COUNT(*) FROM tracks", [], |row| row.get(0))
             .map_err(|error| error.to_string())?;
-        Ok(ImportResultDto { added, updated, total })
+        Ok(ImportResultDto { added, updated, total, skipped })
     })
     .await
     .map_err(|error| error.to_string())??;

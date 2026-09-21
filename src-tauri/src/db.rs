@@ -10,6 +10,8 @@ const MIGRATIONS: &[&str] = &[
 pub fn open_db(path: &Path) -> Result<Connection, rusqlite::Error> {
     let conn = Connection::open(path)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
+    // 扫描线程持有第二条连接，写竞争时等待而非立即 SQLITE_BUSY
+    conn.busy_timeout(std::time::Duration::from_millis(5000))?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
     Ok(conn)
 }
