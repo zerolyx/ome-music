@@ -8,8 +8,8 @@ import {
   refreshTracks,
   toggleLiked,
   tracks,
-  currentIndex,
 } from "../state/library";
+import { currentIndex } from "../state/player";
 import { TrackList } from "../components/TrackList";
 import { Icon } from "../components/Icon";
 

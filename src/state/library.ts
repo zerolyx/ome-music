@@ -4,7 +4,6 @@ import type { Track } from "../types/music";
 import { playTracks } from "./player";
 
 export const tracks = signal<Track[]>([]);
-export const currentIndex = signal(-1);
 export const importing = signal(false);
 export const importNotice = signal<string | null>(null);
 
@@ -27,7 +26,6 @@ export async function importFolder(): Promise<void> {
 }
 
 export function playFromLibrary(index: number): void {
-  currentIndex.value = index;
   playTracks(tracks.value, index);
 }
 

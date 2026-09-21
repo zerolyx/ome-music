@@ -16,7 +16,6 @@ export function TrackList({ tracks, currentIndex, onPlay, onToggleLike }: TrackL
         <li
           key={track.id}
           class={`track-row ${index === currentIndex ? "is-current" : ""}`}
-          onDblClick={() => onPlay(index)}
         >
           <button class="track-play" aria-label={`播放 ${track.title}`} onClick={() => onPlay(index)}>
             <Icon name="play" size={14} />
