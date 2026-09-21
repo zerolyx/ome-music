@@ -1,24 +1,14 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { defineConfig } from "vitest/config";
+import preact from "@preact/preset-vite";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [preact()],
   clearScreen: false,
-  server: {
-    port: 1420,
-    strictPort: true,
-  },
-  envPrefix: ["VITE_", "TAURI_"],
-  build: {
-    target: "es2020",
-    minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
-    sourcemap: Boolean(process.env.TAURI_DEBUG),
-  },
+  server: { port: 1420, strictPort: true },
+  build: { target: "es2022" },
   test: {
     environment: "jsdom",
-    setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}"],
     globals: true,
-    css: false,
+    setupFiles: ["./src/test/setup.ts"],
   },
 });
