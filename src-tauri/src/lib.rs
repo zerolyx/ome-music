@@ -1,4 +1,5 @@
 mod db;
+mod library;
 
 use rusqlite::Connection;
 use std::sync::Mutex;
@@ -29,7 +30,13 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_app_version])
+        .invoke_handler(tauri::generate_handler![
+            get_app_version,
+            library::list_tracks,
+            library::import_music_folder,
+            library::set_track_liked_command,
+            library::record_playback_event_command,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running ome music");
 }
