@@ -212,3 +212,18 @@
   box-shadow: var(--shadow);
   color: var(--accent);
 }
+
+/* 视图切换包装层：维持 view-host → view → 内容的高度链 */
+.view-host {
+  display: flex;
+  flex-direction: column;
+}
+.view-swap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.view-swap > .view {
+  flex: 1;
+}

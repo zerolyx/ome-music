@@ -1,0 +1,169 @@
+/* ============ 统一运动语言 ============ */
+/* 签名缓动：easeOutExpo 系，全站动画共用 */
+:root {
+  --ease-signature: cubic-bezier(0.16, 1, 0.3, 1);
+  --cursor: rgba(26, 24, 23, 0.55);
+  --cursor-strong: #1a1817;
+}
+
+[data-theme="dark"] {
+  --cursor: rgba(236, 234, 231, 0.6);
+  --cursor-strong: #ffffff;
+}
+
+/* ============ 启动序列 ============ */
+/* 窗口显示前隐藏内容；main.tsx 在前端就绪后移除 .booting 并调用 window.show() */
+.booting #app {
+  opacity: 0;
+}
+
+.ready .titlebar,
+.ready .rail,
+.ready .view-host,
+.ready .player-bar {
+  animation: shell-rise 0.8s var(--ease-signature) both;
+}
+.ready .rail {
+  animation-delay: 0.08s;
+}
+.ready .view-host {
+  animation-delay: 0.16s;
+}
+.ready .player-bar {
+  animation-delay: 0.24s;
+}
+
+@keyframes shell-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 首页圆盘绽放 + 文案跟进 */
+.ready .home-disc {
+  animation: disc-bloom 1s var(--ease-signature) 0.2s both;
+}
+.ready .home-empty h1 {
+  animation: rise-in 0.8s var(--ease-signature) 0.45s both;
+}
+.ready .home-empty p {
+  animation: rise-in 0.8s var(--ease-signature) 0.6s both;
+}
+
+@keyframes disc-bloom {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 光晕呼吸（持续、极轻） */
+.ready .home-glow {
+  animation: glow-breathe 7s ease-in-out infinite alternate;
+}
+
+@keyframes glow-breathe {
+  from {
+    opacity: calc(var(--glow-opacity) * 0.55);
+  }
+  to {
+    opacity: var(--glow-opacity);
+  }
+}
+
+/* ============ 视图切换进场 ============ */
+.view-swap {
+  animation: view-in 0.45s var(--ease-signature) both;
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============ 沉浸光标（环 + 点） ============ */
+.cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--cursor);
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  will-change: translate, opacity;
+  transition:
+    scale 0.35s var(--ease-signature),
+    border-color 0.35s ease,
+    background-color 0.35s ease,
+    opacity 0.3s ease;
+}
+
+.cursor-ring.is-hover {
+  scale: 1.6;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.cursor-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: var(--cursor-strong);
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  will-change: translate, opacity;
+  transition: opacity 0.3s ease;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .cursor-ring,
+  .cursor-dot {
+    display: none;
+  }
+}
+
+/* ============ 可访问性：减少动效 ============ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

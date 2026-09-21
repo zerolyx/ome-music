@@ -1,6 +1,7 @@
 import { activeView } from "./state/app";
 import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
+import { ImmersiveCursor } from "./components/ImmersiveCursor";
 import { HomeView } from "./views/Home";
 import { SearchView } from "./views/Search";
 import { LibraryView } from "./views/Library";
@@ -10,14 +11,17 @@ import { PlayerBar } from "./components/PlayerBar";
 export function App() {
   return (
     <div class="app-shell">
+      <ImmersiveCursor />
       <TitleBar />
       <div class="app-body">
         <Rail />
         <main class="view-host">
-          {activeView.value === "home" && <HomeView />}
-          {activeView.value === "search" && <SearchView />}
-          {activeView.value === "library" && <LibraryView />}
-          {activeView.value === "settings" && <SettingsView />}
+          <div key={activeView.value} class="view-swap">
+            {activeView.value === "home" && <HomeView />}
+            {activeView.value === "search" && <SearchView />}
+            {activeView.value === "library" && <LibraryView />}
+            {activeView.value === "settings" && <SettingsView />}
+          </div>
         </main>
       </div>
       <PlayerBar />

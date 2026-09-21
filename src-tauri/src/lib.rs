@@ -29,6 +29,16 @@ pub fn run() {
             app.manage(AppState {
                 db: Mutex::new(conn),
             });
+            // 兜底：前端启动序列失效时（如 JS 异常），3 秒后强制显示窗口，
+            // 避免用户面对"没有任何窗口"的死局。前端正常时 show() 幂等。
+            let main_window = app.get_webview_window("main");
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                if let Some(window) = main_window {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            });
             Ok(())
         })
         .register_uri_scheme_protocol("ome-media", |_context, request| media::handle(request))
