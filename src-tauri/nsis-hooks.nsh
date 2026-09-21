@@ -27,6 +27,17 @@
 !macroend
 
 
+!macro NSIS_HOOK_POSTINSTALL
+  ; --- Remove stale runtime leftovers from previous versions ---
+  ; NSIS upgrades only overwrite files present in the new package, so the old
+  ; bundled node.exe sidecar (~115 MB) from earlier installs lingers under
+  ; resources. The current package installs nothing into $INSTDIR\resources,
+  ; so removing the directory here reclaims that space after a successful
+  ; install. Runs only when the install section completed.
+  RMDir /r "$INSTDIR\resources"
+!macroend
+
+
 !macro NSIS_HOOK_POSTUNINSTALL
   ; User data is PRESERVED by default so that upgrades and reinstalls do not wipe the
   ; user's library, settings, login sessions, or credentials. This hook intentionally

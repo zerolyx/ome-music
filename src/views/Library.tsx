@@ -4,6 +4,7 @@ import {
   importFolder,
   importing,
   importNotice,
+  loadError,
   playFromLibrary,
   refreshTracks,
   toggleLiked,
@@ -28,6 +29,7 @@ export function LibraryView() {
         </button>
       </div>
       {importNotice.value && <p class="view-hint">{importNotice.value}</p>}
+      {loadError.value && <p class="view-hint">曲库加载失败：{loadError.value}</p>}
       {tracks.value.length === 0 ? (
         <div class="library-empty">
           <Icon name="library" size={40} />

@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://ome-media.localhost ome-media: https:; media-src 'self' data: blob: http://ome-media.localhost ome-media: https:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:* https:"
+      "csp": "default-src 'self'; script-src 'self' 'sha256-UG6aM8PGUtnThRd+dVZPznWg7JkfwNB/bWL9Bdn+iBk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://ome-media.localhost ome-media: https:; media-src 'self' data: blob: http://ome-media.localhost ome-media: https:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:* https:"
     }
   },
   "bundle": {

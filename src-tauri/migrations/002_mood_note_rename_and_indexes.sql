@@ -1,11 +1,7 @@
--- 002: Rename the misleading note_encrypted column to note_text and add the
--- missing hot-path indexes. All statements are idempotent so this file can be
--- re-run on every startup just like 001.
-
--- The journal stores listener notes as plain text today; the legacy column name
--- `note_encrypted` implied encryption that never existed. SQLite 3.25+ supports
--- RENAME COLUMN; rusqlite 0.32 (bundled) ships a newer engine. The Rust loader
--- guards this with a pragma_table_info check so re-runs are no-ops.
+-- 002: Add the hot-path indexes for tracks, playlists, playback events, mood
+-- entries and the lyrics cache. This file only adds indexes; every statement
+-- uses IF NOT EXISTS, so it is idempotent and safe to re-run on every startup
+-- just like 001.
 
 CREATE INDEX IF NOT EXISTS idx_tracks_liked ON tracks(liked);
 CREATE INDEX IF NOT EXISTS idx_tracks_source ON tracks(source);

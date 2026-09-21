@@ -6,9 +6,15 @@ import { playTracks } from "./player";
 export const tracks = signal<Track[]>([]);
 export const importing = signal(false);
 export const importNotice = signal<string | null>(null);
+export const loadError = signal<string | null>(null);
 
 export async function refreshTracks(): Promise<void> {
-  tracks.value = await listTracks();
+  try {
+    tracks.value = await listTracks();
+    loadError.value = null;
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : String(error);
+  }
 }
 
 export async function importFolder(): Promise<void> {

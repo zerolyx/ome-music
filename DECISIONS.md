@@ -16,4 +16,16 @@ Context: 安全审计发现明文 session 镜像。
 Decision: 按 P1 记录并跟踪（详见 SECURITY 相关 docs）。
 Consequences: 后续版本需给出收敛方案。
 
+## DEC-003 — v0.4.0 起用新数据库文件名 ome-music.db，旧库刻意不迁移
+Date: 2026-09（final review 修复波） · Status: Accepted
+Context: Plan 1 重建采用全新 schema，与旧版元数据库 ome_music.sqlite3 不兼容。
+Decision: v0.4.0 统一使用新文件名 ome-music.db；旧 ome_music.sqlite3 刻意不做迁移（fresh start），文件保持原样不动，迁移运行器按“仅全新库”设计。
+Consequences: 磁盘上的音乐文件不受影响；旧元数据库留在原处但不再读取。
+
+## DEC-004 — Cargo 中保留 reqwest / tokio / urlencoding 依赖
+Date: 2026-09（final review 修复波） · Status: Accepted
+Context: 依赖审计可能将这三个 crate 误判为未使用的死重。
+Decision: 保留在 Cargo 依赖中，供 Plan 2（NetEase 计划）与媒体协议使用。
+Consequences: 当前编译体积略增；避免 Plan 2 重复引入与版本摇摆。
+
 新决策一律使用 ADR 格式（Context / Decision / Why / Alternatives / Consequences）追加到本文件。
