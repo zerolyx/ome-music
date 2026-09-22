@@ -24,6 +24,7 @@ const PATHS = {
   maximize: "M5.5 5.5h13v13h-13z",
   close: "M6 6l12 12M18 6L6 18",
   "chevron-down": "M6 9l6 6 6-6",
+  queue: "M4 6h16M4 12h16M4 18h9",
 } as const;
 
 export function Icon({ name, size = 20 }: IconProps) {

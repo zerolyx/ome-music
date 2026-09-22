@@ -143,10 +143,10 @@ export async function radioNext(currentId: string | null = null): Promise<Track 
 /* ---- 开场白 ---- */
 
 /** 歌前介绍词：DJ 未配置 / 接口失败 / 空台词 → null（安静直播） */
-export async function introFor(track: Track): Promise<string | null> {
+export async function introFor(track: Track, event?: "skip" | "ended" | "boot"): Promise<string | null> {
   if (!djConfig.value?.configured) return null;
   try {
-    const { say } = await djIntro(track.id);
+    const { say } = await djIntro(track.id, event);
     return say && say.trim() ? say : null;
   } catch {
     return null;

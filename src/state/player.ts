@@ -7,6 +7,8 @@ import { introFor, radioEnabled, radioNext, recordSkip } from "./radio";
 import { speak } from "./tts";
 
 export const queue = signal<Track[]>([]);
+/** 播放列表抽屉开关 */
+export const queueOpen = signal(false);
 export const currentIndex = signal(-1);
 export const isPlaying = signal(false);
 export const position = signal(0);
@@ -82,7 +84,7 @@ async function onEnded() {
     }
     const nextIndex = queueIndexFor(queue.value, nextTrack);
     if (nextIndex === queue.value.length) queue.value = [...queue.value, nextTrack];
-    await playWithRadioIntro(nextTrack, nextIndex);
+    await playWithRadioIntro(nextTrack, nextIndex, "ended");
     return;
   }
   const nextIndex = advance(currentIndex.value, queue.value.length);
@@ -176,11 +178,15 @@ function playImmediate(index: number) {
  * 电台起播：拿到介绍词 → TTS 说完 → 起播；任何一步失败立即直放，绝不阻塞音乐。
  * 用 introToken 防竞态：请求期间用户点了别的歌，过期的介绍整段丢弃。
  */
-export async function playWithRadioIntro(track: Track, index: number): Promise<void> {
+export async function playWithRadioIntro(
+  track: Track,
+  index: number,
+  event?: "skip" | "ended" | "boot"
+): Promise<void> {
   const token = ++introToken;
   introPlaying.value = true;
   try {
-    const say = await introFor(track);
+    const say = await introFor(track, event);
     if (token !== introToken || queue.value[index] !== track) return;
     if (say) await speak(say);
     if (token !== introToken || queue.value[index] !== track) return;
@@ -213,6 +219,11 @@ export function next(manual: boolean) {
   if (nextIndex === null) {
     invalidateIntro(); // 队列播完即停：等待中的介绍作废，不得在停歇时抢回播放
     ensureAudio().pause();
+    return;
+  }
+  // 情绪化电台：手动跳歌也由 DJ 承接情绪（skip 语境），未配置则直切
+  if (manual && radioEnabled.value && djConfig.value?.configured) {
+    void playWithRadioIntro(queue.value[nextIndex], nextIndex, "skip");
     return;
   }
   playAt(nextIndex);

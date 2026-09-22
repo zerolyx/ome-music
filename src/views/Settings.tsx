@@ -228,7 +228,7 @@ export function SettingsView() {
         <NetEaseBody />
       </Card>
 
-      <Card title="私人 DJ · 大脑与声音" defaultOpen={false}>
+      <Card title="DJ 电台与语音" defaultOpen={false}>
         <DjConfigBody />
       </Card>
 

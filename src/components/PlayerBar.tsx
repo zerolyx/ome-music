@@ -1,4 +1,17 @@
-import { currentTrack, duration, introPlaying, isPlaying, next, position, previous, seek, setVolume, togglePlayback, volume } from "../state/player";
+import {
+  currentTrack,
+  duration,
+  introPlaying,
+  isPlaying,
+  next,
+  position,
+  previous,
+  queueOpen,
+  seek,
+  setVolume,
+  togglePlayback,
+  volume,
+} from "../state/player";
 import { openDrawer } from "../state/dj";
 import { coverUrl } from "../lib/api";
 import { formatDuration } from "../lib/audio";
@@ -66,6 +79,21 @@ export function PlayerBar() {
         </div>
       </div>
 
+      <div class="player-actions">
+        <button class="player-list-btn" aria-label="播放列表" title="播放列表" onClick={() => (queueOpen.value = !queueOpen.value)}>
+          <Icon name="queue" size={18} />
+        </button>
+      </div>
+      <div class="player-list">
+        <button
+          class={`player-list-btn ${queueOpen.value ? "is-active" : ""}`}
+          aria-label="播放列表"
+          title="播放列表"
+          onClick={() => (queueOpen.value = !queueOpen.value)}
+        >
+          <Icon name="queue" size={18} />
+        </button>
+      </div>
       <div class="player-volume">
         <Icon name="volume" size={16} />
         <input

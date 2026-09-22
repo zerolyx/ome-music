@@ -13,6 +13,7 @@ import { SearchView } from "./views/Search";
 import { LibraryView } from "./views/Library";
 import { SettingsView } from "./views/Settings";
 import { PlayerBar } from "./components/PlayerBar";
+import { QueueDrawer } from "./components/QueueDrawer";
 
 export function App() {
   useEffect(() => initChromeAutoHide(), []);
@@ -47,6 +48,7 @@ export function App() {
         </main>
       </div>
       <PlayerBar />
+      <QueueDrawer />
       <DjDrawer />
     </div>
   );

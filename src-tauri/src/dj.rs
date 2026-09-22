@@ -784,7 +784,11 @@ pub async fn dj_greeting(state: State<'_, AppState>) -> Result<GreetingDto, Stri
 }
 
 #[tauri::command]
-pub async fn dj_intro(state: State<'_, AppState>, track_id: String) -> Result<IntroDto, String> {
+pub async fn dj_intro(
+    state: State<'_, AppState>,
+    track_id: String,
+    event: Option<String>,
+) -> Result<IntroDto, String> {
     let track_id = track_id.trim().to_string();
     if track_id.is_empty() {
         return Err("trackId 不能为空".into());
@@ -804,8 +808,14 @@ pub async fn dj_intro(state: State<'_, AppState>, track_id: String) -> Result<In
     if !config_configured(&config) {
         return Ok(IntroDto { say: String::new() });
     }
+    // 事件语境：跳过 = 接住听众的口味变化；自然播完 = 顺势承接；开机 = 深夜开场
+    let lead = match event.as_deref() {
+        Some("skip") => "听众刚跳过了上一首，轻轻接住这个信号（可以带一点自嘲），然后自然地带出下一首：",
+        Some("ended") => "上一首完整播完了，顺势承接情绪，然后带出下一首：",
+        _ => "接下来要播放：",
+    };
     let directive = format!(
-        "接下来要播放：{track_label}。请用不超过两句话把这首歌自然地带出来；actions 留空即可，不要再选歌。"
+        "{lead}{track_label}。请用不超过两句话把这首歌自然地带出来；actions 留空即可，不要再选歌。"
     );
     let messages = chat_messages(&context, &[], Some(&directive));
     let raw = match llm_chat(&config, &messages).await {

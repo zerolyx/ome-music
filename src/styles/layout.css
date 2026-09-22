@@ -882,3 +882,31 @@
 .lyric-current {
   font-size: 22px;
 }
+
+/* ============ 播放列表抽屉 ============ */
+.queue-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 10px;
+}
+.queue-footer {
+  flex: none;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+.player-list-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--text-dim);
+}
+.player-list-btn:hover,
+.player-list-btn.is-active {
+  color: var(--text);
+  background: var(--accent-soft);
+}

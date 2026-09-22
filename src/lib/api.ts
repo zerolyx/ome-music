@@ -101,7 +101,8 @@ export const djSaveConfig = (payload: DjSaveConfigPayload) =>
   invoke<DjConfigState>("dj_save_config", { payload });
 export const djChat = (text: string) => invoke<DjReply>("dj_chat", { text });
 export const djGreeting = () => invoke<{ say: string }>("dj_greeting");
-export const djIntro = (trackId: string) => invoke<{ say: string }>("dj_intro", { trackId });
+export const djIntro = (trackId: string, event?: "skip" | "ended" | "boot") =>
+  invoke<{ say: string }>("dj_intro", { trackId, event });
 export const djMemoryList = () => invoke<DjMemoryFact[]>("dj_memory_list");
 export const djMemoryDelete = (id: string) => invoke<void>("dj_memory_delete", { id });
 
