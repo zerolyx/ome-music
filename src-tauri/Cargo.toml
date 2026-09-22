@@ -24,6 +24,12 @@ lofty = "0.24"
 base64 = "0.22"
 md5 = "0.7"
 urlencoding = "2"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+ecb = { version = "0.1", features = ["alloc"] }
+rsa = "0.9"
+rand = "0.8"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip", "brotli", "deflate"] }
 tokio = { version = "1", features = ["time", "sync"] }
 

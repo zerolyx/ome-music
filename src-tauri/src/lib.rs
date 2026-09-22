@@ -1,6 +1,7 @@
 mod db;
 mod library;
 mod media;
+mod netease;
 
 use rusqlite::Connection;
 use std::sync::Mutex;
@@ -48,6 +49,14 @@ pub fn run() {
             library::import_music_folder,
             library::set_track_liked_command,
             library::record_playback_event_command,
+            netease::auth::netease_status,
+            netease::auth::netease_qr_key,
+            netease::auth::netease_qr_check,
+            netease::auth::netease_logout,
+            netease::api::netease_search,
+            netease::api::netease_stream_url,
+            netease::api::netease_lyric,
+            netease::api::netease_like,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ome music");
