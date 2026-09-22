@@ -235,24 +235,33 @@
 .player-bar {
   transition:
     opacity 0.55s var(--ease-signature),
-    translate 0.55s var(--ease-signature);
+    translate 0.55s var(--ease-signature),
+    width 0.55s var(--ease-signature),
+    height 0.55s var(--ease-signature),
+    padding 0.55s var(--ease-signature);
 }
 
 .chrome-hidden .rail {
   opacity: 0;
   translate: -16px 0;
+  width: 0;
+  padding: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 
 .chrome-hidden .player-bar {
   opacity: 0;
   translate: 0 16px;
+  height: 0;
+  border-top-width: 0;
   pointer-events: none;
 }
 
 /* ============ 电台舞台（首页） ============ */
 .view-home {
   position: relative;
+  overflow: hidden;
 }
 /* 暗角：聚焦中心，深色更重 */
 .view-home::after {
@@ -785,8 +794,8 @@
 
 /* ============ 沉浸升级：封面氛围 + 3D 唱片 ============ */
 .home-backdrop {
-  position: absolute;
-  inset: -12%;
+  position: fixed;
+  inset: 0;
   background-size: cover;
   background-position: center;
   filter: blur(90px) saturate(1.35) brightness(var(--backdrop-brightness, 0.55));
@@ -829,4 +838,47 @@
     opacity: 1;
     transform: none;
   }
+}
+
+/* ============ Apple Music 式舞台层级 ============ */
+.home-now {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+.home-now-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.home-now-artist {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.home-art-tilt {
+  transition: transform 0.12s ease-out;
+  will-change: transform;
+}
+.home-art {
+  width: min(330px, 56vh);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 18px;
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.38), 0 8px 24px rgba(0, 0, 0, 0.22);
+  animation: art-in 0.9s var(--ease-signature) backwards;
+}
+@keyframes art-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+.lyric-current {
+  font-size: 22px;
 }
