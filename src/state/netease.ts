@@ -79,14 +79,19 @@ function stopPolling(): void {
   pollSession += 1;
 }
 
-async function pollCheck(key: string, session: number): Promise<void> {
+async function pollCheck(key: string, session: number, timer: number): Promise<void> {
   let phase: QrPhase;
   try {
     phase = qrPhaseFromCode((await neteaseQrCheck(key)).code);
   } catch {
     return; // 单次查询失败（网络抖动）：保持轮询
   }
-  if (session !== pollSession) return; // 会话已被取消/重启，丢弃过期结果
+  if (session !== pollSession) {
+    // 本会话已被新一轮扫码取代：自己清掉自己的定时器，避免孤儿轮询常驻
+    if (pollTimer === timer) pollTimer = 0;
+    window.clearInterval(timer);
+    return;
+  }
   if (phase === "success") {
     stopPolling();
     qrState.value = qrState.value ? { ...qrState.value, phase } : null;
@@ -104,13 +109,15 @@ async function pollCheck(key: string, session: number): Promise<void> {
 }
 
 export async function startQrLogin(): Promise<void> {
-  stopPolling();
+  stopPolling(); // 同步清掉现有定时器并推进会话号（先于首个 await，防并发申请互踩）
+  const session = pollSession;
   error.value = null;
   try {
     const { key, qrSvg } = await neteaseQrKey();
-    const session = ++pollSession;
+    if (session !== pollSession) return; // 等 key 期间又开了新一轮：本轮作废，不装定时器
     qrState.value = { key, qrSvg, phase: "waiting" };
-    pollTimer = window.setInterval(() => void pollCheck(key, session), 2000);
+    const timer = window.setInterval(() => void pollCheck(key, session, timer), 2000);
+    pollTimer = timer;
   } catch (e) {
     error.value = toMessage(e);
   }

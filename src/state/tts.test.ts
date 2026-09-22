@@ -25,6 +25,15 @@ describe("loadTtsConfig / saveTtsConfig", () => {
     });
   });
 
+  it("保存即同步落盘（超界值钳制后持久化），再次加载读回同一份", () => {
+    saveTtsConfig({ voiceURI: "zh-voice-2", rate: 9.9, pitch: -3, enabled: true });
+    const raw = localStorage.getItem("ome.tts");
+    expect(raw).not.toBeNull();
+    const persisted = JSON.parse(raw as string);
+    expect(persisted).toEqual({ voiceURI: "zh-voice-2", rate: 2, pitch: 0, enabled: true });
+    expect(loadTtsConfig()).toEqual(persisted);
+  });
+
   it("部分字段缺省时与默认值合并", () => {
     localStorage.setItem("ome.tts", JSON.stringify({ rate: 1.2 }));
     expect(loadTtsConfig()).toEqual({ ...DEFAULT_TTS_CONFIG, rate: 1.2 });

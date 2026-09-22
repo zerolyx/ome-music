@@ -6,6 +6,7 @@ use crate::AppState;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::fmt;
 use std::sync::OnceLock;
 use tauri::State;
 
@@ -568,9 +569,41 @@ fn http_client() -> &'static reqwest::Client {
     })
 }
 
-async fn llm_chat_once(config: &LlmConfig, messages: &[Value]) -> Result<String, String> {
+/// LLM 调用失败分类：决定是否值得重试（网络错误 / 5xx 重试，4xx 立即失败）。
+#[derive(Debug, Clone, PartialEq)]
+enum LlmFailure {
+    /// 请求未送达、超时或响应读取失败（消息已含前缀，展示原样输出）
+    Network(String),
+    /// HTTP 非 2xx（状态码供重试判定）
+    Status(u16, String),
+    /// 2xx 但响应体不符合约定（重放同样请求结果大概率相同，不重试）
+    Body(String),
+}
+
+impl fmt::Display for LlmFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LlmFailure::Network(message) => write!(f, "{message}"),
+            LlmFailure::Status(status, detail) => write!(f, "LLM 返回 HTTP {status}：{detail}"),
+            LlmFailure::Body(message) => write!(f, "{message}"),
+        }
+    }
+}
+
+impl LlmFailure {
+    /// 只有网络错误与 5xx 值得重试一次；401/400 等 4xx 立即失败。
+    fn retryable(&self) -> bool {
+        match self {
+            LlmFailure::Network(_) => true,
+            LlmFailure::Status(status, _) => *status >= 500,
+            LlmFailure::Body(_) => false,
+        }
+    }
+}
+
+async fn llm_chat_once(config: &LlmConfig, messages: &[Value]) -> Result<String, LlmFailure> {
     if config.base_url.is_empty() || config.model.is_empty() {
-        return Err("LLM 未配置：缺少 base_url 或 model".into());
+        return Err(LlmFailure::Body("LLM 未配置：缺少 base_url 或 model".into()));
     }
     let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
     let body = json!({
@@ -585,33 +618,37 @@ async fn llm_chat_once(config: &LlmConfig, messages: &[Value]) -> Result<String,
         .json(&body)
         .send()
         .await
-        .map_err(|error| format!("LLM 请求失败：{error}"))?;
+        .map_err(|error| LlmFailure::Network(format!("LLM 请求失败：{error}")))?;
     let status = response.status();
     let text = response
         .text()
         .await
-        .map_err(|error| format!("LLM 响应读取失败：{error}"))?;
+        .map_err(|error| LlmFailure::Network(format!("LLM 响应读取失败：{error}")))?;
     if !status.is_success() {
         let preview: String = text.chars().take(200).collect();
-        return Err(format!("LLM 返回 HTTP {status}：{preview}"));
+        return Err(LlmFailure::Status(status.as_u16(), preview));
     }
     let value: Value = serde_json::from_str(&text)
-        .map_err(|error| format!("LLM 响应不是合法 JSON：{error}"))?;
+        .map_err(|error| LlmFailure::Body(format!("LLM 响应不是合法 JSON：{error}")))?;
     value
         .pointer("/choices/0/message/content")
         .and_then(Value::as_str)
         .map(str::to_string)
-        .ok_or_else(|| "LLM 响应缺少 choices[0].message.content".to_string())
+        .ok_or_else(|| LlmFailure::Body("LLM 响应缺少 choices[0].message.content".into()))
 }
 
-/// 失败重试一次；两次都失败才返回 Err。
+/// 仅网络错误 / 5xx 重试一次；4xx（401 密钥错误、400 参数错误等）立即失败。
 async fn llm_chat(config: &LlmConfig, messages: &[Value]) -> Result<String, String> {
+    let first = match llm_chat_once(config, messages).await {
+        Ok(content) => return Ok(content),
+        Err(failure) => failure,
+    };
+    if !first.retryable() {
+        return Err(first.to_string());
+    }
     match llm_chat_once(config, messages).await {
         Ok(content) => Ok(content),
-        Err(first_error) => match llm_chat_once(config, messages).await {
-            Ok(content) => Ok(content),
-            Err(second_error) => Err(format!("{first_error}；重试仍失败：{second_error}")),
-        },
+        Err(second) => Err(format!("{first}；重试仍失败：{second}")),
     }
 }
 
@@ -808,6 +845,22 @@ mod tests {
     }
 
     // ---------- 动作解析 ----------
+
+    #[test]
+    fn llm_failure_retry_policy() {
+        // 网络错误 / 5xx 可重试；4xx 与响应体异常不重试
+        assert!(LlmFailure::Network("LLM 请求失败：timeout".into()).retryable());
+        assert!(LlmFailure::Status(500, "boom".into()).retryable());
+        assert!(LlmFailure::Status(503, "unavailable".into()).retryable());
+        assert!(!LlmFailure::Status(401, "unauthorized".into()).retryable());
+        assert!(!LlmFailure::Status(400, "bad request".into()).retryable());
+        assert!(!LlmFailure::Body("LLM 响应不是合法 JSON".into()).retryable());
+        // 展示文本保持原有格式
+        assert_eq!(
+            LlmFailure::Status(401, "Unauthorized".into()).to_string(),
+            "LLM 返回 HTTP 401：Unauthorized"
+        );
+    }
 
     #[test]
     fn parse_actions_parses_valid_full_reply() {

@@ -122,11 +122,18 @@ export function playAt(index: number, opts?: { intro?: boolean }) {
   playImmediate(index);
 }
 
+/** 立即起播 / 手动暂停时作废等待中的介绍会话：过期的介绍返回时不得抢回播放 */
+function invalidateIntro() {
+  introToken += 1;
+  introPlaying.value = false;
+}
+
 /** 直接起播（无介绍）：原有 playAt 逻辑 */
 function playImmediate(index: number) {
   const track = queue.value[index];
   if (!track) return;
   playSeq += 1;
+  invalidateIntro();
   currentIndex.value = index;
   position.value = 0;
   duration.value = track.durationSeconds;
@@ -190,7 +197,10 @@ export function togglePlayback() {
     return;
   }
   if (element.paused) void element.play();
-  else element.pause();
+  else {
+    invalidateIntro(); // 手动暂停同样取消等待中的介绍，避免继续播放时被过期介绍抢回
+    element.pause();
+  }
 }
 
 export function next(manual: boolean) {
@@ -201,6 +211,7 @@ export function next(manual: boolean) {
   }
   const nextIndex = advance(currentIndex.value, queue.value.length);
   if (nextIndex === null) {
+    invalidateIntro(); // 队列播完即停：等待中的介绍作废，不得在停歇时抢回播放
     ensureAudio().pause();
     return;
   }

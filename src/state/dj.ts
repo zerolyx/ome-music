@@ -36,6 +36,9 @@ export const lastError = signal<string | null>(null);
 let msgSeq = 0;
 const nextMsgId = () => ++msgSeq;
 
+/** LLM 失败兜底话术：不朗读道歉，只在对话里提示 */
+const CHAT_FALLBACK = "信号不太好，稍后再聊。";
+
 const toMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 let configLoaded = false;
@@ -101,6 +104,13 @@ export async function ask(text: string): Promise<void> {
     if (reply.say) {
       messages.value = [...messages.value, { id: nextMsgId(), role: "dj", text: reply.say, ts: Date.now() }];
       speakAside(reply.say);
+    } else if (djConfig.value?.configured) {
+      // 已配置但后端返回空 say（未配置 / LLM 失败被后端折叠）：兜底提示，且不朗读道歉
+      lastError.value = "LLM 调用失败";
+      messages.value = [
+        ...messages.value,
+        { id: nextMsgId(), role: "dj", text: CHAT_FALLBACK, ts: Date.now() },
+      ];
     }
     await executeActions(reply.actions);
   } catch (e) {

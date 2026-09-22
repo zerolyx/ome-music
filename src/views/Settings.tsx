@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import { TtsSettings } from "../components/TtsSettings";
 import { getAppVersion, isTauriRuntime } from "../lib/api";
 import { setThemeChoice, themeChoice, type ThemeChoice } from "../state/theme";
 import { djConfig, lastError, loadConfig, saveConfig } from "../state/dj";
@@ -139,6 +140,7 @@ function DjConfigCard() {
         </div>
       </div>
       <p class="view-hint">兼容 OpenAI 接口（如 DeepSeek）。开启后 DJ 会在开播问候并自动接播；关闭则播完即停、无介绍。</p>
+      <TtsSettings />
     </div>
   );
 }
