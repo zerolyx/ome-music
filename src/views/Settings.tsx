@@ -2,6 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { getAppVersion, isTauriRuntime } from "../lib/api";
 import { setThemeChoice, themeChoice, type ThemeChoice } from "../state/theme";
 import { djConfig, lastError, loadConfig, saveConfig } from "../state/dj";
+import { radioEnabled, setRadioEnabled } from "../state/radio";
 import {
   cancelQrLogin,
   logout,
@@ -116,7 +117,28 @@ function DjConfigCard() {
         {maskedKey && <span class="view-hint">密钥：{maskedKey}</span>}
         {lastError.value && <span class="dj-config-error">{lastError.value}</span>}
       </div>
-      <p class="view-hint">兼容 OpenAI 接口（如 DeepSeek）。配置后 DJ 会在开播时向你问候。</p>
+      <div class="dj-radio-row">
+        <span class="dj-radio-label">自动电台</span>
+        <div class="segmented" role="radiogroup" aria-label="自动电台">
+          <button
+            role="radio"
+            aria-checked={radioEnabled.value}
+            class={`segment ${radioEnabled.value ? "is-active" : ""}`}
+            onClick={() => setRadioEnabled(true)}
+          >
+            开
+          </button>
+          <button
+            role="radio"
+            aria-checked={!radioEnabled.value}
+            class={`segment ${!radioEnabled.value ? "is-active" : ""}`}
+            onClick={() => setRadioEnabled(false)}
+          >
+            关
+          </button>
+        </div>
+      </div>
+      <p class="view-hint">兼容 OpenAI 接口（如 DeepSeek）。开启后 DJ 会在开播问候并自动接播；关闭则播完即停、无介绍。</p>
     </div>
   );
 }

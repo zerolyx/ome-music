@@ -1,4 +1,4 @@
-import { currentTrack, duration, isPlaying, next, position, previous, seek, setVolume, togglePlayback, volume } from "../state/player";
+import { currentTrack, duration, introPlaying, isPlaying, next, position, previous, seek, setVolume, togglePlayback, volume } from "../state/player";
 import { openDrawer } from "../state/dj";
 import { coverUrl } from "../lib/api";
 import { formatDuration } from "../lib/audio";
@@ -7,6 +7,8 @@ import { Icon } from "./Icon";
 
 export function PlayerBar() {
   const track = currentTrack.value;
+  // DJ 说歌前介绍时淡化标题：音乐还没响，先把注意力让给声音
+  const titleClass = introPlaying.value ? "player-title intro-hint" : "player-title";
   return (
     <footer
       class="player-bar"
@@ -25,13 +27,13 @@ export function PlayerBar() {
               </div>
             )}
             <div class="player-text">
-              <span class="player-title">{track.title}</span>
+              <span class={titleClass}>{track.title}</span>
               <span class="player-artist">{track.artist}</span>
             </div>
           </>
         ) : (
           <div class="player-text">
-            <span class="player-title player-title-idle">没有在播放</span>
+            <span class={`${titleClass} player-title-idle`}>没有在播放</span>
           </div>
         )}
       </div>

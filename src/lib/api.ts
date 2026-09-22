@@ -104,3 +104,12 @@ export const djGreeting = () => invoke<{ say: string }>("dj_greeting");
 export const djIntro = (trackId: string) => invoke<{ say: string }>("dj_intro", { trackId });
 export const djMemoryList = () => invoke<DjMemoryFact[]>("dj_memory_list");
 export const djMemoryDelete = (id: string) => invoke<void>("dj_memory_delete", { id });
+
+/** 时段播放画像（口味画像，无 LLM 也可用），对应 dj.rs HourPreferenceDto */
+export interface HourPreference {
+  hour: number;
+  plays: number;
+  completions: number;
+  skips: number;
+}
+export const profileHourPreferences = () => invoke<HourPreference[]>("profile_hour_preferences");

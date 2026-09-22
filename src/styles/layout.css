@@ -158,6 +158,8 @@
 .player-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player-title-idle { color: var(--text-dim); font-weight: 400; }
 .player-artist { font-size: 12px; color: var(--text-dim); }
+/* DJ 说歌前介绍时淡化标题，把注意力让给声音 */
+.player-bar .intro-hint { opacity: 0.4; font-style: italic; transition: opacity 0.4s ease; }
 
 .player-center { display: grid; gap: 6px; justify-items: center; width: min(480px, 40vw); }
 .player-buttons { display: flex; align-items: center; gap: 18px; }
@@ -609,6 +611,18 @@
 .dj-config-state {
   font-size: 13px;
   margin-bottom: 12px;
+}
+/* 自动电台开关行 */
+.dj-radio-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.dj-radio-label {
+  font-size: 13px;
+  color: var(--text);
 }
 .dj-config-grid {
   display: grid;

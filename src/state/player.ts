@@ -2,6 +2,9 @@ import { computed, signal } from "@preact/signals";
 import type { Track } from "../types/music";
 import { neteaseStreamUrl, recordPlaybackEvent } from "../lib/api";
 import { toPlayableSrc } from "../lib/audio";
+import { djConfig } from "./dj";
+import { introFor, radioEnabled, radioNext, recordSkip } from "./radio";
+import { speak } from "./tts";
 
 export const queue = signal<Track[]>([]);
 export const currentIndex = signal(-1);
@@ -11,6 +14,8 @@ export const duration = signal(0);
 export const volume = signal(0.9);
 /** 取流/播放失败提示（如「该歌曲需要 VIP 或无版权」） */
 export const playbackError = signal<string | null>(null);
+/** DJ 正在说歌前介绍（player-bar 可据此淡化标题） */
+export const introPlaying = signal(false);
 
 export const currentTrack = computed<Track | null>(
   () => queue.value[currentIndex.value] ?? null
@@ -45,15 +50,44 @@ export function advance(index: number, length: number): number | null {
   return index + 1 < length ? index + 1 : null;
 }
 
-function onEnded() {
+/** 纯逻辑：曲目已在队列则返回其下标，否则返回追加后的队尾下标 */
+export function queueIndexFor(tracks: Track[], track: Track): number {
+  const existing = tracks.findIndex((item) => item.id === track.id);
+  return existing === -1 ? tracks.length : existing;
+}
+
+/** 起播序号：电台选曲期间用户手动开播了别的歌时，用它丢弃过期的自动接播 */
+let playSeq = 0;
+/** 歌前介绍会话：快速连点时只保留最新一次介绍 */
+let introToken = 0;
+
+function stopAtQueueEnd() {
+  isPlaying.value = false;
+  position.value = 0;
+}
+
+async function onEnded() {
   const track = currentTrack.value;
   if (track) {
     void recordPlaybackEvent(track.id, endEventType(position.value, duration.value), Math.round(position.value));
   }
+  // 自动电台：DJ 挑下一首并附开场白；未开电台 / DJ 未配置走原有顺序播放
+  if (radioEnabled.value && djConfig.value?.configured) {
+    const seqAtEnd = playSeq;
+    const nextTrack = await radioNext(track?.id ?? null);
+    if (playSeq !== seqAtEnd) return; // 选曲期间用户手动开播了：不抢播放
+    if (!nextTrack) {
+      stopAtQueueEnd();
+      return;
+    }
+    const nextIndex = queueIndexFor(queue.value, nextTrack);
+    if (nextIndex === queue.value.length) queue.value = [...queue.value, nextTrack];
+    await playWithRadioIntro(nextTrack, nextIndex);
+    return;
+  }
   const nextIndex = advance(currentIndex.value, queue.value.length);
   if (nextIndex === null) {
-    isPlaying.value = false;
-    position.value = 0;
+    stopAtQueueEnd();
     return;
   }
   playAt(nextIndex);
@@ -74,9 +108,25 @@ async function resolveNeteaseSrc(track: Track): Promise<string> {
   return toPlayableSrc(track);
 }
 
-export function playAt(index: number) {
+/**
+ * 播放队列中第 index 首。
+ * opts.intro 为 true 时先让 DJ 说一句歌前介绍再起播（未配置 DJ / TTS 关闭则立即直放）。
+ */
+export function playAt(index: number, opts?: { intro?: boolean }) {
   const track = queue.value[index];
   if (!track) return;
+  if (opts?.intro) {
+    void playWithRadioIntro(track, index);
+    return;
+  }
+  playImmediate(index);
+}
+
+/** 直接起播（无介绍）：原有 playAt 逻辑 */
+function playImmediate(index: number) {
+  const track = queue.value[index];
+  if (!track) return;
+  playSeq += 1;
   currentIndex.value = index;
   position.value = 0;
   duration.value = track.durationSeconds;
@@ -115,6 +165,24 @@ export function playAt(index: number) {
   void recordPlaybackEvent(track.id, "play", 0);
 }
 
+/**
+ * 电台起播：拿到介绍词 → TTS 说完 → 起播；任何一步失败立即直放，绝不阻塞音乐。
+ * 用 introToken 防竞态：请求期间用户点了别的歌，过期的介绍整段丢弃。
+ */
+export async function playWithRadioIntro(track: Track, index: number): Promise<void> {
+  const token = ++introToken;
+  introPlaying.value = true;
+  try {
+    const say = await introFor(track);
+    if (token !== introToken || queue.value[index] !== track) return;
+    if (say) await speak(say);
+    if (token !== introToken || queue.value[index] !== track) return;
+    playImmediate(index);
+  } finally {
+    if (token === introToken) introPlaying.value = false;
+  }
+}
+
 export function togglePlayback() {
   const element = ensureAudio();
   if (!element.src) {
@@ -129,6 +197,7 @@ export function next(manual: boolean) {
   const track = currentTrack.value;
   if (manual && track) {
     void recordPlaybackEvent(track.id, "skip", Math.round(position.value));
+    recordSkip(track.id); // 电台记忆：近 20 分钟内降权
   }
   const nextIndex = advance(currentIndex.value, queue.value.length);
   if (nextIndex === null) {

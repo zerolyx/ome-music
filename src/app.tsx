@@ -1,7 +1,9 @@
 import { useEffect } from "preact/hooks";
+import { isTauriRuntime } from "./lib/api";
 import { activeView } from "./state/app";
 import { chromeVisible, initChromeAutoHide } from "./state/chrome";
 import { greet } from "./state/dj";
+import { startRadioIfIdle } from "./state/radio";
 import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
 import { ImmersiveCursor } from "./components/ImmersiveCursor";
@@ -18,7 +20,15 @@ export function App() {
   // 开播问候：稍待入场动画结束再开口；未配置 / 不可用时 greet 自行静默
   useEffect(() => {
     const t = setTimeout(() => void greet(), 1600);
-    return () => clearTimeout(t);
+    // 问候之后自动电台开播：仅 Tauri 环境；未开电台 / DJ 未配置 / 曲库为空时静默
+    const radio = setTimeout(() => {
+      if (!isTauriRuntime()) return;
+      void startRadioIfIdle();
+    }, 2600);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(radio);
+    };
   }, []);
 
   return (
