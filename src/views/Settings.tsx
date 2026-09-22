@@ -1,5 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
 import { TtsSettings } from "../components/TtsSettings";
+import { Icon } from "../components/Icon";
 import { getAppVersion, isTauriRuntime } from "../lib/api";
 import { setThemeChoice, themeChoice, type ThemeChoice } from "../state/theme";
 import { djConfig, lastError, loadConfig, saveConfig } from "../state/dj";
@@ -27,8 +29,37 @@ const QR_PHASE_TEXT: Record<string, string> = {
   expired: "二维码已过期",
 };
 
+/** 可折叠分区：标题行点击收起/展开 */
+function Card({
+  title,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: ComponentChildren;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div class="settings-card">
+      <button
+        class="settings-head"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label={`${open ? "收起" : "展开"}${title}`}
+      >
+        <span class="settings-label">{title}</span>
+        <span class={`settings-chevron ${open ? "is-open" : ""}`}>
+          <Icon name="chevron-down" size={14} />
+        </span>
+      </button>
+      {open && <div class="settings-inner">{children}</div>}
+    </div>
+  );
+}
+
 /** 私人 DJ：OpenAI 兼容语言模型配置；空 apiKey 表示保留旧密钥 */
-function DjConfigCard() {
+function DjConfigBody() {
   const [providerName, setProviderName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
@@ -70,8 +101,7 @@ function DjConfigCard() {
   const maskedKey = savedMaskedKey ?? (config?.configured ? config.maskedKey : "");
 
   return (
-    <div class="settings-card">
-      <h2 class="settings-label">私人 DJ</h2>
+    <>
       <p class="dj-config-state">
         {config?.configured ? `已配置：${config.providerName} · ${config.model}` : "未配置"}
       </p>
@@ -141,6 +171,38 @@ function DjConfigCard() {
       </div>
       <p class="view-hint">兼容 OpenAI 接口（如 DeepSeek）。开启后 DJ 会在开播问候并自动接播；关闭则播完即停、无介绍。</p>
       <TtsSettings />
+    </>
+  );
+}
+
+function NetEaseBody() {
+  return status.value?.loggedIn ? (
+    <div class="netease-row">
+      <span>已登录：{status.value.nickname ?? "网易云用户"}</span>
+      <button class="btn-secondary" onClick={() => void logout()}>
+        登出
+      </button>
+    </div>
+  ) : qrState.value ? (
+    <div class="netease-qr">
+      <div
+        class="qr-box"
+        // 后端生成的可信 SVG（仅含二维码路径）
+        dangerouslySetInnerHTML={{ __html: qrState.value.qrSvg }}
+      />
+      <p class="view-hint">{QR_PHASE_TEXT[qrState.value.phase] ?? ""}</p>
+      {qrState.value.phase === "expired" && (
+        <button class="btn-primary" onClick={() => void startQrLogin()}>
+          重新获取
+        </button>
+      )}
+    </div>
+  ) : (
+    <div class="netease-row">
+      <span class="view-hint">扫码登录后可搜索与播放网易云曲库</span>
+      <button class="btn-primary" onClick={() => void startQrLogin()}>
+        扫码登录
+      </button>
     </div>
   );
 }
@@ -162,43 +224,15 @@ export function SettingsView() {
     <section class="view view-settings">
       <h1 class="view-title">设置</h1>
 
-      <DjConfigCard />
+      <Card title="音乐源 · 网易云">
+        <NetEaseBody />
+      </Card>
 
-      <div class="settings-card">
-        <h2 class="settings-label">音乐源 · 网易云</h2>
-        {status.value?.loggedIn ? (
-          <div class="netease-row">
-            <span>已登录：{status.value.nickname ?? "网易云用户"}</span>
-            <button class="btn-secondary" onClick={() => void logout()}>
-              登出
-            </button>
-          </div>
-        ) : qrState.value ? (
-          <div class="netease-qr">
-            <div
-              class="qr-box"
-              // 后端生成的可信 SVG（仅含二维码路径）
-              dangerouslySetInnerHTML={{ __html: qrState.value.qrSvg }}
-            />
-            <p class="view-hint">{QR_PHASE_TEXT[qrState.value.phase] ?? ""}</p>
-            {qrState.value.phase === "expired" && (
-              <button class="btn-primary" onClick={() => void startQrLogin()}>
-                重新获取
-              </button>
-            )}
-          </div>
-        ) : (
-          <div class="netease-row">
-            <span class="view-hint">扫码登录后可搜索与播放网易云曲库</span>
-            <button class="btn-primary" onClick={() => void startQrLogin()}>
-              扫码登录
-            </button>
-          </div>
-        )}
-      </div>
+      <Card title="私人 DJ · 大脑与声音" defaultOpen={false}>
+        <DjConfigBody />
+      </Card>
 
-      <div class="settings-group">
-        <h2 class="settings-label">外观</h2>
+      <Card title="外观">
         <div class="segmented" role="radiogroup" aria-label="主题">
           {CHOICES.map((choice) => (
             <button
@@ -212,12 +246,11 @@ export function SettingsView() {
             </button>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div class="settings-group">
-        <h2 class="settings-label">关于</h2>
+      <Card title="关于" defaultOpen={false}>
         <p class="view-hint">Ome Music v{version} · 本地优先的私人音乐电台</p>
-      </div>
+      </Card>
     </section>
   );
 }

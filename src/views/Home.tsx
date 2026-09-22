@@ -1,6 +1,16 @@
+import { useEffect } from "preact/hooks";
 import { Icon } from "../components/Icon";
+import { HomeLyrics } from "../components/HomeWidgets";
+import { currentTrack } from "../state/player";
+import { loadLyricFor } from "../state/lyrics";
 
 export function HomeView() {
+  const track = currentTrack.value;
+
+  useEffect(() => {
+    void loadLyricFor(track);
+  }, [track?.id]);
+
   return (
     <section class="view view-home">
       <div class="home-glow" aria-hidden="true" />
@@ -13,8 +23,13 @@ export function HomeView() {
             </span>
           </div>
         </div>
-        <h1>电台即将开播</h1>
-        <p class="home-hint">导入音乐后，这里会成为你的私人电台</p>
+        {track ? (
+          <div class="home-now">
+            <span class="home-now-title">{track.title}</span>
+            <span class="home-now-artist">{track.artist}</span>
+          </div>
+        ) : null}
+        <HomeLyrics />
       </div>
     </section>
   );

@@ -146,6 +146,8 @@ describe("设置页 · 自动电台开关", () => {
 
   it("点击「关」关闭电台并持久化，点击「开」恢复", () => {
     render(h(SettingsView, null));
+    // 私人 DJ 卡默认折叠：先展开
+    fireEvent.click(screen.getByRole("button", { name: "展开私人 DJ · 大脑与声音" }));
     const group = screen.getByRole("radiogroup", { name: "自动电台" });
     fireEvent.click(within(group).getByRole("radio", { name: "关" }));
     expect(radioEnabled.value).toBe(false);

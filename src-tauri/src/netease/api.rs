@@ -76,19 +76,25 @@ pub async fn netease_search(
     search_songs(&keywords, limit.unwrap_or(30)).await
 }
 
-pub async fn fetch_stream_url(id: u64) -> Result<String, String> {
+/// 取流必须带登录 Cookie（MUSIC_U），否则服务端只发 30 秒试听/直接空 url。
+pub async fn fetch_stream_url(id: u64, cookie: Option<&str>) -> Result<String, String> {
     let body = request::eapi_post(
         "/api/song/enhance/player/url/v1",
         &json!({
             "ids": format!("[{id}]"),
-            "level": "standard",
+            "level": "exhigh",
             "encodeType": "flac",
             "e_r": false
         }),
-        None,
+        cookie,
     )
     .await?;
-    body["data"][0]["url"]
+    let item = &body["data"][0];
+    // freeTrialInfo 非空 = 服务端只给了 30 秒试听片段（登录态缺失或无权益）
+    if item["freeTrialInfo"].is_object() {
+        return Err("该歌曲需要 VIP 权益，当前仅提供试听".to_string());
+    }
+    item["url"]
         .as_str()
         .filter(|url| !url.is_empty())
         .map(str::to_string)
@@ -96,8 +102,14 @@ pub async fn fetch_stream_url(id: u64) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn netease_stream_url(id: u64) -> Result<String, String> {
-    fetch_stream_url(id).await
+pub async fn netease_stream_url(app: tauri::AppHandle, id: u64) -> Result<String, String> {
+    use tauri::Manager;
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("获取数据目录失败: {e}"))?;
+    let cookie = request::load_cookie(&data_dir);
+    fetch_stream_url(id, cookie.as_deref()).await
 }
 
 pub async fn fetch_lyric(id: u64) -> Result<String, String> {

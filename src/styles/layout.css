@@ -714,3 +714,71 @@
   border: 1px dashed var(--border);
   border-radius: 12px;
 }
+
+/* ============ 可折叠设置卡 + 沉浸歌词 ============ */
+.settings-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
+}
+.settings-chevron {
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  transition: rotate 0.25s var(--ease-signature);
+}
+.settings-chevron.is-open {
+  rotate: 180deg;
+}
+.settings-inner {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.home-now {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+.home-now-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.home-now-artist {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.home-lyrics {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  min-height: 96px;
+  align-content: center;
+  margin-top: 4px;
+}
+.lyric-line {
+  max-width: 620px;
+  text-align: center;
+  transition: opacity 0.4s var(--ease-signature), color 0.3s ease;
+}
+.lyric-prev,
+.lyric-next {
+  font-size: 13px;
+  color: var(--text-dim);
+  opacity: 0.55;
+}
+.lyric-current {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+.lyric-current.is-paused {
+  opacity: 0.6;
+}
+.lyric-line:empty {
+  display: none;
+}

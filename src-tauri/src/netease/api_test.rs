@@ -57,13 +57,12 @@ fn live_search_returns_songs() {
 
 #[test]
 #[ignore = "需要真实网络"]
-fn live_stream_url_needs_login_or_returns_link() {
-    // 平台现状：未登录时绝大多数歌曲返回空 url（我们转成友好错误），属预期；
-    // 已登录时给出直链。两种结果都是合法行为。
-    match tauri::async_runtime::block_on(fetch_stream_url(186_016)) {
+fn live_stream_url_anonymous_gets_trial_or_error() {
+    // 匿名请求：服务端只给 30 秒试听或直接拒绝，两种都算合法响应。
+    match tauri::async_runtime::block_on(fetch_stream_url(186_016, None)) {
         Ok(url) => assert!(url.starts_with("http"), "{url}"),
         Err(message) => assert!(
-            message.contains("VIP") || message.contains("版权"),
+            message.contains("VIP") || message.contains("版权") || message.contains("试听"),
             "{message}"
         ),
     }
