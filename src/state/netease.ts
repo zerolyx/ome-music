@@ -46,7 +46,7 @@ export function neteaseSongToTrack(song: NeteaseSong): Track {
     source: "netease",
     sourceId: String(song.id),
     unavailableReason: song.plain ? null : "vip",
-    coverPath: null,
+    coverPath: song.coverUrl ?? null,
     liked: false,
     playCount: 0,
   };

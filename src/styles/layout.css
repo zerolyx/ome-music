@@ -782,3 +782,51 @@
 .lyric-line:empty {
   display: none;
 }
+
+/* ============ 沉浸升级：封面氛围 + 3D 唱片 ============ */
+.home-backdrop {
+  position: absolute;
+  inset: -12%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(90px) saturate(1.35) brightness(var(--backdrop-brightness, 0.55));
+  opacity: var(--backdrop-opacity, 0.6);
+  animation: backdrop-drift 26s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+[data-theme="light"] {
+  --backdrop-brightness: 1.06;
+  --backdrop-opacity: 0.42;
+}
+[data-theme="dark"] {
+  --backdrop-brightness: 0.5;
+  --backdrop-opacity: 0.55;
+}
+@keyframes backdrop-drift {
+  from { transform: scale(1.12) translate(-1.5%, -1%); }
+  to { transform: scale(1.22) translate(1.5%, 1%); }
+}
+
+.home-disc-tilt {
+  transition: transform 0.12s ease-out;
+  will-change: transform;
+}
+
+.home-disc-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* 歌词当前句滑动入场 */
+@keyframes lyric-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

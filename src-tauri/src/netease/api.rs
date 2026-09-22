@@ -17,6 +17,7 @@ pub struct NeteaseSongDto {
     pub artists: String,
     pub album: String,
     pub duration_ms: i64,
+    pub cover_url: Option<String>,
     pub fee: i64,
     /// fee 0（免费）/ 8（低音质免费）可播。
     pub plain: bool,
@@ -43,6 +44,9 @@ pub(crate) fn parse_song(raw: &Value) -> Option<NeteaseSongDto> {
         artists,
         album: raw["al"]["name"].as_str().unwrap_or_default().to_string(),
         duration_ms: raw["dt"].as_i64().unwrap_or_default(),
+        cover_url: raw["al"]["picUrl"]
+            .as_str()
+            .map(|url| url.to_string()),
         fee: raw["fee"].as_i64().unwrap_or_default(),
         plain: matches!(raw["fee"].as_i64(), None | Some(0) | Some(8)),
     })

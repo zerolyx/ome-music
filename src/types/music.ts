@@ -9,6 +9,7 @@ export interface NeteaseSong {
   album: string;
   durationMs: number;
   /** 0 免费 / 8 低音质免费，其余多为 VIP */
+  coverUrl?: string | null;
   fee: number;
   /** fee 0/8 可播判定 */
   plain: boolean;

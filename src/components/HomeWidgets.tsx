@@ -24,7 +24,10 @@ export function HomeLyrics() {
   return (
     <div class="home-lyrics" aria-live="polite">
       <p class="lyric-line lyric-prev">{prev?.text ?? ""}</p>
-      <p class={`lyric-line lyric-current ${isPlaying.value ? "" : "is-paused"}`}>
+      <p
+        key={current?.text ?? "idle"}
+        class={`lyric-line lyric-current ${isPlaying.value ? "" : "is-paused"}`}
+      >
         {current?.text ?? "…"}
       </p>
       <p class="lyric-line lyric-next">{next?.text ?? ""}</p>

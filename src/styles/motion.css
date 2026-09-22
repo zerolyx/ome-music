@@ -198,3 +198,17 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@keyframes lyric-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.lyric-current {
+  animation: lyric-in 0.45s var(--ease-signature) backwards;
+}

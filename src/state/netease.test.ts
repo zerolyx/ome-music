@@ -31,6 +31,7 @@ describe("neteaseSongToTrack", () => {
     artists: "周杰伦",
     album: "叶惠美",
     durationMs: 269000,
+    coverUrl: "https://p.example/cover.jpg",
     fee: 8,
     plain: true,
   };
@@ -46,7 +47,7 @@ describe("neteaseSongToTrack", () => {
       source: "netease",
       sourceId: "186016",
       unavailableReason: null,
-      coverPath: null,
+      coverPath: "https://p.example/cover.jpg",
       liked: false,
       playCount: 0,
     });
