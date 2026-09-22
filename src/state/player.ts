@@ -1,6 +1,6 @@
 import { computed, signal } from "@preact/signals";
 import type { Track } from "../types/music";
-import { recordPlaybackEvent } from "../lib/api";
+import { neteaseStreamUrl, recordPlaybackEvent } from "../lib/api";
 import { toPlayableSrc } from "../lib/audio";
 
 export const queue = signal<Track[]>([]);
@@ -9,6 +9,8 @@ export const isPlaying = signal(false);
 export const position = signal(0);
 export const duration = signal(0);
 export const volume = signal(0.9);
+/** 取流/播放失败提示（如「该歌曲需要 VIP 或无版权」） */
+export const playbackError = signal<string | null>(null);
 
 export const currentTrack = computed<Track | null>(
   () => queue.value[currentIndex.value] ?? null
@@ -62,13 +64,50 @@ export function playTracks(tracks: Track[], start = 0) {
   playAt(start);
 }
 
+/** 网易云曲目：取流换成真实 https 直链并缓存回 track.filePath（togglePlayback/seek 复用） */
+async function resolveNeteaseSrc(track: Track): Promise<string> {
+  if (/^https?:\/\//i.test(track.filePath)) return toPlayableSrc(track);
+  const numericId = Number(track.id.replace(/^netease-/, ""));
+  if (!Number.isFinite(numericId)) throw new Error("无效的网易云曲目");
+  const url = await neteaseStreamUrl(numericId);
+  track.filePath = url;
+  return toPlayableSrc(track);
+}
+
 export function playAt(index: number) {
   const track = queue.value[index];
   if (!track) return;
   currentIndex.value = index;
   position.value = 0;
   duration.value = track.durationSeconds;
+  playbackError.value = null;
   const element = ensureAudio();
+
+  if (track.source === "netease") {
+    isPlaying.value = false;
+    resolveNeteaseSrc(track)
+      .then((src) => {
+        if (queue.value[index] !== track) return; // 已切歌，丢弃过期结果
+        if (!src) {
+          playbackError.value = "无法获取播放地址";
+          return;
+        }
+        element.src = src;
+        void element.play().catch(() => {
+          isPlaying.value = false;
+        });
+        void recordPlaybackEvent(track.id, "play", 0);
+      })
+      .catch((e: unknown) => {
+        isPlaying.value = false;
+        // 清掉旧 src：下次按播放会重试当前曲目而不是恢复上一首
+        element.pause();
+        element.removeAttribute("src");
+        playbackError.value = e instanceof Error ? e.message : String(e);
+      });
+    return;
+  }
+
   element.src = toPlayableSrc(track);
   void element.play().catch(() => {
     isPlaying.value = false;

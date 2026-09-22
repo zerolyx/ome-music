@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Track } from "../types/music";
+import type { NeteaseSong, Track } from "../types/music";
 
 export const isTauriRuntime = (): boolean => "__TAURI_INTERNALS__" in window;
 
@@ -8,6 +8,23 @@ export interface ImportResult {
   updated: number;
   total: number;
   skipped: number;
+}
+
+export interface NeteaseStatus {
+  loggedIn: boolean;
+  nickname?: string;
+}
+
+export interface NeteaseQrKey {
+  key: string;
+  /** 完整 <svg>…</svg> 字符串（含 XML 声明），前端 innerHTML 渲染 */
+  qrSvg: string;
+}
+
+/** 801 等待 / 802 已扫 / 803 成功 / 800 过期 */
+export interface NeteaseQrCheck {
+  code: number;
+  nickname?: string;
 }
 
 /** 封面与音频走同一 ome-media 代理（Task 6 handler 已支持 png/jpg），零新协议 */
@@ -28,3 +45,16 @@ export const recordPlaybackEvent = (
   eventType: "play" | "skip" | "completed",
   positionSeconds: number
 ) => invoke<void>("record_playback_event_command", { trackId, eventType, positionSeconds });
+
+/* ============ 网易云（Plan 2 Task 3，命令名与 src-tauri 注册一致） ============ */
+
+export const neteaseStatus = () => invoke<NeteaseStatus>("netease_status");
+export const neteaseQrKey = () => invoke<NeteaseQrKey>("netease_qr_key");
+export const neteaseQrCheck = (key: string) => invoke<NeteaseQrCheck>("netease_qr_check", { key });
+export const neteaseSearch = (keywords: string, limit?: number) =>
+  invoke<NeteaseSong[]>("netease_search", { keywords, limit });
+export const neteaseStreamUrl = (id: number) => invoke<string>("netease_stream_url", { id });
+export const neteaseLyric = (id: number) => invoke<{ lrc: string }>("netease_lyric", { id });
+export const neteaseLike = (id: number, like: boolean) =>
+  invoke<void>("netease_like", { id, like });
+export const neteaseLogout = () => invoke<void>("netease_logout");

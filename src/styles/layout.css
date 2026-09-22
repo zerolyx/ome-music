@@ -355,3 +355,78 @@
     rotate: 360deg;
   }
 }
+
+/* ============ 网易云 ============ */
+.search-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.search-input {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.search-error {
+  color: #e5484d;
+}
+
+.vip-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  vertical-align: 1px;
+}
+
+.settings-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 24px;
+}
+.netease-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.btn-secondary {
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.btn-secondary:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.netease-qr {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+.qr-box svg {
+  width: 176px;
+  height: 176px;
+  background: #fff;
+  padding: 8px;
+  border-radius: 12px;
+  display: block;
+}

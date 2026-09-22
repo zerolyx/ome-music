@@ -21,7 +21,10 @@ export function TrackList({ tracks, currentIndex, onPlay, onToggleLike }: TrackL
             <Icon name="play" size={14} />
           </button>
           <div class="track-meta" onClick={() => onPlay(index)}>
-            <span class="track-title">{track.title}</span>
+            <span class="track-title">
+              {track.title}
+              {track.unavailableReason === "vip" && <span class="vip-chip">VIP</span>}
+            </span>
             <span class="track-artist">{track.artist}</span>
           </div>
           <span class="track-duration">{formatDuration(track.durationSeconds)}</span>
