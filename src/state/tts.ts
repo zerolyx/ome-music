@@ -9,6 +9,11 @@ export interface TtsConfig {
   rate: number;
   pitch: number;
   enabled: boolean;
+  /** 自定义 OpenAI 兼容 /audio/speech 端点（SiliconFlow CosyVoice2 / 自建 GPT-SoVITS 兼容层等） */
+  ttsBaseUrl?: string;
+  ttsApiKey?: string;
+  ttsModel?: string;
+  ttsVoice?: string;
 }
 
 export interface ZhVoice {
@@ -31,6 +36,10 @@ export const DEFAULT_TTS_CONFIG: TtsConfig = {
   rate: 0.88,
   pitch: 0.95,
   enabled: true,
+  ttsBaseUrl: "",
+  ttsApiKey: "",
+  ttsModel: "FunAudioLLM/CosyVoice2-0.5B",
+  ttsVoice: "FunAudioLLM/CosyVoice2-0.5B:alex",
 };
 
 function synthOrNull(): SpeechSynthesis | null {
@@ -64,6 +73,10 @@ function sanitize(raw: Partial<TtsConfig> | null | undefined): TtsConfig {
     rate: Math.min(2, Math.max(0.5, rate)),
     pitch: Math.min(2, Math.max(0, pitch)),
     enabled: typeof raw?.enabled === "boolean" ? raw.enabled : DEFAULT_TTS_CONFIG.enabled,
+    ttsBaseUrl: typeof raw?.ttsBaseUrl === "string" ? raw.ttsBaseUrl.trim() : DEFAULT_TTS_CONFIG.ttsBaseUrl,
+    ttsApiKey: typeof raw?.ttsApiKey === "string" ? raw.ttsApiKey : DEFAULT_TTS_CONFIG.ttsApiKey,
+    ttsModel: typeof raw?.ttsModel === "string" ? raw.ttsModel : DEFAULT_TTS_CONFIG.ttsModel,
+    ttsVoice: typeof raw?.ttsVoice === "string" ? raw.ttsVoice : DEFAULT_TTS_CONFIG.ttsVoice,
   };
 }
 
@@ -245,6 +258,30 @@ Path:ssml
   }
 }
 
+/** 自定义 OpenAI 兼容 /audio/speech 端点合成（SiliconFlow CosyVoice2 / 自建 GPT-SoVITS 兼容层等） */
+async function customSpeak(text: string, config: TtsConfig): Promise<boolean> {
+  if (!config.ttsBaseUrl) return false;
+  const base = config.ttsBaseUrl.replace(/\/+$/, "");
+  const response = await fetch(`${base}/audio/speech`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(config.ttsApiKey ? { Authorization: `Bearer ${config.ttsApiKey}` } : {}),
+    },
+    body: JSON.stringify({
+      model: config.ttsModel || DEFAULT_TTS_CONFIG.ttsModel,
+      input: text,
+      voice: config.ttsVoice || DEFAULT_TTS_CONFIG.ttsVoice,
+      response_format: "mp3",
+      speed: config.rate,
+    }),
+  });
+  if (!response.ok) throw new Error(`TTS HTTP ${response.status}`);
+  const blob = await response.blob();
+  await playAudioUrl(URL.createObjectURL(blob));
+  return true;
+}
+
 /**
  * 朗读一段话；禁用 / 环境不可用 / 出错时 resolve(false)。
  * 链路：Edge 神经语音（若选了云端声线）→ 系统 speechSynthesis 兜底。
@@ -252,6 +289,15 @@ Path:ssml
 export async function speak(text: string): Promise<boolean> {
   const config = loadTtsConfig();
   if (!config.enabled || !text.trim()) return false;
+
+  // 优先：自定义音色端点（用户配置的港台男播客克隆音色等）
+  if (config.ttsBaseUrl) {
+    try {
+      if (await customSpeak(text, config)) return true;
+    } catch {
+      // 失败落到下方默认链路
+    }
+  }
 
   if (!EDGE_VOICES.some((voice) => voice.uri === config.voiceURI)) {
     // 系统声线

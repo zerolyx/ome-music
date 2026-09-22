@@ -113,10 +113,57 @@ export function TtsSettings() {
       </label>
 
       <div class="tts-row">
-        <button class="btn-secondary" disabled={speaking} onClick={() => void audition()}>
+        <button class="btn-primary" disabled={speaking} onClick={() => void audition()}>
           {speaking ? "朗读中…" : "试听"}
         </button>
       </div>
+
+      <div class="settings-label" style="margin-top:14px">自定义音色（可选 · 优先级最高）</div>
+      <p class="view-hint">
+        填入 OpenAI 兼容 TTS 端点即可使用克隆音色，例如 SiliconFlow 的 CosyVoice2（含预设男声与音色克隆），
+        或自建 GPT-SoVITS / Fish-Speech 的兼容服务。未填写时使用上方声线。
+      </p>
+      <label class="tts-row">
+        <span class="tts-label">端点</span>
+        <input
+          class="search-input"
+          type="text"
+          placeholder="https://api.siliconflow.cn/v1"
+          value={config.ttsBaseUrl ?? ""}
+          onInput={(event) => apply({ ttsBaseUrl: (event.target as HTMLInputElement).value })}
+        />
+      </label>
+      <label class="tts-row">
+        <span class="tts-label">密钥</span>
+        <input
+          class="search-input"
+          type="password"
+          placeholder="sk-…（留空则不带鉴权）"
+          value={config.ttsApiKey ?? ""}
+          onInput={(event) => apply({ ttsApiKey: (event.target as HTMLInputElement).value })}
+        />
+      </label>
+      <label class="tts-row">
+        <span class="tts-label">模型</span>
+        <input
+          class="search-input"
+          type="text"
+          placeholder="FunAudioLLM/CosyVoice2-0.5B"
+          value={config.ttsModel ?? ""}
+          onInput={(event) => apply({ ttsModel: (event.target as HTMLInputElement).value })}
+        />
+      </label>
+      <label class="tts-row">
+        <span class="tts-label">音色</span>
+        <input
+          class="search-input"
+          type="text"
+          placeholder="FunAudioLLM/CosyVoice2-0.5B:alex"
+          value={config.ttsVoice ?? ""}
+          onInput={(event) => apply({ ttsVoice: (event.target as HTMLInputElement).value })}
+        />
+      </label>
+      <p class="view-hint">开源方案参考：GPT-SoVITS / CosyVoice2 / IndexTTS / F5-TTS / ChatTTS（自建后填端点即可）</p>
     </div>
   );
 }

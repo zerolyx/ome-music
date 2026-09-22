@@ -14,17 +14,13 @@ beforeEach(() => {
 
 describe("loadTtsConfig / saveTtsConfig", () => {
   it("无存档时返回默认配置（云希 / rate 0.88 / pitch 0.95）", () => {
-    expect(loadTtsConfig()).toEqual({
-      voiceURI: "zh-CN-YunxiNeural",
-      rate: 0.88,
-      pitch: 0.95,
-      enabled: true,
-    });
+    expect(loadTtsConfig()).toEqual({ ...DEFAULT_TTS_CONFIG });
   });
 
   it("保存后读取往返一致", () => {
     saveTtsConfig({ voiceURI: "zh-voice-1", rate: 1.05, pitch: 0.85, enabled: false });
     expect(loadTtsConfig()).toEqual({
+      ...DEFAULT_TTS_CONFIG,
       voiceURI: "zh-voice-1",
       rate: 1.05,
       pitch: 0.85,
@@ -37,7 +33,13 @@ describe("loadTtsConfig / saveTtsConfig", () => {
     const raw = localStorage.getItem("ome.tts");
     expect(raw).not.toBeNull();
     const persisted = JSON.parse(raw as string);
-    expect(persisted).toEqual({ voiceURI: "zh-voice-2", rate: 2, pitch: 0, enabled: true });
+    expect(persisted).toEqual({
+      ...DEFAULT_TTS_CONFIG,
+      voiceURI: "zh-voice-2",
+      rate: 2,
+      pitch: 0,
+      enabled: true,
+    });
     expect(loadTtsConfig()).toEqual(persisted);
   });
 

@@ -21,7 +21,7 @@ const CHOICES: Array<{ value: ThemeChoice; label: string }> = [
 
 const QR_PHASE_TEXT: Record<string, string> = {
   idle: "正在获取二维码…",
-  waiting: "请使用网易云音乐 App 扫码",
+  waiting: "请打开网易云音乐 App → 右上角 ＋ → 扫一扫（微信/相机扫码会提示“暂不支持该类型”）",
   scanned: "已扫描，请在手机上确认",
   success: "登录成功",
   expired: "二维码已过期",
