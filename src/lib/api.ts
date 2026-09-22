@@ -58,3 +58,49 @@ export const neteaseLyric = (id: number) => invoke<{ lrc: string }>("netease_lyr
 export const neteaseLike = (id: number, like: boolean) =>
   invoke<void>("netease_like", { id, like });
 export const neteaseLogout = () => invoke<void>("netease_logout");
+
+/* ============ 私人 DJ（后端命令已提交于 src-tauri/src/dj.rs，serde camelCase） ============ */
+
+export interface DjAction {
+  type: "play" | "queue" | "search_and_play" | "mood" | "none";
+  query?: string | null;
+  mood?: string | null;
+}
+
+export interface DjReply {
+  say: string;
+  actions: DjAction[];
+}
+
+export interface DjConfigState {
+  configured: boolean;
+  providerName: string;
+  baseUrl: string;
+  model: string;
+  maskedKey: string;
+}
+
+export interface DjSaveConfigPayload {
+  providerName: string;
+  baseUrl: string;
+  model: string;
+  /** 空字符串 = 保持旧密钥不变 */
+  apiKey: string;
+}
+
+export interface DjMemoryFact {
+  id: string;
+  kind: string;
+  content: string;
+  weight: number;
+  updatedAt: string;
+}
+
+export const djGetConfig = () => invoke<DjConfigState>("dj_config");
+export const djSaveConfig = (payload: DjSaveConfigPayload) =>
+  invoke<DjConfigState>("dj_save_config", { payload });
+export const djChat = (text: string) => invoke<DjReply>("dj_chat", { text });
+export const djGreeting = () => invoke<{ say: string }>("dj_greeting");
+export const djIntro = (trackId: string) => invoke<{ say: string }>("dj_intro", { trackId });
+export const djMemoryList = () => invoke<DjMemoryFact[]>("dj_memory_list");
+export const djMemoryDelete = (id: string) => invoke<void>("dj_memory_delete", { id });

@@ -430,3 +430,219 @@
   border-radius: 12px;
   display: block;
 }
+
+/* ============ 私人 DJ ============ */
+/* 播放条右侧圆形入口 */
+.dj-fab {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-indent: 0.08em;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.dj-fab:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* 右侧滑入抽屉：不属于 chrome，打开时常显 */
+.dj-drawer {
+  position: fixed;
+  top: 40px;
+  right: 0;
+  bottom: 0;
+  width: 340px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  translate: 0 0;
+  visibility: visible;
+  transition:
+    translate 0.5s var(--ease-signature),
+    visibility 0.5s;
+}
+.dj-drawer[data-open="false"] {
+  translate: 100% 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.dj-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.dj-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: var(--text-dim);
+}
+.dj-close {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--text-dim);
+}
+.dj-close:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.dj-offline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 12px 16px 0;
+  padding: 9px 8px 9px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  font-size: 12px;
+  color: var(--text-dim);
+  flex: none;
+}
+
+.dj-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+.dj-empty {
+  margin: auto;
+  text-align: center;
+  font-size: 13px;
+  line-height: 2;
+  color: var(--text-dim);
+}
+.dj-msg {
+  max-width: 84%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dj-msg.user {
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.dj-msg.dj {
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+}
+/* 思考中：三点气泡（点动画见 motion.css） */
+.dj-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 14px;
+}
+
+.dj-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  flex: none;
+}
+.dj-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.dj-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.dj-send {
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+}
+.dj-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.dj-send:not(:disabled):hover {
+  filter: brightness(1.05);
+}
+
+/* 设置页 · 私人 DJ 卡片 */
+.dj-config-state {
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.dj-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.dj-field {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.dj-field input {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.dj-field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.dj-config-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.dj-config-error {
+  font-size: 12px;
+  color: #e5484d;
+}

@@ -1,4 +1,5 @@
 import { currentTrack, duration, isPlaying, next, position, previous, seek, setVolume, togglePlayback, volume } from "../state/player";
+import { openDrawer } from "../state/dj";
 import { coverUrl } from "../lib/api";
 import { formatDuration } from "../lib/audio";
 import { setChromeHover } from "../state/chrome";
@@ -75,6 +76,9 @@ export function PlayerBar() {
           aria-label="音量"
           onInput={(event) => setVolume(Number((event.target as HTMLInputElement).value))}
         />
+        <button class="dj-fab" aria-label="打开 DJ" onClick={openDrawer}>
+          DJ
+        </button>
       </div>
     </footer>
   );

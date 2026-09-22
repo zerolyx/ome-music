@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { getAppVersion, isTauriRuntime } from "../lib/api";
 import { setThemeChoice, themeChoice, type ThemeChoice } from "../state/theme";
+import { djConfig, lastError, loadConfig, saveConfig } from "../state/dj";
 import {
   cancelQrLogin,
   logout,
@@ -24,6 +25,102 @@ const QR_PHASE_TEXT: Record<string, string> = {
   expired: "二维码已过期",
 };
 
+/** 私人 DJ：OpenAI 兼容语言模型配置；空 apiKey 表示保留旧密钥 */
+function DjConfigCard() {
+  const [providerName, setProviderName] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [model, setModel] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedMaskedKey, setSavedMaskedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    void loadConfig();
+  }, []);
+
+  // 配置信号更新（首次载入 / 保存成功）时同步表单
+  useEffect(() => {
+    const config = djConfig.value;
+    if (!config) return;
+    setProviderName(config.providerName);
+    setBaseUrl(config.baseUrl);
+    setModel(config.model);
+    setSavedMaskedKey(config.configured ? config.maskedKey : null);
+  }, [djConfig.value]);
+
+  const save = async () => {
+    setSaving(true);
+    const result = await saveConfig({
+      providerName: providerName.trim(),
+      baseUrl: baseUrl.trim(),
+      model: model.trim(),
+      apiKey,
+    });
+    setSaving(false);
+    if (result) {
+      setApiKey(""); // 密钥不回显，清空输入框
+      setSavedMaskedKey(result.maskedKey);
+    }
+  };
+
+  const canSave = providerName.trim() !== "" && baseUrl.trim() !== "" && model.trim() !== "" && !saving;
+  const config = djConfig.value;
+  const maskedKey = savedMaskedKey ?? (config?.configured ? config.maskedKey : "");
+
+  return (
+    <div class="settings-card">
+      <h2 class="settings-label">私人 DJ</h2>
+      <p class="dj-config-state">
+        {config?.configured ? `已配置：${config.providerName} · ${config.model}` : "未配置"}
+      </p>
+      <div class="dj-config-grid">
+        <label class="dj-field">
+          服务商名称
+          <input
+            value={providerName}
+            placeholder="DeepSeek"
+            onInput={(event) => setProviderName((event.target as HTMLInputElement).value)}
+          />
+        </label>
+        <label class="dj-field">
+          接口地址
+          <input
+            value={baseUrl}
+            placeholder="https://api.deepseek.com"
+            onInput={(event) => setBaseUrl((event.target as HTMLInputElement).value)}
+          />
+        </label>
+        <label class="dj-field">
+          模型
+          <input
+            value={model}
+            placeholder="deepseek-chat"
+            onInput={(event) => setModel((event.target as HTMLInputElement).value)}
+          />
+        </label>
+        <label class="dj-field">
+          API 密钥
+          <input
+            type="password"
+            value={apiKey}
+            placeholder="留空保持不变"
+            autoComplete="off"
+            onInput={(event) => setApiKey((event.target as HTMLInputElement).value)}
+          />
+        </label>
+      </div>
+      <div class="dj-config-actions">
+        <button class="btn-primary" disabled={!canSave} onClick={() => void save()}>
+          {saving ? "保存中…" : "保存"}
+        </button>
+        {maskedKey && <span class="view-hint">密钥：{maskedKey}</span>}
+        {lastError.value && <span class="dj-config-error">{lastError.value}</span>}
+      </div>
+      <p class="view-hint">兼容 OpenAI 接口（如 DeepSeek）。配置后 DJ 会在开播时向你问候。</p>
+    </div>
+  );
+}
+
 export function SettingsView() {
   const [version, setVersion] = useState<string>("…");
 
@@ -40,6 +137,8 @@ export function SettingsView() {
   return (
     <section class="view view-settings">
       <h1 class="view-title">设置</h1>
+
+      <DjConfigCard />
 
       <div class="settings-card">
         <h2 class="settings-label">音乐源 · 网易云</h2>

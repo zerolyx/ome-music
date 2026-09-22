@@ -1,9 +1,11 @@
 import { useEffect } from "preact/hooks";
 import { activeView } from "./state/app";
 import { chromeVisible, initChromeAutoHide } from "./state/chrome";
+import { greet } from "./state/dj";
 import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
 import { ImmersiveCursor } from "./components/ImmersiveCursor";
+import { DjDrawer } from "./components/DjDrawer";
 import { HomeView } from "./views/Home";
 import { SearchView } from "./views/Search";
 import { LibraryView } from "./views/Library";
@@ -12,6 +14,12 @@ import { PlayerBar } from "./components/PlayerBar";
 
 export function App() {
   useEffect(() => initChromeAutoHide(), []);
+
+  // 开播问候：稍待入场动画结束再开口；未配置 / 不可用时 greet 自行静默
+  useEffect(() => {
+    const t = setTimeout(() => void greet(), 1600);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <div class={`app-shell ${chromeVisible.value ? "" : "chrome-hidden"}`}>
@@ -29,6 +37,7 @@ export function App() {
         </main>
       </div>
       <PlayerBar />
+      <DjDrawer />
     </div>
   );
 }
