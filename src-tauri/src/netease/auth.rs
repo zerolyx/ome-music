@@ -27,10 +27,16 @@ async fn create_qr_key() -> Result<(String, String), String> {
         .as_str()
         .or_else(|| body["unikey"].as_str())
         .ok_or_else(|| format!("获取登录钥匙失败: {body}"))?;
-    let qr_svg = QrCode::new(key.as_bytes())
+    // 纠错级别 L：unikey 短时效且由本机渲染，低纠错换更低密度（模块更大更易扫）
+    let qr_svg = QrCode::with_error_correction_level(key.as_bytes(), qrcode::EcLevel::L)
         .map_err(|e| format!("生成二维码失败: {e}"))?
         .render::<qr_svg_pixel::Color>()
         .build();
+    // 去掉 XML 声明头：innerHTML 解析时它只会变成无意义的 bogus comment
+    let qr_svg = qr_svg
+        .split_once("?>")
+        .map(|(_, rest)| rest.trim_start().to_string())
+        .unwrap_or(qr_svg);
     Ok((key.to_string(), qr_svg))
 }
 

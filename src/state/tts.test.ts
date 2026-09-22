@@ -1,15 +1,22 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_TTS_CONFIG, listZhVoices, loadTtsConfig, saveTtsConfig, speak } from "./tts";
+import {
+  __setEdgeTransportOverride,
+  DEFAULT_TTS_CONFIG,
+  listZhVoices,
+  loadTtsConfig,
+  saveTtsConfig,
+  speak,
+} from "./tts";
 
 beforeEach(() => {
   localStorage.removeItem("ome.tts");
 });
 
 describe("loadTtsConfig / saveTtsConfig", () => {
-  it("无存档时返回默认配置（rate 0.92 / pitch 0.95 / enabled true）", () => {
+  it("无存档时返回默认配置（云希 / rate 0.88 / pitch 0.95）", () => {
     expect(loadTtsConfig()).toEqual({
-      voiceURI: "",
-      rate: 0.92,
+      voiceURI: "zh-CN-YunxiNeural",
+      rate: 0.88,
       pitch: 0.95,
       enabled: true,
     });
@@ -47,7 +54,15 @@ describe("loadTtsConfig / saveTtsConfig", () => {
 
 describe("jsdom 无 speechSynthesis：全部静默降级", () => {
   it("speak() resolve false", async () => {
-    await expect(speak("晚安，电台刚开播。")).resolves.toBe(false);
+    // 封死 Edge 网络通道：jsdom 无 speechSynthesis 且无云端时必须静默降级为 false
+    __setEdgeTransportOverride(() => {
+      throw new Error("no network in test");
+    });
+    try {
+      await expect(speak("晚安，电台刚开播。")).resolves.toBe(false);
+    } finally {
+      __setEdgeTransportOverride(null);
+    }
   });
 
   it("listZhVoices() 返回空数组", () => {

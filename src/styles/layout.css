@@ -425,12 +425,12 @@
   gap: 12px;
 }
 .qr-box svg {
-  width: 176px;
-  height: 176px;
+  /* 不设宽高：SVG 按后端生成的原生尺寸渲染（零缩放），模块边缘锐利无缝隙 */
   background: #fff;
-  padding: 8px;
+  padding: 10px;
   border-radius: 12px;
   display: block;
+  max-width: 100%;
 }
 
 /* ============ 私人 DJ ============ */

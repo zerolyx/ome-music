@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { listZhVoices, loadTtsConfig, saveTtsConfig, speak, type TtsConfig } from "../state/tts";
 
 /** 试听台词：DJ 人设开场白（逐字固定） */
-const AUDITION_LINE = "晚上好，欢迎回到你的音乐世界。";
+const AUDITION_LINE = "嘿，晚上好。欢迎回来，这里是你的私人电台——今晚想听点什么？";
 
 /** 私人 DJ 语音设置：启用 / 声线 / 语速 / 音高 / 试听；任何改动立即持久化 */
 export function TtsSettings() {
