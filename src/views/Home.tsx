@@ -4,6 +4,8 @@ import { HomeLyrics } from "../components/HomeWidgets";
 import { currentTrack } from "../state/player";
 import { coverUrl } from "../lib/api";
 import { loadLyricFor } from "../state/lyrics";
+import { djConfig } from "../state/dj";
+import { startRadioIfIdle } from "../state/radio";
 
 export function HomeView() {
   const track = currentTrack.value;
@@ -59,6 +61,11 @@ export function HomeView() {
             </div>
             <h1>电台即将开播</h1>
             <p class="home-hint">导入音乐后，这里会成为你的私人电台</p>
+            {djConfig.value?.configured && (
+              <button class="btn-primary home-radio-cta" onClick={() => void startRadioIfIdle()}>
+                不必选歌，按下播放就好
+              </button>
+            )}
           </>
         )}
       </div>

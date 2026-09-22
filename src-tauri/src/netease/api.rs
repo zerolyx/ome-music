@@ -116,7 +116,7 @@ pub async fn netease_stream_url(app: tauri::AppHandle, id: u64) -> Result<String
     fetch_stream_url(id, cookie.as_deref()).await
 }
 
-pub async fn fetch_lyric(id: u64) -> Result<String, String> {
+pub async fn fetch_lyric(id: u64) -> Result<(String, Option<String>), String> {
     let body = request::eapi_post(
         "/api/song/lyric/v1",
         &json!({
@@ -134,15 +134,14 @@ pub async fn fetch_lyric(id: u64) -> Result<String, String> {
         None,
     )
     .await?;
-    Ok(body["lrc"]["lyric"]
-        .as_str()
-        .unwrap_or_default()
-        .to_string())
+    let yrc = body["yrc"]["lyric"].as_str().map(str::to_string);
+    Ok((body["lrc"]["lyric"].as_str().unwrap_or_default().to_string(), yrc))
 }
 
 #[tauri::command]
 pub async fn netease_lyric(id: u64) -> Result<Value, String> {
-    Ok(json!({ "lrc": fetch_lyric(id).await? }))
+    let (lrc, yrc) = fetch_lyric(id).await?;
+    Ok(json!({ "lrc": lrc, "yrc": yrc }))
 }
 
 #[tauri::command]

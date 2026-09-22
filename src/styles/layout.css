@@ -910,3 +910,33 @@
   color: var(--text);
   background: var(--accent-soft);
 }
+
+/* ============ 逐字歌词（yrc，Folia 式） ============ */
+.yrc-line {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: center;
+  max-width: 760px;
+  line-height: 1.4;
+}
+.yrc-word {
+  transition: color 0.18s ease, opacity 0.18s ease, text-shadow 0.25s ease;
+}
+.yrc-word.yrc-sung {
+  color: var(--text);
+}
+.yrc-word.yrc-singing {
+  color: var(--accent);
+  text-shadow: 0 0 18px var(--accent-soft);
+}
+.yrc-word.yrc-next {
+  color: var(--text-dim);
+  opacity: 0.55;
+}
+.home-radio-cta {
+  margin-top: 6px;
+  font-size: 14px;
+  padding: 11px 26px;
+  box-shadow: var(--shadow);
+}

@@ -54,7 +54,8 @@ export const neteaseQrCheck = (key: string) => invoke<NeteaseQrCheck>("netease_q
 export const neteaseSearch = (keywords: string, limit?: number) =>
   invoke<NeteaseSong[]>("netease_search", { keywords, limit });
 export const neteaseStreamUrl = (id: number) => invoke<string>("netease_stream_url", { id });
-export const neteaseLyric = (id: number) => invoke<{ lrc: string }>("netease_lyric", { id });
+export const neteaseLyric = (id: number) =>
+  invoke<{ lrc: string; yrc?: string | null }>("netease_lyric", { id });
 export const neteaseLike = (id: number, like: boolean) =>
   invoke<void>("netease_like", { id, like });
 export const neteaseLogout = () => invoke<void>("netease_logout");
