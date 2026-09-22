@@ -5,6 +5,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/001_initial_schema.sql"),
     include_str!("../migrations/002_mood_note_rename_and_indexes.sql"),
     include_str!("../migrations/003_authorized_music_directories.sql"),
+    include_str!("../migrations/004_dj.sql"),
 ];
 
 pub fn open_db(path: &Path) -> Result<Connection, rusqlite::Error> {

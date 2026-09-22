@@ -1,4 +1,5 @@
 mod db;
+mod dj;
 mod library;
 mod media;
 mod netease;
@@ -49,6 +50,14 @@ pub fn run() {
             library::import_music_folder,
             library::set_track_liked_command,
             library::record_playback_event_command,
+            dj::dj_config,
+            dj::dj_save_config,
+            dj::dj_chat,
+            dj::dj_greeting,
+            dj::dj_intro,
+            dj::dj_memory_list,
+            dj::dj_memory_delete,
+            dj::profile_hour_preferences,
             netease::auth::netease_status,
             netease::auth::netease_qr_key,
             netease::auth::netease_qr_check,
