@@ -80,11 +80,6 @@ export function PlayerBar() {
       </div>
 
       <div class="player-actions">
-        <button class="player-list-btn" aria-label="播放列表" title="播放列表" onClick={() => (queueOpen.value = !queueOpen.value)}>
-          <Icon name="queue" size={18} />
-        </button>
-      </div>
-      <div class="player-list">
         <button
           class={`player-list-btn ${queueOpen.value ? "is-active" : ""}`}
           aria-label="播放列表"
@@ -93,19 +88,19 @@ export function PlayerBar() {
         >
           <Icon name="queue" size={18} />
         </button>
-      </div>
-      <div class="player-volume">
-        <Icon name="volume" size={16} />
-        <input
-          class="slider slider-volume"
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={volume.value}
-          aria-label="音量"
-          onInput={(event) => setVolume(Number((event.target as HTMLInputElement).value))}
-        />
+        <div class="player-volume">
+          <Icon name="volume" size={16} />
+          <input
+            class="slider slider-volume"
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume.value}
+            aria-label="音量"
+            onInput={(event) => setVolume(Number((event.target as HTMLInputElement).value))}
+          />
+        </div>
         <button class="dj-fab" aria-label="打开 DJ" onClick={openDrawer}>
           DJ
         </button>

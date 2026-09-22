@@ -151,6 +151,16 @@
 
 /* 播放条 */
 .player-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 0 20px; }
+.player-actions { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.player-actions .player-volume { display: flex; align-items: center; gap: 8px; color: var(--text-dim); }
+.player-actions .dj-fab {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+  background: var(--accent); color: #fff;
+  box-shadow: 0 2px 10px var(--accent-soft);
+}
+.player-actions .dj-fab:hover { filter: brightness(1.08); }
 .player-info { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .player-cover { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; background: var(--accent-soft); }
 .player-cover-empty { display: grid; place-items: center; color: var(--text-dim); }
@@ -939,4 +949,20 @@
   font-size: 14px;
   padding: 11px 26px;
   box-shadow: var(--shadow);
+}
+
+/* ============ Folia 式水印排版 ============ */
+.home-watermark {
+  position: absolute;
+  inset: auto -4% 6% -4%;
+  font-size: clamp(64px, 14vw, 190px);
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(128, 128, 128, 0.14);
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+  letter-spacing: 0.02em;
 }

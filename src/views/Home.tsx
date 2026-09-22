@@ -16,8 +16,12 @@ export function HomeView() {
     void loadLyricFor(track);
   }, [track?.id]);
 
+  // Folia 式水印文本：曲名 · 艺人（未播放时为电台标识）
+  const watermarkText = track ? `${track.title} · ${track.artist}` : "OME RADIO";
+
   return (
     <section class="view view-home">
+      <div class="home-watermark" aria-hidden="true">{watermarkText}</div>
       {/* 氛围背景：当前封面高斯模糊铺满全窗（fixed 脱离滚动区） */}
       {cover && (
         <div
