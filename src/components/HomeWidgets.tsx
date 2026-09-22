@@ -16,6 +16,7 @@ export function HomeLyrics() {
       </>
     );
   }
+  // 歌词尚未加载完成：留白等待，绝不误显"即将开播"
 
   // 逐字点亮（网易云 yrc 逐字歌词，Folia 式）
   if (hasYrc) {

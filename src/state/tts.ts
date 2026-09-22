@@ -157,13 +157,44 @@ export function __setEdgeTransportOverride(factory: WsFactory | null): void {
   wsFactory = factory ?? ((url) => new WebSocket(url));
 }
 
-/** 用 Audio 元素播放一段音频 URL，结束或出错时 resolve */
+/** 全局唯一的 Edge 音频实例：新语音顶掉旧的，杜绝多路人声重叠 */
+let currentAudio: HTMLAudioElement | null = null;
+function stopEdgeAudio(): void {
+  if (currentAudio) {
+    try { currentAudio.pause(); } catch { /* 已停止 */ }
+    currentAudio.removeAttribute("src");
+    currentAudio = null;
+  }
+}
+
+/** 停掉一切正在进行的播报（语音 + 音频 + 队列），跳歌/关闭时调用 */
+export function stopAllSpeech(): void {
+  stopEdgeAudio();
+  synthOrNull()?.cancel();
+  speakChain = Promise.resolve(true);
+}
+
+/** 串行播报队列：并发调用按顺序朗读，绝不重叠 */
+let speakChain: Promise<boolean> = Promise.resolve(true);
+
+/** 用 Audio 元素播放一段音频 URL，结束或出错时 resolve；全局单例防重叠 */
 function playAudioUrl(url: string): Promise<void> {
+  stopEdgeAudio();
   return new Promise((resolve, reject) => {
     const audio = new Audio(url);
-    audio.onended = () => resolve();
-    audio.onerror = () => reject(new Error("audio playback error"));
-    void audio.play().catch(reject);
+    currentAudio = audio;
+    audio.onended = () => {
+      if (currentAudio === audio) currentAudio = null;
+      resolve();
+    };
+    audio.onerror = () => {
+      if (currentAudio === audio) currentAudio = null;
+      reject(new Error("audio playback error"));
+    };
+    void audio.play().catch((error) => {
+      if (currentAudio === audio) currentAudio = null;
+      reject(error);
+    });
   });
 }
 
@@ -289,9 +320,17 @@ async function customSpeak(text: string, config: TtsConfig): Promise<boolean> {
  * 朗读一段话；禁用 / 环境不可用 / 出错时 resolve(false)。
  * 链路：Edge 神经语音（若选了云端声线）→ 系统 speechSynthesis 兜底。
  */
-export async function speak(text: string): Promise<boolean> {
+export function speak(text: string): Promise<boolean> {
+  const run = () => speakNow(text);
+  speakChain = speakChain.then(run, run);
+  return speakChain;
+}
+
+async function speakNow(text: string): Promise<boolean> {
   const config = loadTtsConfig();
   if (!config.enabled || !text.trim()) return false;
+  stopEdgeAudio();
+  synthOrNull()?.cancel();
 
   // 优先：自定义音色端点（用户配置的港台男播客克隆音色等）
   if (config.voiceURI === CUSTOM_VOICE && config.ttsBaseUrl) {

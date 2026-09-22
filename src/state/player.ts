@@ -29,14 +29,27 @@ function ensureAudio(): HTMLAudioElement {
   if (audio) return audio;
   audio = new Audio();
   audio.volume = volume.value;
+  let lastPersist = 0;
   audio.addEventListener("timeupdate", () => {
     position.value = audio?.currentTime ?? 0;
+    const now = Date.now();
+    if (now - lastPersist > 5000) {
+      lastPersist = now;
+      const track = currentTrack.value;
+      if (track) saveLastPlayback(track, position.value);
+    }
   });
   audio.addEventListener("durationchange", () => {
     duration.value = Number.isFinite(audio?.duration) ? (audio?.duration ?? 0) : 0;
   });
   audio.addEventListener("play", () => (isPlaying.value = true));
   audio.addEventListener("pause", () => (isPlaying.value = false));
+  audio.addEventListener("loadedmetadata", () => {
+    if (pendingSeekSeconds !== null && audio) {
+      try { audio.currentTime = pendingSeekSeconds; position.value = pendingSeekSeconds; } catch { /* 越界忽略 */ }
+      pendingSeekSeconds = null;
+    }
+  });
   audio.addEventListener("ended", () => onEnded());
   return audio;
 }
@@ -62,6 +75,33 @@ export function queueIndexFor(tracks: Track[], track: Track): number {
 let playSeq = 0;
 /** 歌前介绍会话：快速连点时只保留最新一次介绍 */
 let introToken = 0;
+
+/* ---- 续播记忆：上次播放的曲目与进度 ---- */
+const LAST_KEY = "ome.last";
+let pendingSeekSeconds: number | null = null;
+
+export function saveLastPlayback(track: Track | null, positionSeconds: number): void {
+  try {
+    if (!track) return;
+    localStorage.setItem(LAST_KEY, JSON.stringify({ track, position: Math.round(positionSeconds) }));
+  } catch { /* 存储不可用忽略 */ }
+}
+
+export function setPendingSeek(seconds: number | null): void {
+  pendingSeekSeconds = seconds;
+}
+
+export function readLastPlayback(): { track: Track; position: number } | null {
+  try {
+    const raw = localStorage.getItem(LAST_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { track: Track; position: number };
+    if (!parsed?.track?.id) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 function stopAtQueueEnd() {
   isPlaying.value = false;
@@ -139,6 +179,7 @@ function playImmediate(index: number) {
   currentIndex.value = index;
   position.value = 0;
   duration.value = track.durationSeconds;
+  saveLastPlayback(track, 0);
   playbackError.value = null;
   const element = ensureAudio();
 
@@ -181,7 +222,7 @@ function playImmediate(index: number) {
 export async function playWithRadioIntro(
   track: Track,
   index: number,
-  event?: "skip" | "ended" | "boot"
+  event?: "skip" | "ended" | "boot" | "resume"
 ): Promise<void> {
   const token = ++introToken;
   introPlaying.value = true;

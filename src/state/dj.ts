@@ -87,7 +87,7 @@ export async function greet(): Promise<void> {
     const { say } = await djGreeting();
     if (!say) return;
     messages.value = [...messages.value, { id: nextMsgId(), role: "dj", text: say, ts: Date.now() }];
-    speakAside(say);
+    await speakAside(say); // 等问候说完，保证开机链路顺序：问候 → 电台接播
   } catch {
     // 问候失败保持安静：电台不该以报错开场
   }
@@ -121,10 +121,10 @@ export async function ask(text: string): Promise<void> {
 }
 
 /** 朗读但不阻塞对话流；同一时间只保留最新一句 */
-function speakAside(text: string): void {
+function speakAside(text: string): Promise<boolean> {
   const session = ++speakSession;
   ttsSpeaking.value = true;
-  void speak(text).finally(() => {
+  return speak(text).finally(() => {
     if (session === speakSession) ttsSpeaking.value = false;
   });
 }

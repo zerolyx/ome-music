@@ -812,6 +812,7 @@ pub async fn dj_intro(
     let lead = match event.as_deref() {
         Some("skip") => "听众刚跳过了上一首，轻轻接住这个信号（可以带一点自嘲），然后自然地带出下一首：",
         Some("ended") => "上一首完整播完了，顺势承接情绪，然后带出下一首：",
+        Some("resume") => "听众回来了，就从上次听到一半的这首继续，像老朋友重逢一样自然地说：",
         _ => "接下来要播放：",
     };
     let directive = format!(

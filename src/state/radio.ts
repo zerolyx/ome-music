@@ -9,7 +9,7 @@ import { djIntro, profileHourPreferences, type HourPreference } from "../lib/api
 import type { Track } from "../types/music";
 import { djConfig } from "./dj";
 import { refreshTracks, tracks } from "./library";
-import { isPlaying, playWithRadioIntro, queue } from "./player";
+import { isPlaying, playWithRadioIntro, queue, setPendingSeek, readLastPlayback } from "./player";
 
 const RADIO_KEY = "ome.radio";
 
@@ -143,7 +143,10 @@ export async function radioNext(currentId: string | null = null): Promise<Track 
 /* ---- 开场白 ---- */
 
 /** 歌前介绍词：DJ 未配置 / 接口失败 / 空台词 → null（安静直播） */
-export async function introFor(track: Track, event?: "skip" | "ended" | "boot"): Promise<string | null> {
+export async function introFor(
+  track: Track,
+  event?: "skip" | "ended" | "boot" | "resume"
+): Promise<string | null> {
   if (!djConfig.value?.configured) return null;
   try {
     const { say } = await djIntro(track.id, event);
@@ -161,6 +164,18 @@ const idle = (): boolean => !isPlaying.value && queue.value.length === 0;
 export async function startRadioIfIdle(): Promise<void> {
   if (!radioEnabled.value || !djConfig.value?.configured) return;
   if (!idle()) return;
+
+  // 优先续播上次：从上一次播放的曲目与进度继续，之后交给 onEnded 的今日推荐
+  const last = readLastPlayback();
+  if (last) {
+    queue.value = [last.track];
+    setPendingSeek(
+      last.position > 0 && last.position < last.track.durationSeconds - 15 ? last.position : null
+    );
+    await playWithRadioIntro(last.track, 0, "resume");
+    return;
+  }
+
   await refreshTracks(); // 本地库读取，缓存安全；失败时 loadError 置位但不影响判断
   if (tracks.value.length === 0 || !idle()) return;
   const track = await radioNext(null);

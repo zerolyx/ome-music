@@ -3,6 +3,7 @@ import { isTauriRuntime } from "./lib/api";
 import { activeView } from "./state/app";
 import { chromeVisible, initChromeAutoHide } from "./state/chrome";
 import { greet } from "./state/dj";
+import { stopAllSpeech } from "./state/tts";
 import { startRadioIfIdle } from "./state/radio";
 import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
@@ -18,17 +19,24 @@ import { QueueDrawer } from "./components/QueueDrawer";
 export function App() {
   useEffect(() => initChromeAutoHide(), []);
 
-  // 开播问候：稍待入场动画结束再开口；未配置 / 不可用时 greet 自行静默
+  // 开机单链：入场动画 → 问候（说完）→ 电台接播（续播上次 / 今日推荐）
+  // 顺序执行杜绝多路人声重叠；卸载时停掉一切播报
   useEffect(() => {
-    const t = setTimeout(() => void greet(), 1600);
-    // 问候之后自动电台开播：仅 Tauri 环境；未开电台 / DJ 未配置 / 曲库为空时静默
-    const radio = setTimeout(() => {
-      if (!isTauriRuntime()) return;
-      void startRadioIfIdle();
-    }, 2600);
+    if (!isTauriRuntime()) return;
+    let cancelled = false;
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const boot = async () => {
+      await delay(1500);
+      if (cancelled) return;
+      await greet();
+      await delay(600);
+      if (cancelled) return;
+      await startRadioIfIdle();
+    };
+    void boot();
     return () => {
-      clearTimeout(t);
-      clearTimeout(radio);
+      cancelled = true;
+      stopAllSpeech();
     };
   }, []);
 
