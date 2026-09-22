@@ -27,8 +27,21 @@ async fn create_qr_key() -> Result<(String, String), String> {
         .as_str()
         .or_else(|| body["unikey"].as_str())
         .ok_or_else(|| format!("获取登录钥匙失败: {body}"))?;
+    // 二维码内容必须带 chainId（web 平台形态）：手机网易云 App 只识别这种 URL；
+    // 无 chainId 的形态是给 PC 客户端扫的，App 会提示"暂不支持该类型"。
+    // chainId 与上游 generateChainId 一致：v1_{设备}_web_login_{毫秒时间戳}
+    use rand::Rng;
+    let random6: u32 = rand::thread_rng().gen_range(0..1_000_000);
+    let timestamp_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
+    let qr_url = format!(
+        "https://music.163.com/login?codekey={key}&chainId=v1_unknown-{random6:06}_web_login_{timestamp_ms}"
+    );
+
     // 纠错级别 L：unikey 短时效且由本机渲染，低纠错换更低密度（模块更大更易扫）
-    let qr_svg = QrCode::with_error_correction_level(key.as_bytes(), qrcode::EcLevel::L)
+    let qr_svg = QrCode::with_error_correction_level(qr_url.as_bytes(), qrcode::EcLevel::L)
         .map_err(|e| format!("生成二维码失败: {e}"))?
         .render::<qr_svg_pixel::Color>()
         .build();

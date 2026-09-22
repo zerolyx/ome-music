@@ -31,6 +31,9 @@ export const EDGE_VOICES: ZhVoice[] = [
   { uri: "zh-CN-YunyangNeural", name: "云扬 · 男 · 新闻播报" },
 ];
 
+/** 自定义音色：走用户配置的 OpenAI 兼容 /audio/speech 端点 */
+export const CUSTOM_VOICE = "custom";
+
 export const DEFAULT_TTS_CONFIG: TtsConfig = {
   voiceURI: "zh-CN-YunxiNeural",
   rate: 0.88,
@@ -291,11 +294,12 @@ export async function speak(text: string): Promise<boolean> {
   if (!config.enabled || !text.trim()) return false;
 
   // 优先：自定义音色端点（用户配置的港台男播客克隆音色等）
-  if (config.ttsBaseUrl) {
+  if (config.voiceURI === CUSTOM_VOICE && config.ttsBaseUrl) {
     try {
       if (await customSpeak(text, config)) return true;
     } catch {
-      // 失败落到下方默认链路
+      // 失败 → 回落免费云端男声（云希），再回落系统语音
+      if (await edgeSpeak(text, "zh-CN-YunxiNeural", config.rate, config.pitch)) return true;
     }
   }
 
