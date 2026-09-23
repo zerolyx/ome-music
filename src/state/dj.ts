@@ -8,10 +8,15 @@ import {
   djChat,
   djGetConfig,
   djGreeting,
+  djMemoryDelete,
+  djMemoryList,
   djSaveConfig,
+  profileHourPreferences,
   type DjAction,
   type DjConfigState,
+  type DjMemoryFact,
   type DjSaveConfigPayload,
+  type HourPreference,
 } from "../lib/api";
 import { results, search as neteaseSearch } from "./netease";
 import { playTracks, queue } from "./player";
@@ -26,12 +31,62 @@ export interface DjMsg {
 
 const MOOD_KEY = "ome.dj.mood";
 
+export type DjTab = "chat" | "memory" | "profile";
+
 export const drawerOpen = signal(false);
 export const messages: Signal<DjMsg[]> = signal([]);
 export const djConfig = signal<DjConfigState | null>(null);
 export const thinking = signal(false);
 export const ttsSpeaking = signal(false);
 export const lastError = signal<string | null>(null);
+export const djTab = signal<DjTab>("chat");
+/** null = 未加载；[] = 已加载但没有数据（demo 预置时保持预置值不被失败覆盖） */
+export const memoryFacts: Signal<DjMemoryFact[] | null> = signal(null);
+export const hourProfile: Signal<HourPreference[] | null> = signal(null);
+/** DJ 感知到的当前氛围（LLM mood 动作写入） */
+export const mood = signal<string | null>(readStoredMood());
+
+function readStoredMood(): string | null {
+  try {
+    return localStorage.getItem(MOOD_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function clearMood(): void {
+  mood.value = null;
+  try {
+    localStorage.removeItem(MOOD_KEY);
+  } catch {
+    /* 存储不可用时忽略 */
+  }
+}
+
+export async function loadMemoryFacts(): Promise<void> {
+  try {
+    memoryFacts.value = await djMemoryList();
+  } catch {
+    if (memoryFacts.value === null) memoryFacts.value = [];
+  }
+}
+
+export async function forgetFact(id: string): Promise<void> {
+  try {
+    await djMemoryDelete(id);
+    memoryFacts.value = (memoryFacts.value ?? []).filter((fact) => fact.id !== id);
+  } catch {
+    lastError.value = "删除记忆失败";
+  }
+}
+
+export async function loadHourProfile(): Promise<void> {
+  try {
+    hourProfile.value = await profileHourPreferences();
+  } catch {
+    if (hourProfile.value === null) hourProfile.value = [];
+  }
+}
 
 let msgSeq = 0;
 const nextMsgId = () => ++msgSeq;
@@ -149,6 +204,7 @@ async function executeActions(actions: DjAction[]): Promise<void> {
         break;
       case "mood":
         if (action.mood) {
+          mood.value = action.mood;
           try {
             localStorage.setItem(MOOD_KEY, action.mood);
           } catch {
