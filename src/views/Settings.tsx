@@ -7,6 +7,7 @@ import { setThemeChoice, themeChoice, type ThemeChoice } from "../state/theme";
 import { djConfig, lastError, loadConfig, saveConfig } from "../state/dj";
 import { radioEnabled, setRadioEnabled } from "../state/radio";
 import { danmakuEnabled, setDanmakuEnabled } from "../state/danmaku";
+import { accentMode, setAccentMode } from "../state/tint";
 import {
   cancelQrLogin,
   logout,
@@ -30,22 +31,25 @@ const QR_PHASE_TEXT: Record<string, string> = {
   expired: "二维码已过期",
 };
 
-/** 可折叠分区：标题行点击收起/展开 */
+/** 可折叠分区：标题行点击收起/展开（受控：侧栏导航也能展开并定位） */
 function Card({
   title,
-  defaultOpen = true,
+  id,
+  open,
+  onToggle,
   children,
 }: {
   title: string;
-  defaultOpen?: boolean;
+  id: string;
+  open: boolean;
+  onToggle: () => void;
   children: ComponentChildren;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div class="settings-card">
+    <div class="settings-card" id={`settings-${id}`}>
       <button
         class="settings-head"
-        onClick={() => setOpen(!open)}
+        onClick={onToggle}
         aria-expanded={open}
         aria-label={`${open ? "收起" : "展开"}${title}`}
       >
@@ -208,8 +212,25 @@ function NetEaseBody() {
   );
 }
 
+const SECTIONS = [
+  { id: "source", label: "音乐源" },
+  { id: "dj", label: "DJ 电台与语音" },
+  { id: "appearance", label: "外观" },
+  { id: "about", label: "关于" },
+] as const;
+
+type SectionId = (typeof SECTIONS)[number]["id"];
+
 export function SettingsView() {
   const [version, setVersion] = useState<string>("…");
+  // 受控折叠：默认音乐源与外观展开（使用频率最高）
+  const [openMap, setOpenMap] = useState<Record<SectionId, boolean>>({
+    source: true,
+    dj: false,
+    appearance: true,
+    about: false,
+  });
+  const [activeSection, setActiveSection] = useState<SectionId>("source");
 
   useEffect(() => {
     if (isTauriRuntime()) {
@@ -221,59 +242,112 @@ export function SettingsView() {
     return () => cancelQrLogin();
   }, []);
 
+  const toggleSection = (id: SectionId) => {
+    setOpenMap((map) => ({ ...map, [id]: !map[id] }));
+  };
+
+  /** 侧栏导航：展开对应分组并平滑定位（Kimi 设置页信息架构） */
+  const navigateTo = (id: SectionId) => {
+    setActiveSection(id);
+    setOpenMap((map) => ({ ...map, [id]: true }));
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`settings-${id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   return (
     <section class="view view-settings">
       <h1 class="view-title">设置</h1>
-
-      <Card title="音乐源 · 网易云">
-        <NetEaseBody />
-      </Card>
-
-      <Card title="DJ 电台与语音" defaultOpen={false}>
-        <DjConfigBody />
-      </Card>
-
-      <Card title="外观">
-        <div class="segmented" role="radiogroup" aria-label="主题">
-          {CHOICES.map((choice) => (
+      <div class="settings-layout">
+        <nav class="settings-nav" aria-label="设置分组">
+          {SECTIONS.map((section) => (
             <button
-              key={choice.value}
-              role="radio"
-              aria-checked={themeChoice.value === choice.value}
-              class={`segment ${themeChoice.value === choice.value ? "is-active" : ""}`}
-              onClick={() => setThemeChoice(choice.value)}
+              key={section.id}
+              class="settings-nav-item"
+              data-active={activeSection === section.id}
+              onClick={() => navigateTo(section.id)}
             >
-              {choice.label}
+              {section.label}
             </button>
           ))}
-        </div>
-        <div class="dj-radio-row settings-danmaku-row">
-          <span class="dj-radio-label">弹幕氛围</span>
-          <div class="segmented" role="radiogroup" aria-label="弹幕氛围">
-            <button
-              role="radio"
-              aria-checked={danmakuEnabled.value}
-              class={`segment ${danmakuEnabled.value ? "is-active" : ""}`}
-              onClick={() => setDanmakuEnabled(true)}
-            >
-              开
-            </button>
-            <button
-              role="radio"
-              aria-checked={!danmakuEnabled.value}
-              class={`segment ${!danmakuEnabled.value ? "is-active" : ""}`}
-              onClick={() => setDanmakuEnabled(false)}
-            >
-              关
-            </button>
-          </div>
-        </div>
-        <p class="view-hint">播放 B站视频时在首页漂浮同屏弹幕，纯氛围装饰。</p>
-      </Card>
+        </nav>
 
-      <Card title="关于" defaultOpen={false}>
-        <p class="view-hint">Ome Music v{version} · 本地优先的私人音乐电台</p>
-      </Card>
+        <div class="settings-cards">
+          <Card title="音乐源 · 网易云" id="source" open={openMap.source} onToggle={() => toggleSection("source")}>
+            <NetEaseBody />
+          </Card>
+
+          <Card title="DJ 电台与语音" id="dj" open={openMap.dj} onToggle={() => toggleSection("dj")}>
+            <DjConfigBody />
+          </Card>
+
+          <Card title="外观" id="appearance" open={openMap.appearance} onToggle={() => toggleSection("appearance")}>
+            <div class="segmented" role="radiogroup" aria-label="主题">
+              {CHOICES.map((choice) => (
+                <button
+                  key={choice.value}
+                  role="radio"
+                  aria-checked={themeChoice.value === choice.value}
+                  class={`segment ${themeChoice.value === choice.value ? "is-active" : ""}`}
+                  onClick={() => setThemeChoice(choice.value)}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
+            <div class="dj-radio-row settings-danmaku-row">
+              <span class="dj-radio-label">强调色</span>
+              <div class="segmented" role="radiogroup" aria-label="强调色">
+                <button
+                  role="radio"
+                  aria-checked={accentMode.value === "cover"}
+                  class={`segment ${accentMode.value === "cover" ? "is-active" : ""}`}
+                  onClick={() => setAccentMode("cover")}
+                >
+                  唱片取色
+                </button>
+                <button
+                  role="radio"
+                  aria-checked={accentMode.value === "fixed"}
+                  class={`segment ${accentMode.value === "fixed" ? "is-active" : ""}`}
+                  onClick={() => setAccentMode("fixed")}
+                >
+                  固定主题
+                </button>
+              </div>
+            </div>
+            <p class="view-hint">唱片取色：按钮、歌词辉光等强调色随当前封面主色变化（Folia 式 AI 主题的轻量替代）。</p>
+            <div class="dj-radio-row settings-danmaku-row">
+              <span class="dj-radio-label">弹幕氛围</span>
+              <div class="segmented" role="radiogroup" aria-label="弹幕氛围">
+                <button
+                  role="radio"
+                  aria-checked={danmakuEnabled.value}
+                  class={`segment ${danmakuEnabled.value ? "is-active" : ""}`}
+                  onClick={() => setDanmakuEnabled(true)}
+                >
+                  开
+                </button>
+                <button
+                  role="radio"
+                  aria-checked={!danmakuEnabled.value}
+                  class={`segment ${!danmakuEnabled.value ? "is-active" : ""}`}
+                  onClick={() => setDanmakuEnabled(false)}
+                >
+                  关
+                </button>
+              </div>
+            </div>
+            <p class="view-hint">播放 B站视频时在首页漂浮同屏弹幕，纯氛围装饰。</p>
+          </Card>
+
+          <Card title="关于" id="about" open={openMap.about} onToggle={() => toggleSection("about")}>
+            <p class="view-hint">Ome Music v{version} · 本地优先的私人音乐电台</p>
+          </Card>
+        </div>
+      </div>
     </section>
   );
 }

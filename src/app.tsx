@@ -15,6 +15,8 @@ import { LibraryView } from "./views/Library";
 import { SettingsView } from "./views/Settings";
 import { PlayerBar } from "./components/PlayerBar";
 import { QueueDrawer } from "./components/QueueDrawer";
+import { PlaylistPicker } from "./components/PlaylistPicker";
+import { CommandPalette } from "./components/CommandPalette";
 
 export function App() {
   useEffect(() => initChromeAutoHide(), []);
@@ -58,6 +60,8 @@ export function App() {
       <PlayerBar />
       <QueueDrawer />
       <DjDrawer />
+      <PlaylistPicker />
+      <CommandPalette />
     </div>
   );
 }

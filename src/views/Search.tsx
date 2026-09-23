@@ -14,7 +14,8 @@ import {
   searching as biliSearching,
   searchBilibili,
 } from "../state/bilibili";
-import { currentIndex, playTracks } from "../state/player";
+import { currentIndex, playTracks, insertNext, appendToQueue } from "../state/player";
+import { openAddToPlaylist } from "../state/playlists";
 import type { Track } from "../types/music";
 import { TrackList } from "../components/TrackList";
 import { Icon } from "../components/Icon";
@@ -50,7 +51,14 @@ export function SearchView() {
 
   return (
     <section class="view view-search">
-      <h1 class="view-title">搜索</h1>
+      <div class="view-head">
+        <div class="view-head-text">
+          <h1 class="view-title">搜索</h1>
+          {activeResults.length > 0 && (
+            <span class="view-count">找到 {activeResults.length} 个结果</span>
+          )}
+        </div>
+      </div>
       <div class="search-row">
         <input
           class="search-input"
@@ -92,6 +100,9 @@ export function SearchView() {
           currentIndex={currentIndex.value}
           onPlay={onPlay}
           onToggleLike={onToggleLike}
+          onPlayNext={insertNext}
+          onEnqueue={appendToQueue}
+          onAddToPlaylist={openAddToPlaylist}
         />
       ) : (
         activeSearched &&
