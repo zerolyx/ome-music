@@ -33,6 +33,7 @@ const PATHS = {
   playlist: "M4 5h16v14H4zM10.5 9.5l4.5 2.5-4.5 2.5z",
   lyrics: "M4 5h16M4 10h16M4 15h16M4 20h8",
   moon: "M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5z",
+  folder: "M3.5 6.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z",
 } as const;
 
 export function Icon({ name, size = 20 }: IconProps) {

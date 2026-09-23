@@ -20,17 +20,51 @@ import { openAddToPlaylist } from "../state/playlists";
 import { Icon } from "../components/Icon";
 import type { Track } from "../types/music";
 
-type LibraryMode = "list" | "grid" | "artists" | "history" | "playlists";
+type LibraryMode = "list" | "grid" | "artists" | "folders" | "history" | "playlists";
 const MODE_KEY = "ome.library.view";
 const LIKED_KEY = "ome.library.likedOnly";
 
-const MODES: Array<{ value: LibraryMode; label: string; icon: "list" | "grid" | "user" | "history" | "playlist" }> = [
+const MODES: Array<{
+  value: LibraryMode;
+  label: string;
+  icon: "list" | "grid" | "user" | "folder" | "history" | "playlist";
+}> = [
   { value: "list", label: "列表", icon: "list" },
   { value: "grid", label: "专辑墙", icon: "grid" },
   { value: "artists", label: "艺人", icon: "user" },
+  { value: "folders", label: "文件夹", icon: "folder" },
   { value: "playlists", label: "歌单", icon: "playlist" },
   { value: "history", label: "历史", icon: "history" },
 ];
+
+/** 曲目所在目录（统一分隔符后取最后一段之前的路径；无路径返回 null） */
+function dirOf(filePath: string): string | null {
+  const normalized = filePath.replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+  if (index <= 0) return null;
+  return normalized.slice(0, index);
+}
+
+interface FolderGroup {
+  dir: string;
+  tracks: Track[];
+}
+
+/** 按目录分组并排序（目录名升序） */
+function groupFolders(items: Track[]): FolderGroup[] {
+  const map = new Map<string, Track[]>();
+  for (const track of items) {
+    if (track.source !== "local") continue;
+    const dir = dirOf(track.filePath);
+    if (!dir) continue;
+    const bucket = map.get(dir);
+    if (bucket) bucket.push(track);
+    else map.set(dir, [track]);
+  }
+  return [...map.entries()]
+    .map(([dir, groupTracks]) => ({ dir, tracks: groupTracks }))
+    .sort((a, b) => a.dir.localeCompare(b.dir));
+}
 
 function loadMode(): LibraryMode {
   try {
@@ -53,6 +87,7 @@ export function LibraryView() {
   const [mode, setMode] = useState<LibraryMode>(loadMode);
   const [likedOnly, setLikedOnly] = useState<boolean>(loadLikedOnly);
   const [history, setHistory] = useState<Track[] | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
   useEffect(() => {
     if (isTauriRuntime()) void refreshTracks();
@@ -76,9 +111,15 @@ export function LibraryView() {
   );
   const albums = useMemo(() => groupAlbums(visible), [visible]);
   const artists = useMemo(() => groupArtists(visible), [visible]);
+  const folders = useMemo(() => groupFolders(visible), [visible]);
+  const folderTracks = useMemo(
+    () => (selectedFolder ? (folders.find((group) => group.dir === selectedFolder)?.tracks ?? []) : []),
+    [folders, selectedFolder]
+  );
 
   const switchMode = (next: LibraryMode) => {
     setMode(next);
+    setSelectedFolder(null);
     try {
       localStorage.setItem(MODE_KEY, next);
     } catch {
@@ -98,9 +139,25 @@ export function LibraryView() {
   };
 
   const count =
-    mode === "history" ? (history?.length ?? 0) : likedOnly ? visible.length : tracks.value.length;
+    mode === "history"
+      ? (history?.length ?? 0)
+      : mode === "folders"
+        ? selectedFolder
+          ? folderTracks.length
+          : folders.length
+        : likedOnly
+          ? visible.length
+          : tracks.value.length;
   const countLabel =
-    mode === "history" ? `最近 ${count} 首` : likedOnly ? `收藏 ${count} 首` : `共 ${count} 首`;
+    mode === "history"
+      ? `最近 ${count} 首`
+      : mode === "folders"
+        ? selectedFolder
+          ? `${count} 首`
+          : `${count} 个文件夹`
+        : likedOnly
+          ? `收藏 ${count} 首`
+          : `共 ${count} 首`;
 
   return (
     <section class="view view-library">
@@ -165,6 +222,60 @@ export function LibraryView() {
             onEnqueue={appendToQueue}
             onAddToPlaylist={openAddToPlaylist}
           />
+        )
+      ) : mode === "folders" ? (
+        selectedFolder ? (
+          <>
+            <div class="folder-toolbar">
+              <button class="chip-toggle" onClick={() => setSelectedFolder(null)}>
+                <Icon name="chevron-down" size={14} />
+                返回文件夹
+              </button>
+              <span class="view-hint folder-path" title={selectedFolder}>
+                {selectedFolder}
+              </span>
+            </div>
+            {folderTracks.length === 0 ? (
+              <div class="library-empty">
+                <Icon name="folder" size={40} />
+                <p>这个文件夹没有可播放的曲目</p>
+              </div>
+            ) : (
+              <TrackList
+                tracks={folderTracks}
+                currentIndex={-1}
+                onPlay={(index) => playTracks(folderTracks, index)}
+                onToggleLike={(track) => void toggleLiked(track)}
+                onPlayNext={insertNext}
+                onEnqueue={appendToQueue}
+                onAddToPlaylist={openAddToPlaylist}
+              />
+            )}
+          </>
+        ) : folders.length === 0 ? (
+          <div class="library-empty">
+            <Icon name="folder" size={40} />
+            <p>没有本地文件夹</p>
+            <p class="view-hint">导入音乐文件夹后，可按磁盘上的目录浏览</p>
+          </div>
+        ) : (
+          <div class="folder-list">
+            {folders.map((group) => {
+              const name = group.dir.replace(/\\/g, "/").split("/").pop() ?? group.dir;
+              return (
+                <button
+                  key={group.dir}
+                  class="folder-row"
+                  title={group.dir}
+                  onClick={() => setSelectedFolder(group.dir)}
+                >
+                  <Icon name="folder" size={20} />
+                  <span class="folder-row-name">{name}</span>
+                  <span class="folder-row-count">{group.tracks.length} 首</span>
+                </button>
+              );
+            })}
+          </div>
         )
       ) : tracks.value.length === 0 ? (
         <div class="library-empty">
