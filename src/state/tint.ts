@@ -2,7 +2,8 @@ import { signal } from "@preact/signals";
 
 /**
  * 唱片取色：从当前封面提取主色，把 --accent / --accent-soft 覆盖到 <html>，
- * 全站强调色（按钮、歌词辉光、导航选中、红心…）随之跟随唱片气质。
+ * 全站强调色（按钮、歌词辉光、导航选中、红心…）随之跟随唱片气质；
+ * 同时写入 --ambient-a / --ambient-b 两团氛围光（Folia 式沉浸背景）。
  * 任何一步失败都静默回退到主题默认色，绝不影响使用。
  */
 export type AccentMode = "cover" | "fixed";
@@ -40,10 +41,10 @@ export async function applyCoverAccent(url: string | null): Promise<void> {
     return;
   }
   try {
-    const rgb = await extractDominant(url);
+    const colors = await extractPalette(url);
     // 等待取色期间封面又换了：丢弃过期结果
-    if (!rgb || lastCover !== url) return;
-    setAccentVars(rgb);
+    if (!colors || lastCover !== url) return;
+    setAccentVars(colors);
   } catch {
     if (lastCover === url) resetAccent();
   }
@@ -53,10 +54,13 @@ function resetAccent(): void {
   const style = document.documentElement.style;
   style.removeProperty("--accent");
   style.removeProperty("--accent-soft");
+  style.removeProperty("--ambient-a");
+  style.removeProperty("--ambient-b");
 }
 
 /** 提亮/压暗到适合做文字与控件的亮度区间，保证双主题下对比度 */
-function setAccentVars([r, g, b]: [number, number, number]): void {
+function setAccentVars({ accent, ambient }: CoverPalette): void {
+  const [r, g, b] = accent;
   const [h, s, l] = rgbToHsl(r, g, b);
   const targetL = Math.min(0.58, Math.max(0.42, l));
   const targetS = Math.max(0.3, s);
@@ -64,10 +68,23 @@ function setAccentVars([r, g, b]: [number, number, number]): void {
   const style = document.documentElement.style;
   style.setProperty("--accent", `rgb(${rr} ${gg} ${bb})`);
   style.setProperty("--accent-soft", `rgba(${rr}, ${gg}, ${bb}, 0.16)`);
+  // 氛围光：主色亮团 + 全图均值冷团，饱和度压低避免荧光感
+  const [ar, ag, ab] = ambient;
+  const [ah, as] = rgbToHsl(ar, ag, ab);
+  const [ca, cb2, cc] = hslToRgb(ah, as * 0.7, 0.5);
+  style.setProperty("--ambient-a", `rgba(${rr}, ${gg}, ${bb}, 0.5)`);
+  style.setProperty("--ambient-b", `rgba(${ca}, ${cb2}, ${cc}, 0.32)`);
 }
 
-/** 缩样 32px 后对高饱和像素取均值；全图平均做兜底 */
-async function extractDominant(url: string): Promise<[number, number, number] | null> {
+interface CoverPalette {
+  /** 强调色：高饱和像素均值（兜底全图均值） */
+  accent: [number, number, number];
+  /** 氛围底色：全图平均 */
+  ambient: [number, number, number];
+}
+
+/** 缩样 32px：高饱和像素均值作强调色，全图平均作氛围底色 */
+async function extractPalette(url: string): Promise<CoverPalette | null> {
   const image = await loadImage(url);
   if (!image) return null;
   const size = 32;
@@ -104,9 +121,12 @@ async function extractDominant(url: string): Promise<[number, number, number] | 
       sn += 1;
     }
   }
-  if (sn >= 8) return [sr / sn, sg / sn, sb / sn].map(Math.round) as [number, number, number];
-  if (an >= 1) return [ar / an, ag / an, ab / an].map(Math.round) as [number, number, number];
-  return null;
+  if (an < 1) return null;
+  const ambient = [ar / an, ag / an, ab / an].map(Math.round) as [number, number, number];
+  const accent = sn >= 8
+    ? ([sr / sn, sg / sn, sb / sn].map(Math.round) as [number, number, number])
+    : ambient;
+  return { accent, ambient };
 }
 
 /** 加载图片：优先 <img crossOrigin>（data: 与带 CORS 的代理封面都干净），失败返回 null */

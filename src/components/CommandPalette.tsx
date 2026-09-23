@@ -21,7 +21,7 @@ import {
   togglePlayback,
 } from "../state/player";
 import { openPlaylist, playlists } from "../state/playlists";
-import { setThemeChoice } from "../state/theme";
+import { setThemeChoice, THEME_PRESETS } from "../state/theme";
 import { cancelSleepTimer, setSleepAtTrackEnd, setSleepTimer } from "../state/sleeptimer";
 import { Icon } from "./Icon";
 
@@ -71,9 +71,13 @@ function buildCommands(): Command[] {
     { id: "sleep.track", title: "睡眠定时 · 播完当前停止", group: "睡眠", run: () => setSleepAtTrackEnd() },
     { id: "sleep.cancel", title: "睡眠定时 · 取消", group: "睡眠", run: () => cancelSleepTimer() },
     // 外观
-    { id: "theme.light", title: "外观 · 亮色", group: "外观", run: () => setThemeChoice("light") },
-    { id: "theme.dark", title: "外观 · 暗色", group: "外观", run: () => setThemeChoice("dark") },
     { id: "theme.system", title: "外观 · 跟随系统", group: "外观", run: () => setThemeChoice("system") },
+    ...THEME_PRESETS.map((preset) => ({
+      id: `theme.${preset.id}`,
+      title: `外观 · ${preset.label}`,
+      group: "外观" as const,
+      run: () => setThemeChoice(preset.id),
+    })),
   ];
   // 歌单：一键播放
   for (const playlist of playlists.value ?? []) {

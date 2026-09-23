@@ -3,7 +3,7 @@ import type { ComponentChildren } from "preact";
 import { TtsSettings } from "../components/TtsSettings";
 import { Icon } from "../components/Icon";
 import { getAppVersion, isTauriRuntime } from "../lib/api";
-import { setThemeChoice, themeChoice, type ThemeChoice } from "../state/theme";
+import { setThemeChoice, THEME_PRESETS, themeChoice, type ThemeChoice } from "../state/theme";
 import { djConfig, lastError, loadConfig, saveConfig } from "../state/dj";
 import { radioEnabled, setRadioEnabled } from "../state/radio";
 import { danmakuEnabled, setDanmakuEnabled } from "../state/danmaku";
@@ -19,8 +19,7 @@ import {
 
 const CHOICES: Array<{ value: ThemeChoice; label: string }> = [
   { value: "system", label: "跟随系统" },
-  { value: "light", label: "浅色" },
-  { value: "dark", label: "深色" },
+  ...THEME_PRESETS.map((preset) => ({ value: preset.id as ThemeChoice, label: preset.label })),
 ];
 
 const QR_PHASE_TEXT: Record<string, string> = {

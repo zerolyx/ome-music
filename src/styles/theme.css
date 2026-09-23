@@ -47,6 +47,112 @@ html {
   --glow-opacity: 1;
 }
 
+/* ---- Folia Theme Park 式手工预设 ---- */
+
+/* 月夜：蓝紫深夜，冷光 */
+[data-theme="noir"] {
+  --bg: #0b0e17;
+  --bg-elev: #141928;
+  --bg-veil: rgba(11, 14, 23, 0.62);
+  --text: #e8eaf2;
+  --text-dim: #828ba3;
+  --accent: #8ea2ff;
+  --accent-soft: rgba(142, 162, 255, 0.16);
+  --border: rgba(232, 234, 242, 0.08);
+  --shadow: 0 8px 32px rgba(2, 4, 12, 0.55);
+  --glow-opacity: 1;
+}
+
+/* 茜影：暗玫瑰，暖光 */
+[data-theme="ember"] {
+  --bg: #140d10;
+  --bg-elev: #1f1419;
+  --bg-veil: rgba(20, 13, 16, 0.62);
+  --text: #f2e9ec;
+  --text-dim: #a08a92;
+  --accent: #fb7c9a;
+  --accent-soft: rgba(251, 124, 154, 0.15);
+  --border: rgba(242, 233, 236, 0.08);
+  --shadow: 0 8px 32px rgba(12, 4, 8, 0.55);
+  --glow-opacity: 1;
+}
+
+/* 青川：暗青绿，清透 */
+[data-theme="jade"] {
+  --bg: #0a110f;
+  --bg-elev: #122019;
+  --bg-veil: rgba(10, 17, 15, 0.62);
+  --text: #e7f0ea;
+  --text-dim: #8aa294;
+  --accent: #5fd3a5;
+  --accent-soft: rgba(95, 211, 165, 0.14);
+  --border: rgba(231, 240, 234, 0.08);
+  --shadow: 0 8px 32px rgba(3, 10, 7, 0.55);
+  --glow-opacity: 1;
+}
+
+/* 纸墨：暖白 daylight，墨色文字 */
+[data-theme="paper"] {
+  --bg: #f4f1e8;
+  --bg-elev: #fffdf6;
+  --bg-veil: rgba(244, 241, 232, 0.74);
+  --text: #24211c;
+  --text-dim: #79736a;
+  --accent: #4a7d6c;
+  --accent-soft: rgba(74, 125, 108, 0.12);
+  --border: rgba(36, 33, 28, 0.09);
+  --shadow: 0 8px 32px rgba(36, 33, 28, 0.09);
+  --glow-opacity: 0;
+}
+
+/* ---- 封面氛围光（tint.ts 写入 --ambient-a/b；无封面时透明） ---- */
+@property --ambient-a {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(0, 0, 0, 0);
+}
+@property --ambient-b {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(0, 0, 0, 0);
+}
+:root {
+  --ambient-a: rgba(0, 0, 0, 0);
+  --ambient-b: rgba(0, 0, 0, 0);
+  --ambient-opacity: 0;
+}
+html {
+  transition:
+    --accent 0.7s ease,
+    --accent-soft 0.7s ease,
+    --ambient-a 1.2s ease,
+    --ambient-b 1.2s ease;
+}
+[data-theme="dark"],
+[data-theme="noir"],
+[data-theme="ember"],
+[data-theme="jade"] {
+  --ambient-opacity: 1;
+}
+[data-theme="light"],
+[data-theme="paper"] {
+  --ambient-opacity: 0.35;
+}
+
+/* 各预设暗角 */
+[data-theme="noir"] {
+  --vignette: 0.5;
+}
+[data-theme="ember"] {
+  --vignette: 0.5;
+}
+[data-theme="jade"] {
+  --vignette: 0.42;
+}
+[data-theme="paper"] {
+  --vignette: 0.14;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body, #app { height: 100%; }

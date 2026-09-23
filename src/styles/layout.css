@@ -1,3 +1,23 @@
+/* ============ 封面氛围光（Folia 式沉浸式背景，tint.ts 驱动） ============ */
+/* 固定在最底层：两团从封面取色的柔光，全站内容浮于其上 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -12%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 34% at 16% 10%, var(--ambient-a), transparent 72%),
+    radial-gradient(36% 30% at 86% 82%, var(--ambient-b), transparent 72%);
+  filter: blur(48px) saturate(1.15);
+  opacity: var(--ambient-opacity);
+  transition: opacity 1.2s ease;
+}
+#app {
+  position: relative;
+  z-index: 1;
+}
+
 .app-shell {
   display: flex;
   flex-direction: column;
