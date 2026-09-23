@@ -10,6 +10,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use tauri::http::{header::CONTENT_RANGE, StatusCode};
+use tauri::Manager;
 
 use crate::bilibili::{BILIBILI_BROWSER_UA, BILIBILI_REFERER};
 
@@ -198,7 +199,45 @@ fn query_param(query: &str, key: &str) -> Option<String> {
     None
 }
 
+/// 封面缓存自愈：covers 目录里的文件被系统清理后，按文件名（= 曲目 id）
+/// 找回源音频并重提取封面写回原路径（DB 里的绝对路径因此始终有效）。
+fn regenerate_cover(app: &tauri::AppHandle, missing: &std::path::Path) -> bool {
+    let Some(name) = missing.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    let Some(stem) = name.split('.').next() else {
+        return false;
+    };
+    let Ok(data_dir) = app.path().app_data_dir() else {
+        return false;
+    };
+    let Ok(conn) = crate::db::open_db(&data_dir.join("ome-music.db")) else {
+        return false;
+    };
+    let Some(covers_dir) = missing.parent().map(std::path::Path::to_path_buf) else {
+        return false;
+    };
+    crate::library::reextract_cover_by_id(&conn, &covers_dir, stem).is_some()
+}
+
+/// 测试入口：不带 AppHandle，不触发自愈
+#[cfg(test)]
 pub fn handle(request: tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+    handle_impl(request, None)
+}
+
+/// 运行时入口：带 AppHandle，封面 404 时触发自愈重提取
+pub fn handle_with_app(
+    app: &tauri::AppHandle,
+    request: tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
+    handle_impl(request, Some(app))
+}
+
+fn handle_impl(
+    request: tauri::http::Request<Vec<u8>>,
+    app: Option<&tauri::AppHandle>,
+) -> tauri::http::Response<Vec<u8>> {
     let handled = (|| -> Result<tauri::http::Response<Vec<u8>>, StatusCode> {
         let uri = request.uri();
         let path = uri.path();
@@ -221,7 +260,26 @@ pub fn handle(request: tauri::http::Request<Vec<u8>>) -> tauri::http::Response<V
             .get("range")
             .and_then(|value| value.to_str().ok())
             .map(|value| value.to_string());
-        serve_file(PathBuf::from(path), range)
+        let target = std::path::PathBuf::from(&path);
+        match serve_file(target.clone(), range.clone()) {
+            Err(StatusCode::NOT_FOUND) => {
+                // 封面缓存被清理（covers 在 app_cache，可能被系统管家删除）：就地再生一次
+                let in_covers = target
+                    .parent()
+                    .and_then(|dir| dir.file_name())
+                    .map(|name| name == "covers")
+                    .unwrap_or(false);
+                if in_covers {
+                    if let Some(app) = app {
+                        if regenerate_cover(app, &target) {
+                            return serve_file(target, range);
+                        }
+                    }
+                }
+                Err(StatusCode::NOT_FOUND)
+            }
+            other => other,
+        }
     })();
 
     match handled {

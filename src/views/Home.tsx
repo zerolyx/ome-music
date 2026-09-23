@@ -1,4 +1,4 @@
-import { useEffect } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { Icon } from "../components/Icon";
 import { HomeLyrics } from "../components/HomeWidgets";
 import { WelcomeCard } from "../components/WelcomeCard";
@@ -88,6 +88,11 @@ export function HomeView() {
   const demoTrack = demo ? DEMO_TRACK : null;
   const track = demo ? demoTrack : currentTrack.value;
   const cover = track?.coverPath ? coverUrl(track.coverPath) : "";
+  const [coverBroken, setCoverBroken] = useState(false);
+
+  // 换封面时重置加载失败标记
+  useEffect(() => setCoverBroken(false), [cover]);
+  const showCover = !!cover && !coverBroken;
 
   useEffect(() => {
     void applyCoverAccent(cover || null); // 唱片取色：强调色跟随封面（demo 分支 return 之前）
@@ -135,7 +140,7 @@ export function HomeView() {
   return (
     <section class={`view view-home ${track ? "is-cinema" : ""}`}>
       {/* 氛围背景：当前封面高斯模糊铺满全窗（fixed 脱离滚动区） */}
-      {cover && (
+      {showCover && (
         <div
           key={cover}
           class="home-backdrop"
@@ -151,8 +156,14 @@ export function HomeView() {
         /* 宽屏：左盘右词（Folia pendolo 式）；窄屏：居中堆叠（CSS 断点） */
         <div class="home-stage">
           <div class="home-art-col">
-            {cover ? (
-              <img class="home-art" key={cover} src={cover} alt="" />
+            {showCover ? (
+              <img
+                class="home-art"
+                key={cover}
+                src={cover}
+                alt=""
+                onError={() => setCoverBroken(true)}
+              />
             ) : (
               <div class="home-disc" aria-hidden="true">
                 <div class="home-disc-face">

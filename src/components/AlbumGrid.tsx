@@ -41,7 +41,14 @@ export function AlbumGrid({ albums }: { albums: AlbumGroup[] }) {
             >
               <span class="album-cover">
                 {cover ? (
-                  <img src={coverUrl(cover)} alt="" loading="lazy" />
+                  <img
+                    src={coverUrl(cover)}
+                    alt=""
+                    loading="lazy"
+                    onError={(event) => {
+                      (event.target as HTMLImageElement).style.visibility = "hidden";
+                    }}
+                  />
                 ) : (
                   <span class="album-cover-empty">
                     <Icon name="music-note" size={26} />

@@ -3,7 +3,7 @@ use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::tag::Accessor;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, State};
 use walkdir::WalkDir;
 
@@ -306,12 +306,7 @@ pub async fn import_music_folder(
     Ok(result)
 }
 
-fn extract_cover(
-    _conn: &Connection,
-    covers_dir: &Path,
-    path: &Path,
-    track: &NewTrack,
-) -> Result<Option<String>, String> {
+fn write_cover(covers_dir: &Path, track_id: &str, path: &Path) -> Result<Option<PathBuf>, String> {
     let tagged = match lofty::read_from_path(path) {
         Ok(tagged) => tagged,
         Err(_) => return Ok(None),
@@ -328,15 +323,42 @@ fn extract_cover(
         Some(lofty::picture::MimeType::Png) => "png",
         _ => "jpg",
     };
-    let cover_path = covers_dir.join(format!(
-        "{}.{}",
-        track_id_for_path(&track.file_path),
-        extension
-    ));
+    let cover_path = covers_dir.join(format!("{track_id}.{extension}"));
     if !cover_path.exists() {
         std::fs::write(&cover_path, picture.data()).map_err(|error| error.to_string())?;
     }
-    Ok(Some(cover_path.to_string_lossy().to_string()))
+    Ok(Some(cover_path))
+}
+
+fn extract_cover(
+    _conn: &Connection,
+    covers_dir: &Path,
+    path: &Path,
+    track: &NewTrack,
+) -> Result<Option<String>, String> {
+    Ok(
+        write_cover(covers_dir, &track_id_for_path(&track.file_path), path)?
+            .map(|path| path.to_string_lossy().to_string()),
+    )
+}
+
+/// 封面缓存自愈：按曲目 id 找到源音频并重提取封面到 covers_dir（媒体协议 404 时调用）。
+/// 封面存在 app_cache（可能被系统清理），DB 里的绝对路径会悬空，此函数就地再生。
+pub fn reextract_cover_by_id(
+    conn: &Connection,
+    covers_dir: &Path,
+    track_id: &str,
+) -> Option<PathBuf> {
+    let src: String = conn
+        .query_row(
+            "SELECT file_path FROM tracks WHERE id = ?1 AND source = 'local'",
+            params![track_id],
+            |row| row.get(0),
+        )
+        .ok()?;
+    write_cover(covers_dir, track_id, Path::new(&src))
+        .ok()
+        .flatten()
 }
 
 #[tauri::command]

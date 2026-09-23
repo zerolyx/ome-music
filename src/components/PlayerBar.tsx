@@ -119,7 +119,14 @@ export function PlayerBar() {
         {track ? (
           <>
             {track.coverPath ? (
-              <img class="player-cover" src={coverUrl(track.coverPath)} alt="" />
+              <img
+                class="player-cover"
+                src={coverUrl(track.coverPath)}
+                alt=""
+                onError={(event) => {
+                  (event.target as HTMLImageElement).style.visibility = "hidden";
+                }}
+              />
             ) : (
               <div class="player-cover player-cover-empty">
                 <Icon name="music-note" size={18} />
