@@ -1,3 +1,4 @@
+mod bilibili;
 mod db;
 mod dj;
 mod library;
@@ -66,6 +67,9 @@ pub fn run() {
             netease::api::netease_stream_url,
             netease::api::netease_lyric,
             netease::api::netease_like,
+            bilibili::bilibili_search,
+            bilibili::bilibili_stream_url,
+            bilibili::bilibili_danmaku,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ome music");
