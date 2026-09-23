@@ -2572,3 +2572,66 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   .view { animation: none; }
 }
+
+/* ============ 迷你播放器（ECHO mini-player） ============ */
+.mini-player {
+  position: fixed;
+  right: 20px;
+  bottom: 88px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  background: color-mix(in srgb, var(--bg-elev) 88%, transparent);
+  backdrop-filter: blur(18px) saturate(1.1);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.3);
+  animation: view-in 0.3s var(--ease-signature) both;
+}
+.mini-cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--accent-soft);
+}
+.mini-meta {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  max-width: 180px;
+  cursor: pointer;
+}
+.mini-title {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-artist {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s var(--ease-signature),
+    scale 0.15s var(--ease-signature);
+}
+.mini-btn:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.mini-btn:active { scale: 0.92; }

@@ -8,6 +8,7 @@ import { startRadioIfIdle } from "./state/radio";
 import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
 import { ImmersiveCursor } from "./components/ImmersiveCursor";
+import { MiniPlayer } from "./components/MiniPlayer";
 import { DjDrawer } from "./components/DjDrawer";
 import { HomeView } from "./views/Home";
 import { SearchView } from "./views/Search";
@@ -66,6 +67,7 @@ export function App() {
       <DjDrawer />
       <PlaylistPicker />
       <CommandPalette />
+      <MiniPlayer />
       {stageOpen.value && <StageView />}
       {vizOpen.value && <VisualizerView />}
     </div>
