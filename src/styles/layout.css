@@ -609,7 +609,10 @@ body::before {
 [data-theme="light"] {
   --vignette: 0.12;
 }
-[data-theme="dark"] {
+[data-theme="dark"],
+[data-theme="noir"],
+[data-theme="ember"],
+[data-theme="jade"] {
   --vignette: 0.45;
 }
 
@@ -1208,7 +1211,10 @@ body::before {
   --backdrop-brightness: 1.06;
   --backdrop-opacity: 0.42;
 }
-[data-theme="dark"] {
+[data-theme="dark"],
+[data-theme="noir"],
+[data-theme="ember"],
+[data-theme="jade"] {
   --backdrop-brightness: 0.5;
   --backdrop-opacity: 0.55;
 }

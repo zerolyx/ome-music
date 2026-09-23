@@ -6,7 +6,10 @@
   --cursor-strong: #1a1817;
 }
 
-[data-theme="dark"] {
+[data-theme="dark"],
+[data-theme="noir"],
+[data-theme="ember"],
+[data-theme="jade"] {
   --cursor: rgba(236, 234, 231, 0.6);
   --cursor-strong: #ffffff;
 }
