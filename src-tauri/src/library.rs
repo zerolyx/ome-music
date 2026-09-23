@@ -77,7 +77,14 @@ pub fn insert_track(conn: &Connection, track: &NewTrack) -> Result<(), rusqlite:
     Ok(())
 }
 
-fn row_to_track(row: &rusqlite::Row<'_>) -> Result<TrackDto, rusqlite::Error> {
+/// 曲目行查询共用 SELECT（列序与 row_to_track 对应）；调用方拼自己的 FROM 后续
+pub(crate) const TRACK_SELECT: &str = "SELECT t.id, t.title, ar.name AS artist, a.title AS album, t.duration_seconds, t.file_path,
+                t.source, t.source_id, t.unavailable_reason, t.cover_path, t.liked, t.play_count
+         FROM tracks t
+         LEFT JOIN artists ar ON t.artist_id = ar.id
+         LEFT JOIN albums a ON t.album_id = a.id";
+
+pub(crate) fn row_to_track(row: &rusqlite::Row<'_>) -> Result<TrackDto, rusqlite::Error> {
     Ok(TrackDto {
         id: row.get("id")?,
         title: row.get("title")?,
@@ -96,12 +103,7 @@ fn row_to_track(row: &rusqlite::Row<'_>) -> Result<TrackDto, rusqlite::Error> {
 
 pub fn load_tracks(conn: &Connection) -> Result<Vec<TrackDto>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT t.id, t.title, ar.name AS artist, a.title AS album, t.duration_seconds, t.file_path,
-                t.source, t.source_id, t.unavailable_reason, t.cover_path, t.liked, t.play_count
-         FROM tracks t
-         LEFT JOIN artists ar ON t.artist_id = ar.id
-         LEFT JOIN albums a ON t.album_id = a.id
-         ORDER BY t.title COLLATE NOCASE",
+        &(TRACK_SELECT.to_string() + " ORDER BY t.title COLLATE NOCASE"),
     )?;
     let rows = stmt.query_map([], row_to_track)?;
     rows.collect()
@@ -113,6 +115,20 @@ pub fn set_track_liked(conn: &Connection, id: &str, liked: bool) -> Result<(), r
         params![id, liked as i64],
     )?;
     Ok(())
+}
+
+/// 最近播放历史：按曲目聚合播放事件，按最近一次播放倒序。
+pub fn playback_history(conn: &Connection, limit: i64) -> Result<Vec<TrackDto>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        &(TRACK_SELECT.to_string()
+            + " JOIN playback_events e ON t.id = e.track_id
+         WHERE e.event_type IN ('play', 'completed', 'replayed')
+         GROUP BY t.id
+         ORDER BY MAX(e.played_at) DESC
+         LIMIT ?1"),
+    )?;
+    let rows = stmt.query_map(params![limit], row_to_track)?;
+    rows.collect()
 }
 
 pub fn record_playback_event(
@@ -308,6 +324,60 @@ pub fn record_playback_event_command(
     record_playback_event(&conn, &track_id, &event_type, position_seconds)
 }
 
+#[tauri::command]
+pub fn playback_history_command(state: State<'_, AppState>, limit: Option<i64>) -> Result<Vec<TrackDto>, String> {
+    let conn = state.db.lock().map_err(|error| error.to_string())?;
+    let limit = limit.unwrap_or(50).clamp(1, 200);
+    playback_history(&conn, limit).map_err(|error| error.to_string())
+}
+
+/// 本地曲目的同目录 .lrc 歌词（原样字节，base64 编码）。
+///
+/// 编码探测交给前端 TextDecoder（utf-8 fatal → gbk 回退）：Windows 下歌词
+/// 大量是 GBK，Rust 侧不加编码依赖也能正确解码。
+#[tauri::command]
+pub fn local_lyric(state: State<'_, AppState>, id: String) -> Result<Option<String>, String> {
+    let conn = state.db.lock().map_err(|error| error.to_string())?;
+    let row: Option<(String, String)> = conn
+        .query_row(
+            "SELECT file_path, source FROM tracks WHERE id = ?1",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    let Some((file_path, source)) = row else {
+        return Err("曲目不存在".into());
+    };
+    if source != "local" {
+        return Ok(None);
+    }
+    read_sidecar_lrc(Path::new(&file_path))
+}
+
+/// 同目录查找 `<音频主名>.lrc`（兼容大写 .LRC），命中返回 base64 字节
+fn read_sidecar_lrc(audio_path: &Path) -> Result<Option<String>, String> {
+    let Some(found) = find_sidecar_lrc(audio_path) else {
+        return Ok(None);
+    };
+    let bytes = std::fs::read(&found).map_err(|error| error.to_string())?;
+    use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine as _;
+    Ok(Some(BASE64.encode(bytes)))
+}
+
+fn find_sidecar_lrc(audio_path: &Path) -> Option<std::path::PathBuf> {
+    let stem = audio_path.file_stem()?.to_string_lossy();
+    let dir = audio_path.parent()?;
+    for name in [format!("{stem}.lrc"), format!("{stem}.LRC")] {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,5 +431,83 @@ mod tests {
         let id = load_tracks(&conn).unwrap()[0].id.clone();
         assert!(record_playback_event(&conn, &id, "play", 0).is_ok());
         assert!(record_playback_event(&conn, &id, "explode", 0).is_err());
+    }
+
+    #[test]
+    fn playback_history_orders_by_latest_play() {
+        let conn = memory_db();
+        for (title, path) in [("先播", "p1"), ("后播", "p2")] {
+            insert_track(&conn, &NewTrack {
+                title: title.into(),
+                artist: "b".into(),
+                album: String::new(),
+                duration_seconds: 1,
+                file_path: path.into(),
+                cover_path: None,
+            })
+            .unwrap();
+        }
+        let first = load_tracks(&conn).unwrap()[0].id.clone();
+        let second = load_tracks(&conn).unwrap()[1].id.clone();
+        // played_at 秒级精度，直接注入显式时间戳保证顺序确定
+        for (track, at) in [(&first, "2026-09-23 10:00:00"), (&second, "2026-09-23 11:00:00")] {
+            conn.execute(
+                "INSERT INTO playback_events (id, track_id, event_type, position_seconds, played_at)
+                 VALUES (?1, ?2, 'play', 0, ?3)",
+                params![format!("evt-{track}-{at}"), track, at],
+            )
+            .unwrap();
+        }
+        let history = playback_history(&conn, 50).unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].id, second);
+        assert_eq!(history[1].id, first);
+    }
+
+    // ---------- 同目录 .lrc ----------
+
+    /// 临时目录造一个音频 + 歌词文件，返回音频路径
+    fn make_sidecar_pair(lrc_name: &str, lrc_bytes: &[u8]) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("ome-lrc-test-{:x}", md5::compute(format!("{lrc_name:?}{lrc_bytes:?}"))));
+        std::fs::create_dir_all(&dir).unwrap();
+        let audio = dir.join("夜曲.flac");
+        std::fs::write(&audio, b"fake-audio").unwrap();
+        std::fs::write(dir.join(lrc_name), lrc_bytes).unwrap();
+        audio
+    }
+
+    #[test]
+    fn sidecar_lrc_found_same_dir_and_base64_roundtrip() {
+        let audio = make_sidecar_pair("夜曲.lrc", "[00:01.00]你好".as_bytes());
+        let encoded = read_sidecar_lrc(&audio).unwrap().expect("应命中同目录 .lrc");
+        use base64::engine::general_purpose::STANDARD as BASE64;
+        use base64::Engine as _;
+        let bytes = BASE64.decode(encoded).unwrap();
+        assert_eq!(bytes, "[00:01.00]你好".as_bytes());
+    }
+
+    #[test]
+    fn sidecar_lrc_supports_uppercase_extension() {
+        let audio = make_sidecar_pair("夜曲.LRC", b"[00:01.00]hi");
+        assert!(read_sidecar_lrc(&audio).unwrap().is_some());
+    }
+
+    #[test]
+    fn sidecar_lrc_returns_none_when_missing() {
+        let dir = std::env::temp_dir().join("ome-lrc-test-missing");
+        std::fs::create_dir_all(&dir).unwrap();
+        let audio = dir.join("无歌词.flac");
+        std::fs::write(&audio, b"fake-audio").unwrap();
+        assert!(read_sidecar_lrc(&audio).unwrap().is_none());
+    }
+
+    #[test]
+    fn sidecar_lrc_requires_real_file() {
+        // 同名目录而不是文件：不应命中
+        let dir = std::env::temp_dir().join("ome-lrc-test-dir-trap");
+        std::fs::create_dir_all(dir.join("陷阱.lrc")).unwrap();
+        let audio = dir.join("陷阱.flac");
+        std::fs::write(&audio, b"fake-audio").unwrap();
+        assert!(read_sidecar_lrc(&audio).unwrap().is_none());
     }
 }

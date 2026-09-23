@@ -13,12 +13,13 @@ use tauri::http::{header::CONTENT_RANGE, StatusCode};
 
 use crate::bilibili::{BILIBILI_BROWSER_UA, BILIBILI_REFERER};
 
-/// 远程媒体域后缀白名单（B 站 CDN 及其镜像/图床），SSRF 防护。
+/// 远程媒体域后缀白名单（B 站 CDN 及其镜像/图床 + 网易云封面域），SSRF 防护。
 const REMOTE_MEDIA_HOST_SUFFIXES: &[&str] = &[
     "bilivideo.com",
     "bilivideo.cn",
     "akamaized.net",
     "hdslb.com",
+    "126.net",
 ];
 
 /// 域名是否命中白名单（host == 后缀 或以 `.后缀` 结尾）。
@@ -98,6 +99,7 @@ fn serve_file(
             .header("Accept-Ranges", "bytes")
             .header(CONTENT_RANGE, format!("bytes {start}-{end}/{size}"))
             .header("Content-Length", length)
+            .header("Access-Control-Allow-Origin", "*")
             .body(buffer)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     } else {
@@ -109,6 +111,7 @@ fn serve_file(
             .header("Content-Type", content_type)
             .header("Accept-Ranges", "bytes")
             .header("Content-Length", size)
+            .header("Access-Control-Allow-Origin", "*")
             .body(buffer)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
@@ -160,7 +163,8 @@ fn proxy_remote(
 
     let status = upstream.status();
     let mut builder = tauri::http::Response::builder()
-        .status(StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY));
+        .status(StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY))
+        .header("Access-Control-Allow-Origin", "*");
     for header in ["Content-Type", "Content-Range", "Accept-Ranges"] {
         if let Some(value) = upstream
             .headers()
@@ -267,6 +271,8 @@ mod tests {
             "upos-hz-mirrorakam.akamaized.net"
         ));
         assert!(remote_media_host_allowed("i0.hdslb.com"));
+        assert!(remote_media_host_allowed("p1.music.126.net"));
+        assert!(!remote_media_host_allowed("evil126.net"));
         assert!(remote_media_host_allowed("BILIVIDEO.COM"));
         assert!(remote_media_host_allowed("www.bilivideo.cn"));
         // 后缀伪装 / 相似域 / 非白名单域名一律拒绝。

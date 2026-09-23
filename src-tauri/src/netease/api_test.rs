@@ -71,6 +71,6 @@ fn live_stream_url_anonymous_gets_trial_or_error() {
 #[test]
 #[ignore = "需要真实网络"]
 fn live_lyric_returns_lrc_text() {
-    let (lrc, _yrc) = tauri::async_runtime::block_on(fetch_lyric(186_016)).unwrap();
+    let (lrc, _yrc, _tlyric) = tauri::async_runtime::block_on(fetch_lyric(186_016)).unwrap();
     assert!(lrc.contains('['), "{lrc}");
 }

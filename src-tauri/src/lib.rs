@@ -4,6 +4,7 @@ mod dj;
 mod library;
 mod media;
 mod netease;
+mod playlists;
 
 use rusqlite::Connection;
 use std::sync::Mutex;
@@ -51,6 +52,15 @@ pub fn run() {
             library::import_music_folder,
             library::set_track_liked_command,
             library::record_playback_event_command,
+            library::playback_history_command,
+            library::local_lyric,
+            playlists::playlist_list,
+            playlists::playlist_create,
+            playlists::playlist_rename,
+            playlists::playlist_delete,
+            playlists::playlist_tracks_command,
+            playlists::playlist_add_command,
+            playlists::playlist_remove_command,
             dj::dj_config,
             dj::dj_save_config,
             dj::dj_chat,

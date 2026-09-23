@@ -28,9 +28,24 @@ export interface NeteaseQrCheck {
 }
 
 /** 封面与音频走同一 ome-media 代理（Task 6 handler 已支持 png/jpg），零新协议 */
+const PROXYABLE_COVER_SUFFIXES = ["126.net", "hdslb.com", "bilivideo.com", "bilivideo.cn", "akamaized.net"];
+
 export function coverUrl(path?: string | null): string {
   if (!path) return "";
-  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(path)) {
+    // 远程封面经媒体代理中转：绕防盗链 + 补 CORS，供唱片取色 canvas 采样
+    if (isTauriRuntime()) {
+      try {
+        const host = new URL(path).hostname.toLowerCase();
+        if (PROXYABLE_COVER_SUFFIXES.some((s) => host === s || host.endsWith(`.${s}`))) {
+          return `http://ome-media.localhost/remote?p=${encodeURIComponent(path)}`;
+        }
+      } catch {
+        /* URL 解析失败按原样返回 */
+      }
+    }
+    return path;
+  }
   if (!isTauriRuntime()) return path;
   return `http://ome-media.localhost/local?p=${encodeURIComponent(path)}`;
 }
@@ -55,7 +70,7 @@ export const neteaseSearch = (keywords: string, limit?: number) =>
   invoke<NeteaseSong[]>("netease_search", { keywords, limit });
 export const neteaseStreamUrl = (id: number) => invoke<string>("netease_stream_url", { id });
 export const neteaseLyric = (id: number) =>
-  invoke<{ lrc: string; yrc?: string | null }>("netease_lyric", { id });
+  invoke<{ lrc: string; yrc?: string | null; tlyric?: string | null }>("netease_lyric", { id });
 export const neteaseLike = (id: number, like: boolean) =>
   invoke<void>("netease_like", { id, like });
 export const neteaseLogout = () => invoke<void>("netease_logout");
@@ -152,3 +167,26 @@ export interface HourPreference {
   skips: number;
 }
 export const profileHourPreferences = () => invoke<HourPreference[]>("profile_hour_preferences");
+export const playbackHistory = (limit?: number) => invoke<Track[]>("playback_history", { limit });
+
+/** 本地曲目同目录 .lrc：返回 base64 原始字节（null = 没有同目录歌词），编码由前端探测 */
+export const localLyric = (id: string) => invoke<string | null>("local_lyric", { id });
+
+/* ============ 播放列表（001 迁移已有 playlists/playlist_tracks 表，serde camelCase） ============ */
+
+export interface Playlist {
+  id: string;
+  name: string;
+  trackCount: number;
+  createdAt: string;
+}
+
+export const playlistList = () => invoke<Playlist[]>("playlist_list");
+export const playlistCreate = (name: string) => invoke<Playlist>("playlist_create", { name });
+export const playlistRename = (id: string, name: string) => invoke<void>("playlist_rename", { id, name });
+export const playlistDelete = (id: string) => invoke<void>("playlist_delete", { id });
+export const playlistTracks = (id: string) => invoke<Track[]>("playlist_tracks", { id });
+export const playlistAdd = (id: string, trackIds: string[]) =>
+  invoke<number>("playlist_add", { id, trackIds });
+export const playlistRemove = (id: string, trackId: string) =>
+  invoke<void>("playlist_remove", { id, trackId });
