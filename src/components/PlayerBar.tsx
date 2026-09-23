@@ -13,10 +13,95 @@ import {
   volume,
 } from "../state/player";
 import { openDrawer } from "../state/dj";
+import {
+  cancelSleepTimer,
+  formatSleepRemaining,
+  setSleepAtTrackEnd,
+  setSleepTimer,
+  sleepEndAt,
+  sleepMode,
+  sleepTick,
+} from "../state/sleeptimer";
+import { useState } from "preact/hooks";
 import { coverUrl } from "../lib/api";
 import { formatDuration } from "../lib/audio";
 import { setChromeHover } from "../state/chrome";
 import { Icon } from "./Icon";
+
+const SLEEP_CHOICES: Array<{ label: string; minutes: number }> = [
+  { label: "15 分钟", minutes: 15 },
+  { label: "30 分钟", minutes: 30 },
+  { label: "45 分钟", minutes: 45 },
+  { label: "60 分钟", minutes: 60 },
+];
+
+function SleepTimerButton() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const mode = sleepMode.value;
+  void sleepTick.value; // 订阅心跳，驱动倒计时刷新
+  const endAt = sleepEndAt.value;
+
+  const label =
+    mode === "timer" && endAt !== null
+      ? `睡眠定时 · 剩余 ${formatSleepRemaining(endAt, Date.now())}`
+      : mode === "track"
+        ? "睡眠定时 · 播完当前停止"
+        : "睡眠定时";
+
+  return (
+    <div class="sleep-timer">
+      <button
+        class={`player-list-btn ${mode ? "is-active" : ""}`}
+        aria-label={label}
+        title={label}
+        onClick={() => setMenuOpen(!menuOpen)}
+        onBlur={() => requestAnimationFrame(() => setMenuOpen(false))}
+      >
+        <Icon name="moon" size={17} />
+      </button>
+      {menuOpen && (
+        <div class="sleep-menu" role="menu" aria-label="睡眠定时">
+          {SLEEP_CHOICES.map((choice) => (
+            <button
+              key={choice.minutes}
+              role="menuitem"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setSleepTimer(choice.minutes);
+                setMenuOpen(false);
+              }}
+            >
+              {choice.label}后停止
+            </button>
+          ))}
+          <button
+            role="menuitem"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              setSleepAtTrackEnd();
+              setMenuOpen(false);
+            }}
+          >
+            播完当前停止
+          </button>
+          {mode && (
+            <button
+              class="sleep-cancel"
+              role="menuitem"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                cancelSleepTimer();
+                setMenuOpen(false);
+              }}
+            >
+              取消定时
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function PlayerBar() {
   const track = currentTrack.value;
@@ -88,6 +173,7 @@ export function PlayerBar() {
         >
           <Icon name="queue" size={18} />
         </button>
+        <SleepTimerButton />
         <div class="player-volume">
           <Icon name="volume" size={16} />
           <input

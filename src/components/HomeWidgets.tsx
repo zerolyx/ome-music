@@ -1,5 +1,14 @@
 import { currentTrack, position, isPlaying } from "../state/player";
-import { activeLine, activeYrcLine, lyricLines, lyricTrackId, yrcLines, yrcWordStates } from "../state/lyrics";
+import {
+  activeLine,
+  activeYrcLine,
+  lyricLines,
+  lyricTrackId,
+  tlyricLines,
+  translationFor,
+  yrcLines,
+  yrcWordStates,
+} from "../state/lyrics";
 
 /** 沉浸歌词：yrc 逐字点亮 / lrc 行级高亮，歌词即舞台 */
 export function HomeLyrics() {
@@ -45,6 +54,7 @@ export function HomeLyrics() {
     const prev = active >= 0 ? lines[active - 1] : null;
     const current = active >= 0 ? lines[active] : null;
     const next = active + 1 < lines.length ? lines[active + 1] : null;
+    const translation = current ? translationFor(current, tlyricLines.value) : null;
     // 行内进度：卡拉OK式亮色扫过（无结束时间的行按 8 秒估算）
     const lineStart = current?.time ?? 0;
     const lineEnd = next?.time ?? (current ? current.time + 8 : 0);
@@ -67,6 +77,7 @@ export function HomeLyrics() {
             {current?.text ?? ""}
           </span>
         </p>
+        {translation && <p class="lyric-line lyric-translation">{translation.text}</p>}
         <p class="lyric-line lyric-next">{next?.text ?? ""}</p>
       </div>
     );

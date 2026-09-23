@@ -5,6 +5,7 @@ import { toPlayableSrc } from "../lib/audio";
 import { djConfig } from "./dj";
 import { introFor, radioEnabled, radioNext, recordSkip } from "./radio";
 import { speak } from "./tts";
+import { consumeTrackEndSleep } from "./sleeptimer";
 
 export const queue = signal<Track[]>([]);
 /** 播放列表抽屉开关 */
@@ -25,10 +26,43 @@ export const currentTrack = computed<Track | null>(
 
 let audio: HTMLAudioElement | null = null;
 
+/* ---- 舞台频谱：AnalyserNode 挂在唯一 audio 元素上（CORS 污染时数据全零，前端自动隐藏） ---- */
+let analyser: AnalyserNode | null = null;
+let freqData: Uint8Array<ArrayBuffer> | null = null;
+
+function hookupAnalyser(element: HTMLAudioElement): void {
+  if (analyser) return;
+  try {
+    const Ctx = window.AudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const source = ctx.createMediaElementSource(element);
+    const node = ctx.createAnalyser();
+    node.fftSize = 128;
+    node.smoothingTimeConstant = 0.82;
+    source.connect(node);
+    node.connect(ctx.destination);
+    analyser = node;
+    freqData = new Uint8Array(node.frequencyBinCount);
+    element.addEventListener("play", () => void ctx.resume());
+  } catch {
+    analyser = null;
+    freqData = null;
+  }
+}
+
+/** 频谱快照（0-255 频率能量）；未初始化返回 null */
+export function spectrumSnapshot(): Uint8Array | null {
+  if (!analyser || !freqData) return null;
+  analyser.getByteFrequencyData(freqData);
+  return freqData;
+}
+
 function ensureAudio(): HTMLAudioElement {
   if (audio) return audio;
   audio = new Audio();
   audio.volume = volume.value;
+  hookupAnalyser(audio);
   let lastPersist = 0;
   audio.addEventListener("timeupdate", () => {
     position.value = audio?.currentTime ?? 0;
@@ -109,6 +143,11 @@ function stopAtQueueEnd() {
 }
 
 async function onEnded() {
+  // 睡眠定时「播完当前」：在一切切歌逻辑之前消费
+  if (consumeTrackEndSleep()) {
+    stopAtQueueEnd();
+    return;
+  }
   const track = currentTrack.value;
   if (track) {
     void recordPlaybackEvent(track.id, endEventType(position.value, duration.value), Math.round(position.value));
@@ -138,6 +177,46 @@ async function onEnded() {
 export function playTracks(tracks: Track[], start = 0) {
   queue.value = tracks;
   playAt(start);
+}
+
+/** 插播到当前曲目之后；队列空则直接起播 */
+export function insertNext(track: Track): void {
+  if (queue.value.length === 0) {
+    playTracks([track], 0);
+    return;
+  }
+  const at = currentIndex.value + 1;
+  queue.value = [...queue.value.slice(0, at), track, ...queue.value.slice(at)];
+}
+
+/** 追加到队尾 */
+export function appendToQueue(track: Track): void {
+  queue.value = [...queue.value, track];
+}
+
+/** 移除队列中某首；移除正在播放的曲目时切到顺位下一首 */
+export function removeAt(index: number): void {
+  if (index < 0 || index >= queue.value.length) return;
+  const wasCurrent = index === currentIndex.value;
+  queue.value = queue.value.filter((_, i) => i !== index);
+  if (wasCurrent) {
+    if (queue.value.length === 0) {
+      currentIndex.value = -1;
+      stopAtQueueEnd();
+      return;
+    }
+    playAt(Math.min(index, queue.value.length - 1));
+  } else if (index < currentIndex.value) {
+    currentIndex.value -= 1;
+  }
+}
+
+/** 清空队列并停止 */
+export function clearQueue(): void {
+  queue.value = [];
+  currentIndex.value = -1;
+  ensureAudio().pause();
+  stopAtQueueEnd();
 }
 
 /** 网易云曲目：取流换成真实 https 直链并缓存回 track.filePath（togglePlayback/seek 复用） */

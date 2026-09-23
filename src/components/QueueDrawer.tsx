@@ -1,4 +1,4 @@
-import { queue, queueOpen, playAt, currentTrack } from "../state/player";
+import { queue, queueOpen, playAt, currentTrack, removeAt, clearQueue } from "../state/player";
 import { toggleLiked, tracks as libraryTracks } from "../state/library";
 import { toggleNeteaseLike } from "../state/netease";
 import { activeView } from "../state/app";
@@ -39,11 +39,15 @@ export function QueueDrawer() {
             currentIndex={currentTrack.value ? items.findIndex((item) => item.id === currentTrack.value?.id) : -1}
             onPlay={(index) => playAt(index)}
             onToggleLike={onToggleLike}
+            onRemove={(index) => removeAt(index)}
           />
         </div>
       )}
       {items.length > 0 && (
         <div class="queue-footer">
+          <button class="btn-secondary" onClick={() => clearQueue()}>
+            清空列表
+          </button>
           <button
             class="btn-secondary"
             onClick={() => {
