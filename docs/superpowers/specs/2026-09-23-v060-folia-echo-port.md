@@ -36,6 +36,9 @@
 
 ### C. 远期（本版不做，记录在案）
 - 壁纸模式（WorkerW SetParent）、TTML/qrc/krc 歌词、Sync Server、Now Playing 接入、gapless。
+- 桌面歌词独立窗口（Tauri 第二窗口，需歌词状态跨窗同步，工作量最大）。
+- 迷你播放器（mini-player 小窗模式）。
+- 歌词匹配候选确认弹窗（当前为自动挑最佳 + 命令面板手动重匹配兜底）。
 
 ## 二、从 ECHO 提炼的可移植项
 
