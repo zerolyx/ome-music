@@ -70,6 +70,8 @@ export function spectrumSnapshot(): Uint8Array | null {
 function ensureAudio(): HTMLAudioElement {
   if (audio) return audio;
   audio = new Audio();
+  // WebAudio 链（频谱/EQ）要求媒体未被 CORS 污染：CORS 模式取流 + 代理响应带 ACAO:*
+  audio.crossOrigin = "anonymous";
   audio.volume = volume.value;
   hookupAnalyser(audio);
   let lastPersist = 0;
