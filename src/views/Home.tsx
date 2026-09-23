@@ -12,6 +12,7 @@ import { DanmakuLayer } from "../components/DanmakuLayer";
 import { djConfig } from "../state/dj";
 import { startRadioIfIdle } from "../state/radio";
 import { openStage } from "../state/stage";
+import { openViz } from "../state/visualizer";
 import type { Track } from "../types/music";
 
 /** 开发/演示模式：?demo=1 伪造播放态，供视觉自查（不影响正常使用） */
@@ -168,10 +169,16 @@ export function HomeView() {
               <span class="home-now-artist">{track.artist}</span>
             </div>
             <LyricOffsetControl trackId={track.id} />
-            <button class="chip-toggle home-stage-cta" onClick={openStage}>
-              <Icon name="lyrics" size={14} />
-              歌词舞台
-            </button>
+            <div class="home-cta-row">
+              <button class="chip-toggle home-stage-cta" onClick={openStage}>
+                <Icon name="lyrics" size={14} />
+                歌词舞台
+              </button>
+              <button class="chip-toggle home-stage-cta" onClick={openViz}>
+                <Icon name="play" size={14} />
+                视觉器
+              </button>
+            </div>
             <HomeLyrics />
           </div>
         </div>

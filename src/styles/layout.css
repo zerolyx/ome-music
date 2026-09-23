@@ -2293,3 +2293,21 @@ body::before {
   .yrc-word.yrc-pop.yrc-sung,
   .stage-backdrop { animation: none; }
 }
+
+/* ============ 全屏视觉器 ============ */
+.viz-view {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 50% 110%, color-mix(in srgb, var(--accent) 12%, var(--bg)), var(--bg) 62%);
+}
+.viz-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.viz-view.viz-ui-hidden { cursor: none; }
+.home-cta-row { display: flex; gap: 10px; }
