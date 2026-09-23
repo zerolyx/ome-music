@@ -1,30 +1,24 @@
-# Ome Music Development Rules
+# Ome Music — Workspace Conventions
 
-Ome Music is a Tauri desktop music player for local music and NetEase Cloud Music, with Bilibili atmosphere and a natural DJ/podcast experience.
+## 文档地图
 
-## Product principles
+- `PROJECT.md` — L0 摘要（目标/状态/栈/路径）
+- `DECISIONS.md` — 架构决策记录（ADR）
+- `docs/superpowers/specs/` — 设计 spec（权威）
+- `docs/superpowers/plans/` — 实施计划
+- `SECURITY.md` — 安全策略与已知风险
+- `README.md` / `README.zh-CN.md` — 用户文档
 
-- Keep it small, lightweight, immersive, and calm. Less is more.
-- Prefer polishing the listening experience over adding controls or features.
-- Avoid large dependencies, duplicate settings, and architecture that exceeds the problem.
+## 开发规则
 
-## Workflow
+- 前端运行时依赖仅 `preact` / `@preact/signals` / `@tauri-apps/api`，禁止新增。
+- UI 文案简体中文；代码标识符英文。
+- 版本号 `package.json` 与 `src-tauri/tauri.conf.json` lockstep。
+- 提交信息 Conventional Commits；每个任务收尾测试必须绿。
+- `PersonalConfig/` 禁读禁印禁提交。
+- 动效统一使用 `--ease-signature`；尊重 prefers-reduced-motion。
 
-- Read the React, Tauri, and Rust call path before editing. Analyze, plan, change in small steps, then verify.
-- Prefer fixing existing logic over adding libraries. Ask before any dependency change.
-- Run the smallest relevant typecheck, build, Rust check, or focused UI verification after changes.
-- For UI changes, use Playwright screenshots and check Console errors, scrolling, overflow, responsiveness, and window stability.
+## 调试技能
 
-## UI and DJ
-
-- Preserve the light glass aesthetic, generous spacing, consistent radii, smooth scrolling, and stable windows without jitter.
-- Keep the player bar, search, settings, and side panels visually coherent and uncluttered.
-- Never present the DJ as an AI. Treat it as an English music podcast host or British-style DJ.
-- Accept Chinese requests, but keep DJ replies naturally English. Music actions should execute through tools, not end as chat-only text.
-- Keep Bilibili danmaku light, pale, emotional, and secondary to the music.
-
-## Safety and privacy
-
-- Do not delete music, caches, user data, login sessions, databases, or credentials without explicit approval.
-- Do not read, print, or modify `.env`, tokens, cookies, phone numbers, API keys, or `PersonalConfig` credential/session files without explicit approval.
-- Do not run destructive Git, release, deployment, migration, or bulk cleanup commands without approval.
+`.agents/skills/` 内有项目专用技能（netease-music-debug / tauri-app-debug /
+music-player-ui-polish / product-requirements-keeper / dj-agent-tooling）。

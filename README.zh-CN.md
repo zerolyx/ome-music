@@ -2,99 +2,32 @@
 
 [English](./README.md) | 中文
 
-Ome Music 是一个给普通用户使用的 Windows 音乐播放器。目标很简单：下载安装，双击打开，然后开始听歌。
+**AI 时代的私人电台。** 打开应用，DJ 用声音向你问好，接着上次的歌继续播，之后的每一首都由它推荐——每首歌前有电台式的介绍，想聊天随时打开对话抽屉。
 
-你不需要懂 Node.js、Rust、Vite、URL、打包、命令行，也不需要自己启动开发服务器。正常使用只需要下载 Windows 安装包。
+## 功能
 
-## 普通用户怎么安装
+- **本地音乐** — 导入文件夹、封面、歌词。
+- **网易云** — 扫码登录、搜索、完整时长播放（登录后含 VIP 歌曲）、逐字歌词。
+- **Bilibili** — 视频搜索、内置 Referer 代理播放、可选的淡彩弹幕氛围。
+- **AI DJ** — 温暖慵懒的深夜电台主播，带本地记忆（对话、口味、时段习惯）。兼容任何 OpenAI 接口的语言模型（如 DeepSeek）；语音使用 Edge 神经声线，也可接入自建/云端的克隆音色。
+- **双主题跟随系统**、自动隐没的界面 chrome、可折叠设置。
 
-1. 打开 [GitHub Releases 页面](https://github.com/zerolyx/ome-music/releases)。
-2. 下载 `Ome.Music_0.3.8_x64-setup.exe`。
-3. 双击安装包，按提示安装。
-4. 从桌面快捷方式或开始菜单打开 Ome Music。
-5. 直接搜索歌曲、导入本地音乐，或者在设置里扫码连接网易云音乐。
-
-当前版本还没有代码签名，Windows SmartScreen 可能会提醒风险。如果你确认安装包来自本仓库，可以点击“更多信息”，再选择“仍要运行”。
-
-旧版本已下架或不再推荐使用。请始终从 GitHub Releases 下载最新版本安装包。
-
-## 它能做什么
-
-- 播放电脑里的本地音乐。
-- 用你自己的网易云账号会话搜索和播放可用歌曲。
-- 使用 Bilibili 作为音乐和视频氛围来源。
-- 搜索和播放 QQ 音乐歌曲，支持扫码、Cookie 导入与官方窗口登录（QQ 与微信）。
-- 显示封面、歌词、视频氛围和轻量弹幕。
-- 把曲库和播放记录保存在本机。
-
-Ome Music 不会绕过会员、版权、地区限制或平台访问规则。
-
-## 截图
-
-![Ome Music 主界面](docs/assets/screenshot-main.png)
-
-![Ome Music 设置界面](docs/assets/screenshot-settings.png)
-
-## 第一次打开
-
-- 本地音乐不需要登录。
-- 网易云音乐建议在“设置 > 音乐来源”里扫码登录。
-- 如果会员、版权、地区或平台限制导致歌曲仍然不可播放，Ome Music 会提示不可用，不会崩溃。
-- Bilibili 可以先搜索公开内容；登录后可访问账号权限内的内容。
-
-## 隐私
-
-- 不要把 API Key、Cookie、登录会话、本地数据库、缓存、日志提交到 GitHub。
-- 本地音乐只保存路径引用，不会上传你的音乐文件。
-- 网易云音乐和 Bilibili 只使用你自己的登录状态。
-
-详见 [docs/PRIVACY.md](docs/PRIVACY.md) 和 [SECURITY.md](SECURITY.md)。
-
-## 开发者说明
-
-下面内容只适合想从源码构建项目的人。普通用户不需要执行这些命令。
-
-环境要求：
-
-- Windows 10/11
-- Node.js 20 或更高版本
-- Rust stable toolchain
-- Microsoft Edge WebView2 Runtime
-
-安装依赖：
+## 开发运行
 
 ```bash
 npm install
+npm run tauri dev     # 桌面应用
+npm run build         # 前端构建
+cargo test            # Rust 测试（src-tauri 内）
 ```
 
-开发模式运行：
+环境要求：Node 20+、Rust stable、Windows 10/11（WebView2）。
 
-```bash
-npm run desktop
-```
+## 隐私
 
-构建前端：
+所有个人数据都留在本地：曲库、播放记录、DJ 记忆与对话都在本地 SQLite。
+只有你自己配置了语言模型 / TTS 服务时才会产生外呼。无账号、无遥测。详见 `SECURITY.md`。
 
-```bash
-npm run build
-```
+## 许可
 
-构建 Windows 发布版：
-
-```bash
-npm run release:windows
-```
-
-更多开发文档：
-
-- [构建说明](docs/BUILD.md)
-- [配置说明](docs/CONFIGURATION.md)
-- [排障指南](docs/TROUBLESHOOTING.md)
-- [维护指南](docs/MAINTENANCE.md)
-- [更新日志](docs/CHANGELOG.md)
-- [贡献指南](CONTRIBUTING.md)
-- [第三方声明](THIRD_PARTY_NOTICES.md)
-
-## 开源许可
-
-Ome Music 使用 MIT License 开源。详见 [LICENSE](LICENSE)。
+MIT — 见 `LICENSE`。

@@ -1,47 +1,38 @@
-# Ome Music — Project Intelligence 摘要
+# Ome Music — Project Intelligence
 
-> 本文件是 L0 导航摘要；权威信息见文档地图。与代码冲突时以代码为准并标记 STALE。
+> L0 导航摘要。深入背景见 docs/superpowers/specs/（设计）与 docs/superpowers/plans/（实施计划）。
 
 ## Goal
 
-轻量 Windows 音乐播放器：本地音乐 + NetEase/QQ/Bilibili 源，"打开就听"（详见 README.md / PRODUCT.md）。
+AI 时代的私人电台：本地音乐 + 网易云 + Bilibili，DJ 有记忆、有情绪、有声音。
+轻量（安装包 ~10MB 级）、双主题、开机即播。
 
 ## Current Status
 
-Development。package.json 与 src-tauri/tauri.conf.json 版本均为 0.3.8（lockstep 一致）。
-STALE 冲突待确认：docs/FINAL_REPORT_v0.4.0.md 与 docs/QA_CHECKLIST_v0.4.0.md 存在，但版本号未到 0.4.0。
+v0.4.0 重建完成：Preact + Rust 模块化（db/library/media/netease/bilibili/dj）。
+待办：Bilibili 氛围视频（弹幕已上线）、发布打包（nsis）。
 
 ## Tech Stack
 
-- 前端：React + TypeScript + Vite + Tailwind（src/）
-- 桌面壳：Tauri（src-tauri/，Rust：lib.rs / main.rs / qqmusic.rs）
-- 测试与门禁：Vitest + scripts/regression-check.mjs；eslint / tsc / clippy -D warnings / docs-check / size-audit
-
-## 音乐源
-
-本地文件 · NetEase（账号 session）· QQ 音乐（QR / Cookie / 官方 WebView2 登录，近期主线）· Bilibili 氛围/弹幕
+- 前端：Preact + @preact/signals + @tauri-apps/api + 手写 CSS（双主题 tokens）
+- 后端：Tauri 2 模块化 Rust（db/library/media/netease/bilibili/dj）
+- 数据：SQLite（rusqlite bundled），迁移 001-004
+- 语音：WebView2 speechSynthesis 兜底 + Edge 神经语音 + OpenAI 兼容 TTS 端点
 
 ## Important Paths
 
-src/（features, components, musicUnderstanding）· src-tauri/src/ · scripts/ · docs/ · PersonalConfig/（凭据与 session，禁读禁印）
+src/（前端）· src-tauri/src/（Rust 模块）· src-tauri/migrations/ ·
+docs/superpowers/specs/（设计 spec）· docs/superpowers/plans/（实施计划）·
+PersonalConfig/（凭据，禁读禁印）
 
-## Run / Build / Test（package.json scripts）
+## Run / Test
 
-dev · build · build:tauri（含 prepare:netease-runtime）· test（regression+unit）· lint · format · size:audit · docs:check
+dev：`npm run tauri dev` · 测试：`npm run test` + `cargo test`（src-tauri）·
+门禁：tsc / eslint / clippy -D warnings
 
-## 文档地图
+## Rules
 
-AGENTS.md=开发规则（复用，勿重复）· README(.zh-CN)=用户文档 · PRODUCT.md=产品定义 · BUILD/CONFIGURATION/MAINTENANCE/TROUBLESHOOTING · CHANGELOG · docs/TODO-app-refactor.md=TODO 源 · docs/size-budget.md · AUDIT_FINDINGS / PRODUCT_REMEDIATION_PLAN / REMEDIATION_EXECUTION_REPORT（质量线） · LICENSE_DECISION.md（许可 ADR）
-
-## Current Focus
-
-QQ 音乐登录链路：QR 连续性、Cookie 回填、官方 WebView2 主路径（近期提交集中于此）。
-
-## NOT NEEDED
-
-- 根级 TODO.md：docs/TODO-app-refactor.md 已是 TODO 源。
--额外交档：以 PROJECT.md 文档地图 + ARCHITECTURE.md 为唯一导航，不再增生。
-
-## Deployment
-
-GitHub Releases 安装包分发（x64 setup，见 README / BUILD.md）；NetEase API 运行时可容器化（仓库根 Dockerfile.api）。暂无自管服务器部署；未来服务器档案按 server-ops 技能的 servers/name.md 标准建立（敏感信息只留 ssh config/凭据层）。
+- 保持轻量：前端运行时依赖仅 preact/@preact/signals/@tauri-apps/api
+- DJ 人格：港台腔男播客、慵懒松弛、中文为主偶夹英文（见 dj.rs PERSONA_PROMPT）
+- Bilibili subordinate：默认关、淡而弱
+- PersonalConfig/ 禁读禁印
