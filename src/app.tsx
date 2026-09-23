@@ -17,6 +17,8 @@ import { PlayerBar } from "./components/PlayerBar";
 import { QueueDrawer } from "./components/QueueDrawer";
 import { PlaylistPicker } from "./components/PlaylistPicker";
 import { CommandPalette } from "./components/CommandPalette";
+import { StageView } from "./components/StageView";
+import { stageOpen } from "./state/stage";
 
 export function App() {
   useEffect(() => initChromeAutoHide(), []);
@@ -62,6 +64,7 @@ export function App() {
       <DjDrawer />
       <PlaylistPicker />
       <CommandPalette />
+      {stageOpen.value && <StageView />}
     </div>
   );
 }

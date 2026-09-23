@@ -22,6 +22,7 @@ import {
 } from "../state/player";
 import { openPlaylist, playlists } from "../state/playlists";
 import { setThemeChoice, THEME_PRESETS } from "../state/theme";
+import { openStage } from "../state/stage";
 import { cancelSleepTimer, setSleepAtTrackEnd, setSleepTimer } from "../state/sleeptimer";
 import { Icon } from "./Icon";
 
@@ -60,6 +61,7 @@ function buildCommands(): Command[] {
     { id: "play.next", title: "下一首", group: "播放", run: () => next(true) },
     { id: "play.queue", title: "打开播放队列", group: "播放", run: () => (queueOpen.value = true) },
     { id: "play.clear", title: "清空播放队列", group: "播放", run: () => clearQueue() },
+    { id: "stage.open", title: "打开歌词舞台", group: "播放", run: () => openStage() },
     // DJ
     { id: "dj.chat", title: "打开 DJ 对话", group: "DJ", run: () => goToDjTab("chat") },
     { id: "dj.memory", title: "打开 DJ 记忆", group: "DJ", run: () => goToDjTab("memory") },

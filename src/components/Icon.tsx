@@ -31,6 +31,7 @@ const PATHS = {
   history: "M4 12a8 8 0 1 1 2.3 5.6M4 12H2.2M4 12l-1.6-2.2M12 8v4l3 2",
   "play-next": "M5 5.5v13l8.5-6.5zM16.5 5v14",
   playlist: "M4 5h16v14H4zM10.5 9.5l4.5 2.5-4.5 2.5z",
+  lyrics: "M4 5h16M4 10h16M4 15h16M4 20h8",
   moon: "M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5z",
 } as const;
 

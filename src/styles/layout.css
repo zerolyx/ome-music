@@ -2128,3 +2128,168 @@ body::before {
   background: color-mix(in srgb, var(--bg-elev) 82%, transparent);
   backdrop-filter: blur(18px) saturate(1.1);
 }
+
+/* ============ 全屏歌词舞台（Folia 式文字 PV） ============ */
+.stage-view {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text);
+}
+.stage-backdrop {
+  position: absolute;
+  inset: -8%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(64px) brightness(0.42) saturate(1.35);
+  transform: scale(1.06);
+  animation: stage-backdrop-in 1.4s var(--ease-signature) both;
+}
+.stage-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg) 58%, transparent),
+    color-mix(in srgb, var(--bg) 74%, transparent)
+  );
+}
+@keyframes stage-backdrop-in {
+  from { opacity: 0; scale: 1.12; }
+  to { opacity: 1; scale: 1.06; }
+}
+
+.stage-top {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  transition: opacity 0.5s var(--ease-signature);
+}
+.stage-top.is-hidden,
+.stage-bottom.is-hidden { opacity: 0; pointer-events: none; }
+.stage-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--bg-elev) 55%, transparent);
+  border: 1px solid var(--border);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.stage-close:hover { color: var(--text); background: var(--bg-elev); }
+.stage-switch { display: flex; gap: 8px; }
+.stage-view.stage-ui-hidden { cursor: none; }
+
+.stage-body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 6vw;
+}
+.stage-lines {
+  display: grid;
+  gap: clamp(14px, 3vh, 30px);
+  justify-items: center;
+  text-align: center;
+  max-width: 960px;
+}
+.stage-line { margin: 0; }
+.stage-hero {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 5.6vw, 62px);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  animation: stage-line-in 0.65s var(--ease-signature) both;
+  text-wrap: balance;
+}
+@keyframes stage-line-in {
+  from { opacity: 0; translate: 0 16px; scale: 0.985; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+.stage-dim {
+  font-size: clamp(15px, 2vw, 20px);
+  color: var(--text-dim);
+  opacity: 0.72;
+}
+.stage-translation {
+  font-size: clamp(14px, 1.8vw, 18px);
+  color: var(--text-dim);
+}
+.stage-ghost {
+  font-size: clamp(16px, 2.2vw, 22px);
+  color: var(--text-dim);
+  opacity: 0.32;
+  filter: blur(5px);
+}
+.stage-empty {
+  color: var(--text-dim);
+  font-size: 15px;
+}
+
+/* 群唱：整组轻微错落，当前行带强调辉光 */
+.stage-chorus .stage-hero {
+  text-shadow: 0 0 26px var(--accent-soft), 0 0 60px var(--accent-soft);
+}
+/* 心象：只有进出场的blur聚焦 */
+.stage-muse .stage-hero { animation-name: stage-muse-in; }
+@keyframes stage-muse-in {
+  from { opacity: 0; filter: blur(16px); scale: 1.02; }
+  to { opacity: 1; filter: blur(0); scale: 1; }
+}
+
+/* 逐字 pop（群唱）：唱过的字轻轻弹一下 */
+.yrc-word.yrc-pop.yrc-sung { animation: stage-word-pop 0.4s var(--ease-signature); }
+@keyframes stage-word-pop {
+  0% { scale: 1; }
+  40% { scale: 1.18; }
+  100% { scale: 1; }
+}
+
+/* 舞台内 karaoke 扫光配色（复用 .lyric-karaoke 机制，大号字专用） */
+.stage-hero.stage-karaoke .lyric-base { color: color-mix(in srgb, var(--text) 55%, transparent); }
+.stage-hero .lyric-fill {
+  color: var(--accent);
+  text-shadow: 0 0 22px var(--accent-soft);
+}
+.stage-hero .yrc-word.yrc-sung { color: var(--text); }
+.stage-hero .yrc-word.yrc-singing {
+  color: var(--accent);
+  text-shadow: 0 0 20px var(--accent-soft);
+}
+.stage-hero .yrc-word.yrc-next { color: color-mix(in srgb, var(--text) 55%, transparent); }
+
+.stage-bottom {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 28px 28px;
+  transition: opacity 0.5s var(--ease-signature);
+}
+.stage-time {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  min-width: 38px;
+  text-align: center;
+}
+.stage-progress { max-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-hero,
+  .yrc-word.yrc-pop.yrc-sung,
+  .stage-backdrop { animation: none; }
+}

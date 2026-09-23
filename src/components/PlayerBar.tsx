@@ -26,6 +26,7 @@ import { useState } from "preact/hooks";
 import { coverUrl } from "../lib/api";
 import { formatDuration } from "../lib/audio";
 import { setChromeHover } from "../state/chrome";
+import { openStage } from "../state/stage";
 import { Icon } from "./Icon";
 
 const SLEEP_CHOICES: Array<{ label: string; minutes: number }> = [
@@ -165,6 +166,14 @@ export function PlayerBar() {
       </div>
 
       <div class="player-actions">
+        <button
+          class="player-list-btn"
+          aria-label="歌词舞台"
+          title="歌词舞台（Folia 式全屏歌词）"
+          onClick={openStage}
+        >
+          <Icon name="lyrics" size={18} />
+        </button>
         <button
           class={`player-list-btn ${queueOpen.value ? "is-active" : ""}`}
           aria-label="播放列表"

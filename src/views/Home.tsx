@@ -11,6 +11,7 @@ import { loadDanmakuFor } from "../state/danmaku";
 import { DanmakuLayer } from "../components/DanmakuLayer";
 import { djConfig } from "../state/dj";
 import { startRadioIfIdle } from "../state/radio";
+import { openStage } from "../state/stage";
 import type { Track } from "../types/music";
 
 /** 开发/演示模式：?demo=1 伪造播放态，供视觉自查（不影响正常使用） */
@@ -167,6 +168,10 @@ export function HomeView() {
               <span class="home-now-artist">{track.artist}</span>
             </div>
             <LyricOffsetControl trackId={track.id} />
+            <button class="chip-toggle home-stage-cta" onClick={openStage}>
+              <Icon name="lyrics" size={14} />
+              歌词舞台
+            </button>
             <HomeLyrics />
           </div>
         </div>
