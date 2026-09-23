@@ -1,6 +1,7 @@
 import { useEffect } from "preact/hooks";
 import { Icon } from "../components/Icon";
 import { HomeLyrics } from "../components/HomeWidgets";
+import { WelcomeCard } from "../components/WelcomeCard";
 import { StageSpectrum } from "../components/StageSpectrum";
 import { currentTrack, currentIndex, duration, isPlaying, position, queue } from "../state/player";
 import { coverUrl } from "../lib/api";
@@ -194,6 +195,7 @@ export function HomeView() {
           </div>
           <h1>电台即将开播</h1>
           <p class="home-hint">导入音乐后，这里会成为你的私人电台</p>
+          {!demo && <WelcomeCard />}
           {djConfig.value?.configured && (
             <button class="btn-primary home-radio-cta" onClick={() => void startRadioIfIdle()}>
               不必选歌，按下播放就好

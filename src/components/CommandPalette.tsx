@@ -13,13 +13,17 @@ import {
 import { djTab, drawerOpen, openDrawer } from "../state/dj";
 import {
   clearQueue,
+  currentTrack,
   isPlaying,
   next,
   playTracks,
   previous,
   queueOpen,
+  setVolume,
   togglePlayback,
+  volume,
 } from "../state/player";
+import { rematchLyric } from "../state/lyrics";
 import { openPlaylist, playlists } from "../state/playlists";
 import { setThemeChoice, THEME_PRESETS } from "../state/theme";
 import { openStage } from "../state/stage";
@@ -54,6 +58,7 @@ function buildCommands(): Command[] {
     { id: "lib.list", title: "曲库 · 列表视图", group: "曲库", hint: "列表", run: () => switchLibraryView("list") },
     { id: "lib.grid", title: "曲库 · 专辑墙", group: "曲库", hint: "专辑墙", run: () => switchLibraryView("grid") },
     { id: "lib.artists", title: "曲库 · 艺人视图", group: "曲库", hint: "艺人", run: () => switchLibraryView("artists") },
+    { id: "lib.folders", title: "曲库 · 文件夹", group: "曲库", hint: "文件夹", run: () => switchLibraryView("folders") },
     { id: "lib.playlists", title: "曲库 · 歌单", group: "曲库", hint: "歌单", run: () => switchLibraryView("playlists") },
     { id: "lib.history", title: "曲库 · 播放历史", group: "曲库", hint: "历史", run: () => switchLibraryView("history") },
     // 播放控制
@@ -62,6 +67,10 @@ function buildCommands(): Command[] {
     { id: "play.next", title: "下一首", group: "播放", run: () => next(true) },
     { id: "play.queue", title: "打开播放队列", group: "播放", run: () => (queueOpen.value = true) },
     { id: "play.clear", title: "清空播放队列", group: "播放", run: () => clearQueue() },
+    { id: "volume.up", title: "音量 · 加大", group: "播放", hint: `${Math.round(volume.value * 100)}%`, run: () => setVolume(volume.value + 0.1) },
+    { id: "volume.down", title: "音量 · 减小", group: "播放", hint: `${Math.round(volume.value * 100)}%`, run: () => setVolume(volume.value - 0.1) },
+    { id: "volume.mute", title: "音量 · 静音", group: "播放", run: () => setVolume(0) },
+    { id: "lyric.rematch", title: "歌词 · 重新匹配当前曲目", group: "播放", hint: currentTrack.value ? currentTrack.value.title : "未在播放", run: () => { const track = currentTrack.value; if (track) void rematchLyric(track); } },
     { id: "stage.open", title: "打开歌词舞台", group: "播放", run: () => openStage() },
     { id: "viz.open", title: "打开视觉器", group: "播放", run: () => openViz() },
     // DJ

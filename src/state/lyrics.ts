@@ -298,3 +298,17 @@ export async function loadLyricFor(track: Track | null): Promise<void> {
   if (lyric) presentParsed(track.id, lyric);
   else clearLyrics();
 }
+
+/** 手动重新匹配歌词：清掉本地/匹配缓存后按当前曲目重拉（命令面板「歌词 · 重新匹配」） */
+export async function rematchLyric(track: Track): Promise<void> {
+  localLrcCache.delete(track.id);
+  matchedCache.delete(track.id);
+  rawByTrack.delete(track.id);
+  if (lyricTrackId.value === track.id) {
+    lyricLines.value = [];
+    yrcLines.value = [];
+    tlyricLines.value = [];
+    lyricTrackId.value = null;
+  }
+  await loadLyricFor(track);
+}
