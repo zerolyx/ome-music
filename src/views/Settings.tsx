@@ -9,6 +9,26 @@ import { radioEnabled, setRadioEnabled } from "../state/radio";
 import { danmakuEnabled, setDanmakuEnabled } from "../state/danmaku";
 import { accentMode, setAccentMode } from "../state/tint";
 import {
+  applyEqPreset,
+  bandLabel,
+  EQ_BANDS,
+  EQ_MAX,
+  EQ_MIN,
+  EQ_PRESETS,
+  eqEnabled,
+  eqGains,
+  eqPreset,
+  setEqBand,
+  setEqEnabled,
+} from "../state/equalizer";
+import { fadeEnabled, setFadeEnabled } from "../state/fade";
+import {
+  outputDevices,
+  outputDeviceId,
+  refreshOutputDevices,
+  setOutputDevice,
+} from "../state/audioout";
+import {
   cancelQrLogin,
   logout,
   qrState,
@@ -211,10 +231,120 @@ function NetEaseBody() {
   );
 }
 
+/** 声音（DSP）：10 段均衡器 + 输出设备 + 自动淡变 */
+function SoundBody() {
+  useEffect(() => {
+    void refreshOutputDevices();
+  }, []);
+
+  return (
+    <>
+      <div class="dj-radio-row settings-danmaku-row">
+        <span class="dj-radio-label">均衡器</span>
+        <div class="segmented" role="radiogroup" aria-label="均衡器">
+          <button
+            role="radio"
+            aria-checked={eqEnabled.value}
+            class={`segment ${eqEnabled.value ? "is-active" : ""}`}
+            onClick={() => setEqEnabled(true)}
+          >
+            开
+          </button>
+          <button
+            role="radio"
+            aria-checked={!eqEnabled.value}
+            class={`segment ${!eqEnabled.value ? "is-active" : ""}`}
+            onClick={() => setEqEnabled(false)}
+          >
+            关
+          </button>
+        </div>
+      </div>
+      <div class="eq-presets">
+        {EQ_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            class={`chip-toggle ${eqPreset.value === preset.id && eqEnabled.value ? "is-active" : ""}`}
+            onClick={() => {
+              setEqEnabled(true);
+              applyEqPreset(preset.id);
+            }}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+      <div class="eq-bands" aria-label="均衡器频段">
+        {EQ_BANDS.map((frequency, index) => {
+          const gain = eqGains.value[index] ?? 0;
+          return (
+            <div class="eq-band" key={frequency}>
+              <span class="eq-band-value">{gain === 0 ? "0" : gain.toFixed(1)}</span>
+              <input
+                type="range"
+                min={EQ_MIN}
+                max={EQ_MAX}
+                step={0.5}
+                value={gain}
+                disabled={!eqEnabled.value}
+                aria-label={`${bandLabel(frequency)} 赫兹`}
+                onInput={(event) => setEqBand(index, Number((event.target as HTMLInputElement).value))}
+              />
+              <span class="eq-band-label">{bandLabel(frequency)}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p class="view-hint">10 段参数均衡（31Hz – 16kHz，±12dB）；关闭时链路完全透明。</p>
+
+      <div class="dj-radio-row settings-danmaku-row">
+        <span class="dj-radio-label">输出设备</span>
+        <select
+          class="eq-device-select"
+          value={outputDeviceId.value}
+          onChange={(event) => setOutputDevice((event.target as HTMLSelectElement).value)}
+        >
+          <option value="">系统默认</option>
+          {outputDevices.value.map((device) => (
+            <option key={device.id} value={device.id}>
+              {device.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <p class="view-hint">选择声音输出到哪台设备；设备拔出时自动回退到系统默认。</p>
+
+      <div class="dj-radio-row settings-danmaku-row">
+        <span class="dj-radio-label">自动淡变</span>
+        <div class="segmented" role="radiogroup" aria-label="自动淡变">
+          <button
+            role="radio"
+            aria-checked={fadeEnabled.value}
+            class={`segment ${fadeEnabled.value ? "is-active" : ""}`}
+            onClick={() => setFadeEnabled(true)}
+          >
+            开
+          </button>
+          <button
+            role="radio"
+            aria-checked={!fadeEnabled.value}
+            class={`segment ${!fadeEnabled.value ? "is-active" : ""}`}
+            onClick={() => setFadeEnabled(false)}
+          >
+            关
+          </button>
+        </div>
+      </div>
+      <p class="view-hint">切歌时旧曲 1.2 秒淡出、新曲从淡入开始，避免生硬打断。</p>
+    </>
+  );
+}
+
 const SECTIONS = [
   { id: "source", label: "音乐源" },
   { id: "dj", label: "DJ 电台与语音" },
   { id: "appearance", label: "外观" },
+  { id: "sound", label: "声音" },
   { id: "about", label: "关于" },
 ] as const;
 
@@ -227,6 +357,7 @@ export function SettingsView() {
     source: true,
     dj: false,
     appearance: true,
+    sound: false,
     about: false,
   });
   const [activeSection, setActiveSection] = useState<SectionId>("source");
@@ -340,6 +471,10 @@ export function SettingsView() {
               </div>
             </div>
             <p class="view-hint">播放 B站视频时在首页漂浮同屏弹幕，纯氛围装饰。</p>
+          </Card>
+
+          <Card title="声音（DSP）" id="sound" open={openMap.sound} onToggle={() => toggleSection("sound")}>
+            <SoundBody />
           </Card>
 
           <Card title="关于" id="about" open={openMap.about} onToggle={() => toggleSection("about")}>

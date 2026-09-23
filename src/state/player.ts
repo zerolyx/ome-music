@@ -6,6 +6,9 @@ import { djConfig } from "./dj";
 import { introFor, radioEnabled, radioNext, recordSkip } from "./radio";
 import { speak } from "./tts";
 import { consumeTrackEndSleep } from "./sleeptimer";
+import { createEqChain, registerEqFilters } from "./equalizer";
+import { fadeEnabled, fadeFactor, fadeSwap, resetFade } from "./fade";
+import { applySinkId } from "./audioout";
 
 export const queue = signal<Track[]>([]);
 /** 播放列表抽屉开关 */
@@ -37,14 +40,20 @@ function hookupAnalyser(element: HTMLAudioElement): void {
     if (!Ctx) return;
     const ctx = new Ctx();
     const source = ctx.createMediaElementSource(element);
+    // EQ 链：source → 10×Peaking → analyser → 输出（关闭时增益全 0，链路透明）
+    const eqChain = createEqChain(ctx);
     const node = ctx.createAnalyser();
     node.fftSize = 128;
     node.smoothingTimeConstant = 0.82;
-    source.connect(node);
+    source.connect(eqChain[0]);
+    eqChain[eqChain.length - 1].connect(node);
     node.connect(ctx.destination);
+    registerEqFilters(eqChain);
     analyser = node;
     freqData = new Uint8Array(node.frequencyBinCount);
     element.addEventListener("play", () => void ctx.resume());
+    applySinkId(element);
+    window.addEventListener("ome:output-device", () => applySinkId(element));
   } catch {
     analyser = null;
     freqData = null;
@@ -138,6 +147,7 @@ export function readLastPlayback(): { track: Track; position: number } | null {
 }
 
 function stopAtQueueEnd() {
+  resetFade();
   isPlaying.value = false;
   position.value = 0;
 }
@@ -262,6 +272,16 @@ function playImmediate(index: number) {
   playbackError.value = null;
   const element = ensureAudio();
 
+  /** 音量 = 用户音量 × 淡变系数（自动淡变期间系数在 0-1 间渐变） */
+  const applyVolume = () => {
+    element.volume = volume.value * fadeFactor();
+  };
+  /** 换源包装：有声音在播且开了淡变 → 先淡出再换；否则直接换 */
+  const swap = (assign: () => void) => {
+    const shouldFade = fadeEnabled.value && !!element.src && !element.paused;
+    fadeSwap(shouldFade, assign, applyVolume);
+  };
+
   if (track.source === "netease") {
     isPlaying.value = false;
     resolveNeteaseSrc(track)
@@ -271,9 +291,11 @@ function playImmediate(index: number) {
           playbackError.value = "无法获取播放地址";
           return;
         }
-        element.src = src;
-        void element.play().catch(() => {
-          isPlaying.value = false;
+        swap(() => {
+          element.src = src;
+          void element.play().catch(() => {
+            isPlaying.value = false;
+          });
         });
         void recordPlaybackEvent(track.id, "play", 0);
       })
@@ -294,9 +316,11 @@ function playImmediate(index: number) {
     bilibiliStreamUrl(sourceId)
       .then(({ url, referer }) => {
         if (queue.value[index] !== track) return; // 已切歌，丢弃过期结果
-        element.src = bilibiliProxySrc(url, referer);
-        void element.play().catch(() => {
-          isPlaying.value = false;
+        swap(() => {
+          element.src = bilibiliProxySrc(url, referer);
+          void element.play().catch(() => {
+            isPlaying.value = false;
+          });
         });
         void recordPlaybackEvent(track.id, "play", 0);
       })
@@ -310,9 +334,11 @@ function playImmediate(index: number) {
     return;
   }
 
-  element.src = toPlayableSrc(track);
-  void element.play().catch(() => {
-    isPlaying.value = false;
+  swap(() => {
+    element.src = toPlayableSrc(track);
+    void element.play().catch(() => {
+      isPlaying.value = false;
+    });
   });
   void recordPlaybackEvent(track.id, "play", 0);
 }
@@ -390,5 +416,6 @@ export function seek(seconds: number) {
 
 export function setVolume(value: number) {
   volume.value = Math.min(1, Math.max(0, value));
-  ensureAudio().volume = volume.value;
+  const element = ensureAudio();
+  element.volume = volume.value * fadeFactor();
 }

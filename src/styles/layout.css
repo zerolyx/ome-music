@@ -2311,3 +2311,64 @@ body::before {
 }
 .viz-view.viz-ui-hidden { cursor: none; }
 .home-cta-row { display: flex; gap: 10px; }
+
+/* ============ 设置 · 声音（DSP） ============ */
+.eq-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.eq-bands {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 10px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.eq-band {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.eq-band input[type="range"] {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 4px;
+  height: 110px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.eq-band input[type="range"]:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.eq-band-value {
+  font-size: 10px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  min-height: 12px;
+}
+.eq-band-label {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.eq-device-select {
+  flex: 1;
+  max-width: 320px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.eq-device-select:focus-visible {
+  border-color: var(--accent);
+}
+@media (max-width: 720px) {
+  .eq-bands { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
