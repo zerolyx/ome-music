@@ -1019,3 +1019,35 @@
   transition: width 0.25s linear;
   text-shadow: 0 0 16px var(--accent-soft);
 }
+
+/* ============ 影院模式：播放即深色沉浸（Apple Music 式） ============ */
+.view-home.is-cinema {
+  /* 局部覆盖主题变量：舞台强制暗场，文字/弹幕/扫光全部鲜活 */
+  --text: #f4f2ef;
+  --text-dim: rgba(244, 242, 239, 0.6);
+  --vignette: 0.72;
+  --backdrop-brightness: 0.5;
+  --backdrop-opacity: 0.72;
+  background: #0a0a0c;
+  color: #f4f2ef;
+}
+.view-home.is-cinema::after {
+  background: radial-gradient(ellipse 92% 82% at 50% 42%, rgba(0, 0, 0, 0) 28%, rgba(5, 5, 8, 0.82) 100%);
+}
+.is-cinema .home-watermark {
+  -webkit-text-stroke-color: rgba(255, 255, 255, 0.1);
+}
+.is-cinema .lyric-fill {
+  color: #ffb98a;
+  text-shadow: 0 0 22px rgba(224, 135, 99, 0.55);
+}
+.is-cinema .yrc-word.yrc-sung {
+  color: #f4f2ef;
+}
+.is-cinema .yrc-word.yrc-singing {
+  color: #ffb98a;
+  text-shadow: 0 0 22px rgba(224, 135, 99, 0.65);
+}
+.is-cinema .yrc-word.yrc-next {
+  color: rgba(244, 242, 239, 0.42);
+}

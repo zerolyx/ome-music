@@ -1,30 +1,87 @@
 import { useEffect } from "preact/hooks";
 import { Icon } from "../components/Icon";
 import { HomeLyrics } from "../components/HomeWidgets";
-import { currentTrack } from "../state/player";
+import { currentTrack, currentIndex, duration, isPlaying, position, queue } from "../state/player";
 import { coverUrl } from "../lib/api";
-import { loadLyricFor } from "../state/lyrics";
+import { loadLyricFor, lyricLines, lyricTrackId } from "../state/lyrics";
 import { loadDanmakuFor } from "../state/danmaku";
 import { DanmakuLayer } from "../components/DanmakuLayer";
 import { djConfig } from "../state/dj";
 import { startRadioIfIdle } from "../state/radio";
+import type { Track } from "../types/music";
+
+/** 开发/演示模式：?demo=1 伪造播放态，供视觉自查（不影响正常使用） */
+const demo =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo");
+
+const DEMO_COVER =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'>` +
+      `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
+      `<stop offset='0' stop-color='#f6e7d7'/><stop offset='.55' stop-color='#e8c3ae'/>` +
+      `<stop offset='1' stop-color='#b97a5e'/></linearGradient></defs>` +
+      `<rect width='600' height='600' fill='url(#g)'/>` +
+      `<circle cx='300' cy='258' r='118' fill='#c96f4a'/>` +
+      `<text x='300' y='420' text-anchor='middle' font-family='serif' font-size='44' fill='#7a4632'>情歌</text>` +
+      `<text x='300' y='470' text-anchor='middle' font-family='sans-serif' font-size='22' fill='#9a6a52'>梁静茹</text>` +
+      `</svg>`
+  );
+
+const DEMO_TRACK: Track = {
+  id: "demo-1",
+  title: "情歌",
+  artist: "梁静茹",
+  album: "现在开始我爱你",
+  durationSeconds: 263,
+  filePath: "",
+  source: "netease",
+  sourceId: "186016",
+  coverPath: DEMO_COVER,
+  liked: false,
+  playCount: 0,
+};
 
 export function HomeView() {
-  const track = currentTrack.value;
+  const demoTrack = demo ? DEMO_TRACK : null;
+  const track = demo ? demoTrack : currentTrack.value;
   const cover = track?.coverPath ? coverUrl(track.coverPath) : "";
-  const playing = track !== null;
 
   useEffect(() => {
+    if (demo) {
+      // 演示：样例歌词 + 假播放进度驱动扫光/逐字
+      lyricLines.value = [
+        { time: 0, text: "一整个宇宙" },
+        { time: 4, text: "换一颗红豆" },
+        { time: 8, text: "回忆如困兽" },
+        { time: 12, text: "寂寞太长时间里发着呆" },
+        { time: 16, text: "时间能证明爱能穿越人海" },
+        { time: 20, text: "情歌深爱着的人啊" },
+      ];
+      lyricTrackId.value = DEMO_TRACK.id;
+      queue.value = [DEMO_TRACK];
+      currentIndex.value = 0;
+      duration.value = DEMO_TRACK.durationSeconds;
+      isPlaying.value = true;
+      const timer = setInterval(() => {
+        position.value = (position.value + 0.25) % 24;
+      }, 250);
+      return () => {
+        clearInterval(timer);
+        position.value = 0;
+        isPlaying.value = false;
+        queue.value = [];
+        currentIndex.value = -1;
+        lyricLines.value = [];
+        lyricTrackId.value = null;
+      };
+    }
     void loadLyricFor(track);
     void loadDanmakuFor(track); // 仅 B站曲目有弹幕；其他源清空
-  }, [track?.id]);
-
-  // Folia 式水印文本：曲名 · 艺人（未播放时为电台标识）
-  const watermarkText = track ? `${track.title} · ${track.artist}` : "OME RADIO";
+  }, [track?.id, demo]);
 
   return (
-    <section class="view view-home">
-      <div class="home-watermark" aria-hidden="true">{watermarkText}</div>
+    <section class={`view view-home ${track ? "is-cinema" : ""}`}>
       {/* 氛围背景：当前封面高斯模糊铺满全窗（fixed 脱离滚动区） */}
       {cover && (
         <div
@@ -35,12 +92,11 @@ export function HomeView() {
         />
       )}
       <div class="home-glow" aria-hidden="true" />
-      {/* 弹幕氛围：夹在氛围背景与内容之间，默认关闭（设置 · 外观） */}
       <DanmakuLayer />
       <div class="home-empty">
         <p class="home-kicker">OME RADIO · 私人电台</p>
 
-        {playing ? (
+        {track ? (
           <>
             <div class="home-now">
               <span class="home-now-title">{track.title}</span>
