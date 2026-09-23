@@ -11,6 +11,27 @@
   --glow-opacity: 0;
   --radius: 14px;
   --font: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  /* 舞台大字衬线：Folia 式歌词 display（纯系统字体栈，零下载） */
+  --font-display: "Noto Serif SC", "Source Han Serif SC", "Source Han Serif CN", "STSong", "SimSun", serif;
+  /* 侧边导航宽（图标 + 文字） */
+  --sidebar-w: 196px;
+}
+
+/* 强调色平滑过渡（唱片取色时全站 accent 渐变；Chromium 支持 @property，其余浏览器静态切换） */
+@property --accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #c96f4a;
+}
+@property --accent-soft {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(201, 111, 74, 0.12);
+}
+html {
+  transition:
+    --accent 0.7s ease,
+    --accent-soft 0.7s ease;
 }
 
 [data-theme="dark"] {

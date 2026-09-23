@@ -25,6 +25,13 @@ const PATHS = {
   close: "M6 6l12 12M18 6L6 18",
   "chevron-down": "M6 9l6 6 6-6",
   queue: "M4 6h16M4 12h16M4 18h9",
+  list: "M4 6h3M4 12h3M4 18h3M9.5 6H20M9.5 12H20M9.5 18H20",
+  grid: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+  user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20a7.5 7.5 0 0 1 15 0",
+  history: "M4 12a8 8 0 1 1 2.3 5.6M4 12H2.2M4 12l-1.6-2.2M12 8v4l3 2",
+  "play-next": "M5 5.5v13l8.5-6.5zM16.5 5v14",
+  playlist: "M4 5h16v14H4zM10.5 9.5l4.5 2.5-4.5 2.5z",
+  moon: "M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5z",
 } as const;
 
 export function Icon({ name, size = 20 }: IconProps) {

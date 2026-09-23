@@ -8,7 +8,7 @@ afterEach(cleanup);
 describe("App shell", () => {
   it("渲染四个导航项", () => {
     render(<App />);
-    expect(screen.getByRole("button", { name: "首页" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "电台" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "搜索" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "曲库" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
@@ -18,7 +18,7 @@ describe("App shell", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "曲库" }));
     expect(activeView.value).toBe("library");
-    fireEvent.click(screen.getByRole("button", { name: "首页" }));
+    fireEvent.click(screen.getByRole("button", { name: "电台" }));
     expect(activeView.value).toBe("home");
   });
 });
