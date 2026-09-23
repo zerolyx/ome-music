@@ -45,14 +45,27 @@ export function HomeLyrics() {
     const prev = active >= 0 ? lines[active - 1] : null;
     const current = active >= 0 ? lines[active] : null;
     const next = active + 1 < lines.length ? lines[active + 1] : null;
+    // 行内进度：卡拉OK式亮色扫过（无结束时间的行按 8 秒估算）
+    const lineStart = current?.time ?? 0;
+    const lineEnd = next?.time ?? (current ? current.time + 8 : 0);
+    const progress = current
+      ? Math.min(1, Math.max(0, (position.value - lineStart) / Math.max(lineEnd - lineStart, 0.5)))
+      : 0;
     return (
       <div class="home-lyrics" aria-live="polite">
         <p class="lyric-line lyric-prev">{prev?.text ?? ""}</p>
         <p
           key={current?.text ?? "idle"}
-          class={`lyric-line lyric-current ${isPlaying.value ? "" : "is-paused"}`}
+          class={`lyric-line lyric-current lyric-karaoke ${isPlaying.value ? "" : "is-paused"}`}
         >
-          {current?.text ?? "…"}
+          <span class="lyric-base">{current?.text ?? "…"}</span>
+          <span
+            class="lyric-fill"
+            style={{ width: `${Math.round(progress * 10000) / 100}%` }}
+            aria-hidden="true"
+          >
+            {current?.text ?? ""}
+          </span>
         </p>
         <p class="lyric-line lyric-next">{next?.text ?? ""}</p>
       </div>

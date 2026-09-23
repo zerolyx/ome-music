@@ -242,3 +242,12 @@
 .lyric-current {
   animation: lyric-in 0.45s var(--ease-signature) backwards;
 }
+
+/* yrc 逐字：正在唱的字轻微弹跳放大 */
+.yrc-word {
+  display: inline-block;
+  transition: transform 0.18s var(--ease-signature);
+}
+.yrc-word.yrc-singing {
+  transform: scale(1.09);
+}

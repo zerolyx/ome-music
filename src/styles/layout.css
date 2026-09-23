@@ -874,8 +874,33 @@
   color: var(--text-dim);
 }
 .home-art-tilt {
+  position: relative;
   transition: transform 0.12s ease-out;
   will-change: transform;
+}
+/* moonshot 式光环：封面背后缓慢旋转的柔光（纯装饰） */
+.home-art-tilt::before {
+  content: "";
+  position: absolute;
+  inset: -30px;
+  border-radius: 32px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--accent-soft) 40deg,
+    transparent 90deg,
+    transparent 180deg,
+    var(--accent-soft) 220deg,
+    transparent 280deg
+  );
+  filter: blur(26px);
+  animation: halo-rotate 12s linear infinite;
+  z-index: -1;
+}
+@keyframes halo-rotate {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .home-art {
   width: min(330px, 56vh);
@@ -973,4 +998,24 @@
   user-select: none;
   overflow: hidden;
   letter-spacing: 0.02em;
+}
+
+/* ============ 卡拉OK扫光歌词（行级） ============ */
+.lyric-karaoke {
+  position: relative;
+  display: inline-block;
+  max-width: 760px;
+}
+.lyric-karaoke .lyric-base {
+  color: var(--text-dim);
+}
+.lyric-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--accent);
+  transition: width 0.25s linear;
+  text-shadow: 0 0 16px var(--accent-soft);
 }

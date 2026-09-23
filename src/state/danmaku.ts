@@ -11,14 +11,15 @@ const DANMAKU_KEY = "ome.danmaku";
 const MAX_ITEMS = 120;
 
 function readStoredEnabled(): boolean {
+  // 默认开启（用户明确要看弹幕）；显式存过 "0" 才关
   try {
-    return localStorage.getItem(DANMAKU_KEY) === "1";
+    return localStorage.getItem(DANMAKU_KEY) !== "0";
   } catch {
-    return false; // 存储不可用（隐私模式等）：默认关闭
+    return true;
   }
 }
 
-/** 弹幕氛围总开关；默认关闭 */
+/** 弹幕氛围总开关；默认开启 */
 export const danmakuEnabled = signal<boolean>(readStoredEnabled());
 
 export function setDanmakuEnabled(value: boolean): void {

@@ -4,8 +4,19 @@
  */
 
 import { signal } from "@preact/signals";
-import { bilibiliSearch, type BilibiliSongDto } from "../lib/api";
+import { bilibiliSearch, isTauriRuntime, type BilibiliSongDto } from "../lib/api";
 import type { Track } from "../types/music";
+
+/**
+ * B站图片 CDN（hdslb.com）有防盗链：WebView 的 Referer 会被 403。
+ * 桌面端经 ome-media /remote 代理注入 B站 Referer；http 升级 https。
+ */
+export function bilibiliImageProxy(url: string | null): string | null {
+  if (!url) return null;
+  const httpsUrl = url.replace(/^http:/, "https:");
+  if (!isTauriRuntime()) return httpsUrl;
+  return `http://ome-media.localhost/remote?p=${encodeURIComponent(httpsUrl)}&r=www.bilibili.com`;
+}
 
 export const searching = signal(false);
 export const results = signal<Track[]>([]);
@@ -25,7 +36,7 @@ export function bilibiliSongToTrack(song: BilibiliSongDto): Track {
     source: "bilibili",
     sourceId: song.bvid,
     unavailableReason: null, // B站曲目全部可播，无 VIP 角标
-    coverPath: song.coverUrl || null,
+    coverPath: bilibiliImageProxy(song.coverUrl || null),
     liked: false,
     playCount: 0,
   };
