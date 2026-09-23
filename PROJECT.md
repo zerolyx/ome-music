@@ -9,8 +9,9 @@ AI 时代的私人电台：本地音乐 + 网易云 + Bilibili，DJ 有记忆、
 
 ## Current Status
 
-v0.4.0 重建完成：Preact + Rust 模块化（db/library/media/netease/bilibili/dj）。
-待办：Bilibili 氛围视频（弹幕已上线）、发布打包（nsis）。
+v0.7.0 已发布（UI 逐页对照重做 + 迷你播放器 + 歌词候选弹窗）。全量交接见
+docs/PROJECT-HANDOVER.md（背景/架构/机制/踩坑/路线图）。待办：桌面歌词独立
+窗口（远期，见 handover 第七节）。
 
 ## Tech Stack
 
