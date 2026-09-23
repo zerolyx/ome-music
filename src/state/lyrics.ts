@@ -312,3 +312,42 @@ export async function rematchLyric(track: Track): Promise<void> {
   }
   await loadLyricFor(track);
 }
+
+/* ---- 手动候选确认：搜索结果列表挑选（多版本/翻唱歧义时人工定夺） ---- */
+
+export const matchCandidates = signal<NeteaseSong[] | null>(null);
+export const matchTargetTrack = signal<Track | null>(null);
+
+/** 拉取候选列表并打开确认弹窗 */
+export async function findMatchCandidates(track: Track): Promise<void> {
+  matchTargetTrack.value = track;
+  matchCandidates.value = null;
+  try {
+    matchCandidates.value = await neteaseSearch(`${track.title} ${track.artist}`, 8);
+  } catch {
+    matchCandidates.value = [];
+  }
+}
+
+export function closeMatchPicker(): void {
+  matchCandidates.value = null;
+  matchTargetTrack.value = null;
+}
+
+/** 选定候选：拉它的歌词并作为该曲目匹配结果缓存 */
+export async function applyMatchCandidate(song: NeteaseSong): Promise<void> {
+  const track = matchTargetTrack.value;
+  if (!track) return;
+  const lyric = await fetchNeteaseLyric(String(song.id));
+  matchedCache.set(track.id, lyric);
+  rawByTrack.delete(track.id);
+  if (lyricTrackId.value === track.id) {
+    lyricLines.value = [];
+    yrcLines.value = [];
+    tlyricLines.value = [];
+    lyricTrackId.value = null;
+  }
+  if (lyric) presentParsed(track.id, lyric);
+  else clearLyrics();
+  closeMatchPicker();
+}

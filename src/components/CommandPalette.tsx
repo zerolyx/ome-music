@@ -23,7 +23,7 @@ import {
   togglePlayback,
   volume,
 } from "../state/player";
-import { rematchLyric } from "../state/lyrics";
+import { rematchLyric, findMatchCandidates } from "../state/lyrics";
 import { openPlaylist, playlists } from "../state/playlists";
 import { setThemeChoice, THEME_PRESETS } from "../state/theme";
 import { openStage } from "../state/stage";
@@ -71,6 +71,7 @@ function buildCommands(): Command[] {
     { id: "volume.down", title: "音量 · 减小", group: "播放", hint: `${Math.round(volume.value * 100)}%`, run: () => setVolume(volume.value - 0.1) },
     { id: "volume.mute", title: "音量 · 静音", group: "播放", run: () => setVolume(0) },
     { id: "lyric.rematch", title: "歌词 · 重新匹配当前曲目", group: "播放", hint: currentTrack.value ? currentTrack.value.title : "未在播放", run: () => { const track = currentTrack.value; if (track) void rematchLyric(track); } },
+    { id: "lyric.pick", title: "歌词 · 手动挑选匹配版本", group: "播放", hint: currentTrack.value ? currentTrack.value.title : "未在播放", run: () => { const track = currentTrack.value; if (track) void findMatchCandidates(track); } },
     { id: "stage.open", title: "打开歌词舞台", group: "播放", run: () => openStage() },
     { id: "viz.open", title: "打开视觉器", group: "播放", run: () => openViz() },
     // DJ

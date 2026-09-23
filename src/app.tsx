@@ -9,6 +9,7 @@ import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
 import { ImmersiveCursor } from "./components/ImmersiveCursor";
 import { MiniPlayer } from "./components/MiniPlayer";
+import { LyricsMatchPicker } from "./components/LyricsMatchPicker";
 import { DjDrawer } from "./components/DjDrawer";
 import { HomeView } from "./views/Home";
 import { SearchView } from "./views/Search";
@@ -68,6 +69,7 @@ export function App() {
       <PlaylistPicker />
       <CommandPalette />
       <MiniPlayer />
+      <LyricsMatchPicker />
       {stageOpen.value && <StageView />}
       {vizOpen.value && <VisualizerView />}
     </div>
