@@ -655,6 +655,11 @@ body::before {
 }
 .home-art-col .home-art {
   width: min(100%, 400px);
+  border-radius: 18px;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.42),
+    0 4px 16px rgba(0, 0, 0, 0.28);
+  outline: 1px solid rgba(255, 255, 255, 0.08);
 }
 .home-info-col {
   display: grid;
@@ -677,6 +682,11 @@ body::before {
   }
   .home-stage .home-info-col {
     justify-items: start;
+  }
+  .home-stage .home-now,
+  .home-stage .home-cta-row {
+    justify-items: start;
+    justify-content: start;
   }
   .home-stage .home-info-col .home-lyrics {
     justify-items: start;
@@ -1153,15 +1163,21 @@ body::before {
 
 .home-now {
   display: grid;
-  gap: 2px;
+  gap: 6px;
   justify-items: center;
 }
+/* Folia 式大字阶：display 衬线标题 + 拉开层级 */
 .home-now-title {
-  font-size: 16px;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 3.6vw, 44px);
   font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-wrap: balance;
 }
 .home-now-artist {
-  font-size: 12px;
+  font-size: 14px;
+  letter-spacing: 0.1em;
   color: var(--text-dim);
 }
 
