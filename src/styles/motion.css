@@ -113,7 +113,9 @@
   }
 }
 
-/* ============ 沉浸光标（环 + 点） ============ */
+/* ============ 沉浸光标（环 + 点） ============
+ * 差值混合：白形与底色做 difference，深底变白、浅底变黑，
+ * 任何主题/背景下必然可见（浅色主题 + 深色电台区的失效问题由此根治） */
 .cursor-ring {
   position: fixed;
   top: 0;
@@ -122,22 +124,21 @@
   height: 32px;
   margin: -16px 0 0 -16px;
   border-radius: 50%;
-  border: 1.5px solid var(--cursor);
+  border: 1.5px solid #fff;
+  mix-blend-mode: difference;
   pointer-events: none;
   z-index: 9999;
   opacity: 0;
   will-change: translate, opacity;
   transition:
     scale 0.35s var(--ease-signature),
-    border-color 0.35s ease,
     background-color 0.35s ease,
     opacity 0.3s ease;
 }
 
 .cursor-ring.is-hover {
   scale: 1.6;
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .cursor-dot {
@@ -148,7 +149,8 @@
   height: 5px;
   margin: -2.5px 0 0 -2.5px;
   border-radius: 50%;
-  background: var(--cursor-strong);
+  background: #fff;
+  mix-blend-mode: difference;
   pointer-events: none;
   z-index: 9999;
   opacity: 0;

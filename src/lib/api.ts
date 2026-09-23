@@ -36,9 +36,11 @@ export function coverUrl(path?: string | null): string {
     // 远程封面经媒体代理中转：绕防盗链 + 补 CORS，供唱片取色 canvas 采样
     if (isTauriRuntime()) {
       try {
-        const host = new URL(path).hostname.toLowerCase();
+        // 网易云 picUrl 常是 http 直链：代理只收 https，先升级
+        const upgraded = path.replace(/^http:\/\//i, "https://");
+        const host = new URL(upgraded).hostname.toLowerCase();
         if (PROXYABLE_COVER_SUFFIXES.some((s) => host === s || host.endsWith(`.${s}`))) {
-          return `http://ome-media.localhost/remote?p=${encodeURIComponent(path)}`;
+          return `http://ome-media.localhost/remote?p=${encodeURIComponent(upgraded)}`;
         }
       } catch {
         /* URL 解析失败按原样返回 */

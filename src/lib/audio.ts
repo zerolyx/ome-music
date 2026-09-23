@@ -36,8 +36,12 @@ export function proxyableRemoteUrl(url: string): boolean {
 export function toPlayableSrc(track: Track): string {
   if (track.filePath.startsWith("unavailable:")) return "";
   if (/^https?:\/\//i.test(track.filePath)) {
-    if (isTauriRuntime() && proxyableRemoteUrl(track.filePath)) {
-      return `http://ome-media.localhost/remote?p=${encodeURIComponent(track.filePath)}`;
+    if (isTauriRuntime()) {
+      // 网易云 CDN 常返回 http 直链：升级 https 后走代理（126.net 支持 https）
+      const upgraded = track.filePath.replace(/^http:\/\//i, "https://");
+      if (proxyableRemoteUrl(upgraded)) {
+        return `http://ome-media.localhost/remote?p=${encodeURIComponent(upgraded)}`;
+      }
     }
     return track.filePath;
   }
