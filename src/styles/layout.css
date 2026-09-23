@@ -400,6 +400,10 @@
 .search-error {
   color: #e5484d;
 }
+/* 音源切换（网易云 / B站） */
+.search-source {
+  margin: -6px 0 16px;
+}
 
 .vip-chip {
   display: inline-block;
@@ -642,6 +646,10 @@
 .dj-radio-label {
   font-size: 13px;
   color: var(--text);
+}
+/* 外观卡 · 弹幕氛围行：与主题选择拉开间距 */
+.settings-danmaku-row {
+  margin-top: 16px;
 }
 .dj-config-grid {
   display: grid;

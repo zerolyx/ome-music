@@ -4,6 +4,8 @@ import { HomeLyrics } from "../components/HomeWidgets";
 import { currentTrack } from "../state/player";
 import { coverUrl } from "../lib/api";
 import { loadLyricFor } from "../state/lyrics";
+import { loadDanmakuFor } from "../state/danmaku";
+import { DanmakuLayer } from "../components/DanmakuLayer";
 import { djConfig } from "../state/dj";
 import { startRadioIfIdle } from "../state/radio";
 
@@ -14,6 +16,7 @@ export function HomeView() {
 
   useEffect(() => {
     void loadLyricFor(track);
+    void loadDanmakuFor(track); // 仅 B站曲目有弹幕；其他源清空
   }, [track?.id]);
 
   // Folia 式水印文本：曲名 · 艺人（未播放时为电台标识）
@@ -32,6 +35,8 @@ export function HomeView() {
         />
       )}
       <div class="home-glow" aria-hidden="true" />
+      {/* 弹幕氛围：夹在氛围背景与内容之间，默认关闭（设置 · 外观） */}
+      <DanmakuLayer />
       <div class="home-empty">
         <p class="home-kicker">OME RADIO · 私人电台</p>
 

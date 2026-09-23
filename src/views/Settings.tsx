@@ -6,6 +6,7 @@ import { getAppVersion, isTauriRuntime } from "../lib/api";
 import { setThemeChoice, themeChoice, type ThemeChoice } from "../state/theme";
 import { djConfig, lastError, loadConfig, saveConfig } from "../state/dj";
 import { radioEnabled, setRadioEnabled } from "../state/radio";
+import { danmakuEnabled, setDanmakuEnabled } from "../state/danmaku";
 import {
   cancelQrLogin,
   logout,
@@ -246,6 +247,28 @@ export function SettingsView() {
             </button>
           ))}
         </div>
+        <div class="dj-radio-row settings-danmaku-row">
+          <span class="dj-radio-label">弹幕氛围</span>
+          <div class="segmented" role="radiogroup" aria-label="弹幕氛围">
+            <button
+              role="radio"
+              aria-checked={danmakuEnabled.value}
+              class={`segment ${danmakuEnabled.value ? "is-active" : ""}`}
+              onClick={() => setDanmakuEnabled(true)}
+            >
+              开
+            </button>
+            <button
+              role="radio"
+              aria-checked={!danmakuEnabled.value}
+              class={`segment ${!danmakuEnabled.value ? "is-active" : ""}`}
+              onClick={() => setDanmakuEnabled(false)}
+            >
+              关
+            </button>
+          </div>
+        </div>
+        <p class="view-hint">播放 B站视频时在首页漂浮同屏弹幕，纯氛围装饰。</p>
       </Card>
 
       <Card title="关于" defaultOpen={false}>

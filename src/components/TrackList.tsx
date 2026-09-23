@@ -28,13 +28,16 @@ export function TrackList({ tracks, currentIndex, onPlay, onToggleLike }: TrackL
             <span class="track-artist">{track.artist}</span>
           </div>
           <span class="track-duration">{formatDuration(track.durationSeconds)}</span>
-          <button
-            class={`track-like ${track.liked ? "is-liked" : ""}`}
-            aria-label={track.liked ? "取消红心" : "红心"}
-            onClick={() => onToggleLike(track)}
-          >
-            <Icon name="heart" size={16} />
-          </button>
+          {/* B站暂无红心接口（v1）：源为 bilibili 时隐藏红心 */}
+          {track.source !== "bilibili" && (
+            <button
+              class={`track-like ${track.liked ? "is-liked" : ""}`}
+              aria-label={track.liked ? "取消红心" : "红心"}
+              onClick={() => onToggleLike(track)}
+            >
+              <Icon name="heart" size={16} />
+            </button>
+          )}
         </li>
       ))}
     </ul>

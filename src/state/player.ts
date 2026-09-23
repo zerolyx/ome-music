@@ -1,6 +1,6 @@
 import { computed, signal } from "@preact/signals";
 import type { Track } from "../types/music";
-import { neteaseStreamUrl, recordPlaybackEvent } from "../lib/api";
+import { neteaseStreamUrl, recordPlaybackEvent, bilibiliProxySrc, bilibiliStreamUrl } from "../lib/api";
 import { toPlayableSrc } from "../lib/audio";
 import { djConfig } from "./dj";
 import { introFor, radioEnabled, radioNext, recordSkip } from "./radio";
@@ -193,6 +193,29 @@ function playImmediate(index: number) {
           return;
         }
         element.src = src;
+        void element.play().catch(() => {
+          isPlaying.value = false;
+        });
+        void recordPlaybackEvent(track.id, "play", 0);
+      })
+      .catch((e: unknown) => {
+        isPlaying.value = false;
+        // 清掉旧 src：下次按播放会重试当前曲目而不是恢复上一首
+        element.pause();
+        element.removeAttribute("src");
+        playbackError.value = e instanceof Error ? e.message : String(e);
+      });
+    return;
+  }
+
+  if (track.source === "bilibili") {
+    isPlaying.value = false;
+    const sourceId = track.sourceId ?? "";
+    // B站 CDN 有 Referer 防盗链：真实直链必须经 ome-media /remote 代理中转
+    bilibiliStreamUrl(sourceId)
+      .then(({ url, referer }) => {
+        if (queue.value[index] !== track) return; // 已切歌，丢弃过期结果
+        element.src = bilibiliProxySrc(url, referer);
         void element.play().catch(() => {
           isPlaying.value = false;
         });
