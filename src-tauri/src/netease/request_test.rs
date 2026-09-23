@@ -85,7 +85,10 @@ fn build_eapi_header_contains_device_fields_and_conditional_login() {
             .find(|(k, _)| k == key)
             .map(|(_, v)| v.clone())
     };
-    assert_eq!(get("osver").as_deref(), Some("Microsoft-Windows-10-Professional-build-19045-64bit"));
+    assert_eq!(
+        get("osver").as_deref(),
+        Some("Microsoft-Windows-10-Professional-build-19045-64bit")
+    );
     assert_eq!(get("os").as_deref(), Some("pc"));
     assert_eq!(get("appver").as_deref(), Some("3.1.17.204416"));
     assert_eq!(get("channel").as_deref(), Some("netease"));

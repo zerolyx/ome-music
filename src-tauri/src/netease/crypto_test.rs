@@ -6,11 +6,7 @@ use serde_json::json;
 type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 
 /// 测试专用：两层 CBC 反解，验证 weapi 密文可还原为原始 JSON。
-fn aes_cbc_decrypt_base64(
-    ciphertext_b64: &str,
-    key: &str,
-    iv: &str,
-) -> Result<String, String> {
+fn aes_cbc_decrypt_base64(ciphertext_b64: &str, key: &str, iv: &str) -> Result<String, String> {
     let ciphertext = BASE64
         .decode(ciphertext_b64)
         .map_err(|e| format!("base64 解码失败: {e}"))?;
@@ -43,7 +39,9 @@ fn enc_sec_key_is_256_lowercase_hex_chars() {
     let (_params, enc_sec_key) = weapi_with_secret(&json!({ "type": 3 }), SECRET);
     assert_eq!(enc_sec_key.len(), 256);
     assert!(
-        enc_sec_key.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+        enc_sec_key
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
         "encSecKey 必须是小写 hex: {enc_sec_key}"
     );
 }
@@ -66,7 +64,9 @@ fn eapi_output_is_lowercase_hex_and_block_aligned() {
     assert!(!params.is_empty());
     assert_eq!(params.len() % 32, 0, "AES-128 密文必须是 16 字节块的 hex");
     assert!(
-        params.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+        params
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
         "eapi params 必须是小写 hex"
     );
 }

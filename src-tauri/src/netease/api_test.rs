@@ -22,9 +22,7 @@ fn parse_song_maps_cloudsearch_fields() {
 
 #[test]
 fn parse_song_marks_only_fee_0_and_8_as_plain() {
-    let base = |fee: i64| {
-        serde_json::json!({ "id": 1, "name": "x", "ar": [], "al": {}, "dt": 1, "fee": fee })
-    };
+    let base = |fee: i64| serde_json::json!({ "id": 1, "name": "x", "ar": [], "al": {}, "dt": 1, "fee": fee });
     assert!(parse_song(&base(0)).unwrap().plain);
     assert!(parse_song(&base(8)).unwrap().plain);
     assert!(!parse_song(&base(1)).unwrap().plain);

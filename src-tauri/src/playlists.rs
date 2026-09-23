@@ -18,7 +18,10 @@ pub struct PlaylistDto {
 }
 
 fn new_id(seed: &str) -> String {
-    format!("{:x}", md5::compute(format!("{seed}{:?}", std::time::SystemTime::now())))
+    format!(
+        "{:x}",
+        md5::compute(format!("{seed}{:?}", std::time::SystemTime::now()))
+    )
 }
 
 // ---------- 纯逻辑 ----------
@@ -89,7 +92,10 @@ pub fn delete_playlist(conn: &Connection, id: &str) -> Result<(), String> {
 }
 
 /// 歌单内曲目：按加入顺序（position 升序，同位置按加入时间）
-pub fn playlist_tracks(conn: &Connection, playlist_id: &str) -> Result<Vec<TrackDto>, rusqlite::Error> {
+pub fn playlist_tracks(
+    conn: &Connection,
+    playlist_id: &str,
+) -> Result<Vec<TrackDto>, rusqlite::Error> {
     let mut stmt = conn.prepare(
         &(TRACK_SELECT.to_string()
             + " JOIN playlist_tracks pt ON pt.track_id = t.id
@@ -101,7 +107,11 @@ pub fn playlist_tracks(conn: &Connection, playlist_id: &str) -> Result<Vec<Track
 }
 
 /// 追加曲目：已存在的跳过（主键去重），position 接在末尾；返回实际新增条数
-pub fn playlist_add_tracks(conn: &Connection, playlist_id: &str, track_ids: &[String]) -> Result<i64, String> {
+pub fn playlist_add_tracks(
+    conn: &Connection,
+    playlist_id: &str,
+    track_ids: &[String],
+) -> Result<i64, String> {
     conn.execute(
         "UPDATE playlists SET updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
         params![playlist_id],
@@ -127,7 +137,11 @@ pub fn playlist_add_tracks(conn: &Connection, playlist_id: &str, track_ids: &[St
     Ok(added)
 }
 
-pub fn playlist_remove_track(conn: &Connection, playlist_id: &str, track_id: &str) -> Result<(), String> {
+pub fn playlist_remove_track(
+    conn: &Connection,
+    playlist_id: &str,
+    track_id: &str,
+) -> Result<(), String> {
     conn.execute(
         "DELETE FROM playlist_tracks WHERE playlist_id = ?1 AND track_id = ?2",
         params![playlist_id, track_id],
@@ -163,7 +177,10 @@ pub fn playlist_delete(state: State<'_, AppState>, id: String) -> Result<(), Str
 }
 
 #[tauri::command]
-pub fn playlist_tracks_command(state: State<'_, AppState>, id: String) -> Result<Vec<TrackDto>, String> {
+pub fn playlist_tracks_command(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<Vec<TrackDto>, String> {
     let conn = state.db.lock().map_err(|error| error.to_string())?;
     playlist_tracks(&conn, &id).map_err(|error| error.to_string())
 }
@@ -179,7 +196,11 @@ pub fn playlist_add_command(
 }
 
 #[tauri::command]
-pub fn playlist_remove_command(state: State<'_, AppState>, id: String, track_id: String) -> Result<(), String> {
+pub fn playlist_remove_command(
+    state: State<'_, AppState>,
+    id: String,
+    track_id: String,
+) -> Result<(), String> {
     let conn = state.db.lock().map_err(|error| error.to_string())?;
     playlist_remove_track(&conn, &id, &track_id)
 }
@@ -212,7 +233,11 @@ mod tests {
     }
 
     fn track_ids(conn: &Connection) -> Vec<String> {
-        crate::library::load_tracks(conn).unwrap().into_iter().map(|track| track.id).collect()
+        crate::library::load_tracks(conn)
+            .unwrap()
+            .into_iter()
+            .map(|track| track.id)
+            .collect()
     }
 
     #[test]
@@ -220,7 +245,10 @@ mod tests {
         let conn = memory_db();
         let playlist = create_playlist(&conn, "深夜电台").unwrap();
         assert_eq!(playlist.name, "深夜电台");
-        assert!(list_playlists(&conn).unwrap().iter().any(|item| item.id == playlist.id));
+        assert!(list_playlists(&conn)
+            .unwrap()
+            .iter()
+            .any(|item| item.id == playlist.id));
         rename_playlist(&conn, &playlist.id, "清晨").unwrap();
         assert_eq!(list_playlists(&conn).unwrap()[0].name, "清晨");
         delete_playlist(&conn, &playlist.id).unwrap();

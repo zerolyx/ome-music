@@ -78,7 +78,8 @@ pub fn insert_track(conn: &Connection, track: &NewTrack) -> Result<(), rusqlite:
 }
 
 /// 曲目行查询共用 SELECT（列序与 row_to_track 对应）；调用方拼自己的 FROM 后续
-pub(crate) const TRACK_SELECT: &str = "SELECT t.id, t.title, ar.name AS artist, a.title AS album, t.duration_seconds, t.file_path,
+pub(crate) const TRACK_SELECT: &str =
+    "SELECT t.id, t.title, ar.name AS artist, a.title AS album, t.duration_seconds, t.file_path,
                 t.source, t.source_id, t.unavailable_reason, t.cover_path, t.liked, t.play_count
          FROM tracks t
          LEFT JOIN artists ar ON t.artist_id = ar.id
@@ -102,9 +103,8 @@ pub(crate) fn row_to_track(row: &rusqlite::Row<'_>) -> Result<TrackDto, rusqlite
 }
 
 pub fn load_tracks(conn: &Connection) -> Result<Vec<TrackDto>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        &(TRACK_SELECT.to_string() + " ORDER BY t.title COLLATE NOCASE"),
-    )?;
+    let mut stmt =
+        conn.prepare(&(TRACK_SELECT.to_string() + " ORDER BY t.title COLLATE NOCASE"))?;
     let rows = stmt.query_map([], row_to_track)?;
     rows.collect()
 }
@@ -137,7 +137,15 @@ pub fn record_playback_event(
     event_type: &str,
     position_seconds: i64,
 ) -> Result<(), String> {
-    const ALLOWED: &[&str] = &["play", "pause", "skip", "completed", "liked", "unliked", "replayed"];
+    const ALLOWED: &[&str] = &[
+        "play",
+        "pause",
+        "skip",
+        "completed",
+        "liked",
+        "unliked",
+        "replayed",
+    ];
     if !ALLOWED.contains(&event_type) {
         return Err(format!("Unknown playback event type: {event_type}"));
     }
@@ -163,7 +171,10 @@ fn read_track_metadata(path: &Path) -> Option<NewTrack> {
     let duration_seconds = properties
         .map(|properties| properties.duration().as_secs() as i64)
         .unwrap_or(0);
-    let tag = tagged.as_ref().and_then(|tagged| tagged.primary_tag()).or_else(|| tagged.as_ref().and_then(|tagged| tagged.first_tag()));
+    let tag = tagged
+        .as_ref()
+        .and_then(|tagged| tagged.primary_tag())
+        .or_else(|| tagged.as_ref().and_then(|tagged| tagged.first_tag()));
     let fallback_title = path.file_stem()?.to_string_lossy().to_string();
     Some(NewTrack {
         title: tag
@@ -218,7 +229,10 @@ pub async fn import_music_folder(
         .map_err(|error| error.to_string())?;
     }
 
-    let app_cache = app.path().app_cache_dir().map_err(|error| error.to_string())?;
+    let app_cache = app
+        .path()
+        .app_cache_dir()
+        .map_err(|error| error.to_string())?;
     let covers_dir = app_cache.join("covers");
     std::fs::create_dir_all(&covers_dir).map_err(|error| error.to_string())?;
 
@@ -228,46 +242,66 @@ pub async fn import_music_folder(
         .app_data_dir()
         .map_err(|error| error.to_string())?
         .join("ome-music.db");
-    let result = tauri::async_runtime::spawn_blocking(move || -> Result<ImportResultDto, String> {
-        let conn = crate::db::open_db(&state_path).map_err(|error| error.to_string())?;
-        let mut added = 0i64;
-        let mut updated = 0i64;
-        let mut skipped = 0i64;
-        for entry in WalkDir::new(&folder).into_iter().filter_map(Result::ok) {
-            let path = entry.path();
-            if !path.is_file() { continue; }
-            let ext_ok = path
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .map(|ext| AUDIO_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
-                .unwrap_or(false);
-            if !ext_ok { continue; }
-            if !is_authorized(&conn, path).map_err(|error| error.to_string())? { continue; }
-            let existed: i64 = conn
-                .query_row("SELECT COUNT(*) FROM tracks WHERE file_path = ?1", params![path.to_string_lossy()], |row| row.get(0))
-                .map_err(|error| error.to_string())?;
-            // 单个文件损坏/解析失败只跳过计数，不中止整个导入
-            let Some(mut track) = read_track_metadata(path) else {
-                skipped += 1;
-                continue;
-            };
-            match extract_cover(&conn, &covers_dir, path, &track) {
-                Ok(cover_path) => track.cover_path = cover_path,
-                Err(_) => {
-                    skipped += 1;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || -> Result<ImportResultDto, String> {
+            let conn = crate::db::open_db(&state_path).map_err(|error| error.to_string())?;
+            let mut added = 0i64;
+            let mut updated = 0i64;
+            let mut skipped = 0i64;
+            for entry in WalkDir::new(&folder).into_iter().filter_map(Result::ok) {
+                let path = entry.path();
+                if !path.is_file() {
                     continue;
                 }
+                let ext_ok = path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| AUDIO_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
+                    .unwrap_or(false);
+                if !ext_ok {
+                    continue;
+                }
+                if !is_authorized(&conn, path).map_err(|error| error.to_string())? {
+                    continue;
+                }
+                let existed: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM tracks WHERE file_path = ?1",
+                        params![path.to_string_lossy()],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| error.to_string())?;
+                // 单个文件损坏/解析失败只跳过计数，不中止整个导入
+                let Some(mut track) = read_track_metadata(path) else {
+                    skipped += 1;
+                    continue;
+                };
+                match extract_cover(&conn, &covers_dir, path, &track) {
+                    Ok(cover_path) => track.cover_path = cover_path,
+                    Err(_) => {
+                        skipped += 1;
+                        continue;
+                    }
+                }
+                insert_track(&conn, &track).map_err(|error| error.to_string())?;
+                if existed > 0 {
+                    updated += 1;
+                } else {
+                    added += 1;
+                }
             }
-            insert_track(&conn, &track).map_err(|error| error.to_string())?;
-            if existed > 0 { updated += 1; } else { added += 1; }
-        }
-        let total: i64 = conn
-            .query_row("SELECT COUNT(*) FROM tracks", [], |row| row.get(0))
-            .map_err(|error| error.to_string())?;
-        Ok(ImportResultDto { added, updated, total, skipped })
-    })
-    .await
-    .map_err(|error| error.to_string())??;
+            let total: i64 = conn
+                .query_row("SELECT COUNT(*) FROM tracks", [], |row| row.get(0))
+                .map_err(|error| error.to_string())?;
+            Ok(ImportResultDto {
+                added,
+                updated,
+                total,
+                skipped,
+            })
+        })
+        .await
+        .map_err(|error| error.to_string())??;
 
     Ok(result)
 }
@@ -294,7 +328,11 @@ fn extract_cover(
         Some(lofty::picture::MimeType::Png) => "png",
         _ => "jpg",
     };
-    let cover_path = covers_dir.join(format!("{}.{}", track_id_for_path(&track.file_path), extension));
+    let cover_path = covers_dir.join(format!(
+        "{}.{}",
+        track_id_for_path(&track.file_path),
+        extension
+    ));
     if !cover_path.exists() {
         std::fs::write(&cover_path, picture.data()).map_err(|error| error.to_string())?;
     }
@@ -308,7 +346,11 @@ pub fn list_tracks(state: State<'_, AppState>) -> Result<Vec<TrackDto>, String> 
 }
 
 #[tauri::command]
-pub fn set_track_liked_command(state: State<'_, AppState>, id: String, liked: bool) -> Result<(), String> {
+pub fn set_track_liked_command(
+    state: State<'_, AppState>,
+    id: String,
+    liked: bool,
+) -> Result<(), String> {
     let conn = state.db.lock().map_err(|error| error.to_string())?;
     set_track_liked(&conn, &id, liked).map_err(|error| error.to_string())
 }
@@ -325,7 +367,10 @@ pub fn record_playback_event_command(
 }
 
 #[tauri::command]
-pub fn playback_history_command(state: State<'_, AppState>, limit: Option<i64>) -> Result<Vec<TrackDto>, String> {
+pub fn playback_history_command(
+    state: State<'_, AppState>,
+    limit: Option<i64>,
+) -> Result<Vec<TrackDto>, String> {
     let conn = state.db.lock().map_err(|error| error.to_string())?;
     let limit = limit.unwrap_or(50).clamp(1, 200);
     playback_history(&conn, limit).map_err(|error| error.to_string())
@@ -416,7 +461,14 @@ mod tests {
     #[test]
     fn set_liked_persists() {
         let conn = memory_db();
-        let track = NewTrack { title: "a".into(), artist: "b".into(), album: String::new(), duration_seconds: 1, file_path: "p".into(), cover_path: None };
+        let track = NewTrack {
+            title: "a".into(),
+            artist: "b".into(),
+            album: String::new(),
+            duration_seconds: 1,
+            file_path: "p".into(),
+            cover_path: None,
+        };
         insert_track(&conn, &track).unwrap();
         let id = load_tracks(&conn).unwrap()[0].id.clone();
         set_track_liked(&conn, &id, true).unwrap();
@@ -426,7 +478,14 @@ mod tests {
     #[test]
     fn playback_event_rejects_unknown_type() {
         let conn = memory_db();
-        let track = NewTrack { title: "a".into(), artist: "b".into(), album: String::new(), duration_seconds: 1, file_path: "p".into(), cover_path: None };
+        let track = NewTrack {
+            title: "a".into(),
+            artist: "b".into(),
+            album: String::new(),
+            duration_seconds: 1,
+            file_path: "p".into(),
+            cover_path: None,
+        };
         insert_track(&conn, &track).unwrap();
         let id = load_tracks(&conn).unwrap()[0].id.clone();
         assert!(record_playback_event(&conn, &id, "play", 0).is_ok());
@@ -437,20 +496,26 @@ mod tests {
     fn playback_history_orders_by_latest_play() {
         let conn = memory_db();
         for (title, path) in [("先播", "p1"), ("后播", "p2")] {
-            insert_track(&conn, &NewTrack {
-                title: title.into(),
-                artist: "b".into(),
-                album: String::new(),
-                duration_seconds: 1,
-                file_path: path.into(),
-                cover_path: None,
-            })
+            insert_track(
+                &conn,
+                &NewTrack {
+                    title: title.into(),
+                    artist: "b".into(),
+                    album: String::new(),
+                    duration_seconds: 1,
+                    file_path: path.into(),
+                    cover_path: None,
+                },
+            )
             .unwrap();
         }
         let first = load_tracks(&conn).unwrap()[0].id.clone();
         let second = load_tracks(&conn).unwrap()[1].id.clone();
         // played_at 秒级精度，直接注入显式时间戳保证顺序确定
-        for (track, at) in [(&first, "2026-09-23 10:00:00"), (&second, "2026-09-23 11:00:00")] {
+        for (track, at) in [
+            (&first, "2026-09-23 10:00:00"),
+            (&second, "2026-09-23 11:00:00"),
+        ] {
             conn.execute(
                 "INSERT INTO playback_events (id, track_id, event_type, position_seconds, played_at)
                  VALUES (?1, ?2, 'play', 0, ?3)",
@@ -468,7 +533,10 @@ mod tests {
 
     /// 临时目录造一个音频 + 歌词文件，返回音频路径
     fn make_sidecar_pair(lrc_name: &str, lrc_bytes: &[u8]) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("ome-lrc-test-{:x}", md5::compute(format!("{lrc_name:?}{lrc_bytes:?}"))));
+        let dir = std::env::temp_dir().join(format!(
+            "ome-lrc-test-{:x}",
+            md5::compute(format!("{lrc_name:?}{lrc_bytes:?}"))
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         let audio = dir.join("夜曲.flac");
         std::fs::write(&audio, b"fake-audio").unwrap();
@@ -479,7 +547,9 @@ mod tests {
     #[test]
     fn sidecar_lrc_found_same_dir_and_base64_roundtrip() {
         let audio = make_sidecar_pair("夜曲.lrc", "[00:01.00]你好".as_bytes());
-        let encoded = read_sidecar_lrc(&audio).unwrap().expect("应命中同目录 .lrc");
+        let encoded = read_sidecar_lrc(&audio)
+            .unwrap()
+            .expect("应命中同目录 .lrc");
         use base64::engine::general_purpose::STANDARD as BASE64;
         use base64::Engine as _;
         let bytes = BASE64.decode(encoded).unwrap();

@@ -60,7 +60,8 @@ pub fn eapi(uri: &str, data: &Value) -> String {
     let message = format!("nobody{uri}use{text}md5forencrypt");
     let digest = format!("{:x}", md5::compute(message));
     let payload = format!("{uri}{EAPI_SEPARATOR}{text}{EAPI_SEPARATOR}{digest}");
-    let encryptor = Aes128EcbEnc::new_from_slice(EAPI_KEY.as_bytes()).expect("eapi key 固定 16 字节");
+    let encryptor =
+        Aes128EcbEnc::new_from_slice(EAPI_KEY.as_bytes()).expect("eapi key 固定 16 字节");
     to_lowercase_hex(&encryptor.encrypt_padded_vec_mut::<Pkcs7>(payload.as_bytes()))
 }
 

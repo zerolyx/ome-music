@@ -174,8 +174,14 @@ fn parse_action(item: &Value) -> Option<DjAction> {
     }
     Some(DjAction {
         action_type: action_type.to_string(),
-        query: object.get("query").and_then(Value::as_str).map(str::to_string),
-        mood: object.get("mood").and_then(Value::as_str).map(str::to_string),
+        query: object
+            .get("query")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        mood: object
+            .get("mood")
+            .and_then(Value::as_str)
+            .map(str::to_string),
     })
 }
 
@@ -235,7 +241,10 @@ pub fn build_context(hour: u32, input: &ContextInput) -> String {
     } else {
         lines.push("关于听众的长期记忆（重要在前）：".into());
         for fact in &facts {
-            lines.push(format!("- [{}] {}（权重 {}）", fact.kind, fact.content, fact.weight));
+            lines.push(format!(
+                "- [{}] {}（权重 {}）",
+                fact.kind, fact.content, fact.weight
+            ));
         }
     }
 
@@ -251,7 +260,11 @@ pub fn build_context(hour: u32, input: &ContextInput) -> String {
     } else {
         lines.push("近期对话（旧→新）：".into());
         for message in recent {
-            let speaker = if message.role == "user" { "用户" } else { "DJ" };
+            let speaker = if message.role == "user" {
+                "用户"
+            } else {
+                "DJ"
+            };
             lines.push(format!("{speaker}：{}", message.content));
         }
     }
@@ -362,7 +375,9 @@ pub fn append_message(conn: &Connection, role: &str, content: &str) -> Result<St
 /// 最近 limit 条对话，按旧→新排列（依赖 rowid 的插入序，秒级 created_at 无法区分同秒消息）。
 pub fn recent_messages(conn: &Connection, limit: i64) -> Result<Vec<DjMessage>, String> {
     let mut stmt = conn
-        .prepare("SELECT id, role, content, created_at FROM dj_messages ORDER BY rowid DESC LIMIT ?1")
+        .prepare(
+            "SELECT id, role, content, created_at FROM dj_messages ORDER BY rowid DESC LIMIT ?1",
+        )
         .map_err(|error| error.to_string())?;
     let rows = stmt
         .query_map(params![limit], |row| {
@@ -603,7 +618,9 @@ impl LlmFailure {
 
 async fn llm_chat_once(config: &LlmConfig, messages: &[Value]) -> Result<String, LlmFailure> {
     if config.base_url.is_empty() || config.model.is_empty() {
-        return Err(LlmFailure::Body("LLM 未配置：缺少 base_url 或 model".into()));
+        return Err(LlmFailure::Body(
+            "LLM 未配置：缺少 base_url 或 model".into(),
+        ));
     }
     let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
     let body = json!({
@@ -717,7 +734,9 @@ pub fn dj_memory_delete(state: State<'_, AppState>, id: String) -> Result<(), St
 }
 
 #[tauri::command]
-pub fn profile_hour_preferences(state: State<'_, AppState>) -> Result<Vec<HourPreferenceDto>, String> {
+pub fn profile_hour_preferences(
+    state: State<'_, AppState>,
+) -> Result<Vec<HourPreferenceDto>, String> {
     let conn = state.db.lock().map_err(|error| error.to_string())?;
     hour_preferences(&conn)
 }
@@ -810,7 +829,9 @@ pub async fn dj_intro(
     }
     // 事件语境：跳过 = 接住听众的口味变化；自然播完 = 顺势承接；开机 = 深夜开场
     let lead = match event.as_deref() {
-        Some("skip") => "听众刚跳过了上一首，轻轻接住这个信号（可以带一点自嘲），然后自然地带出下一首：",
+        Some("skip") => {
+            "听众刚跳过了上一首，轻轻接住这个信号（可以带一点自嘲），然后自然地带出下一首："
+        }
         Some("ended") => "上一首完整播完了，顺势承接情绪，然后带出下一首：",
         Some("resume") => "听众回来了，就从上次听到一半的这首继续，像老朋友重逢一样自然地说：",
         _ => "接下来要播放：",
@@ -1133,13 +1154,16 @@ mod tests {
 
         // 其余时段词映射
         for (hour, band) in [(8u32, "清晨"), (3, "深夜")] {
-            let context = build_context(hour, &ContextInput {
-                facts: Vec::new(),
-                recent: Vec::new(),
-                hour_profile: Vec::new(),
-                top_artists: Vec::new(),
-                top_genres: Vec::new(),
-            });
+            let context = build_context(
+                hour,
+                &ContextInput {
+                    facts: Vec::new(),
+                    recent: Vec::new(),
+                    hour_profile: Vec::new(),
+                    top_artists: Vec::new(),
+                    top_genres: Vec::new(),
+                },
+            );
             assert!(context.contains(band), "hour={hour} 应为 {band}");
         }
     }

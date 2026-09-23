@@ -33,7 +33,10 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         let version = (index + 1) as i64;
         if version > current {
             conn.execute_batch(script)?;
-            conn.execute("INSERT INTO schema_migrations (version) VALUES (?1)", [version])?;
+            conn.execute(
+                "INSERT INTO schema_migrations (version) VALUES (?1)",
+                [version],
+            )?;
         }
     }
     Ok(())

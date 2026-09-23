@@ -44,9 +44,7 @@ pub(crate) fn parse_song(raw: &Value) -> Option<NeteaseSongDto> {
         artists,
         album: raw["al"]["name"].as_str().unwrap_or_default().to_string(),
         duration_ms: raw["dt"].as_i64().unwrap_or_default(),
-        cover_url: raw["al"]["picUrl"]
-            .as_str()
-            .map(|url| url.to_string()),
+        cover_url: raw["al"]["picUrl"].as_str().map(|url| url.to_string()),
         fee: raw["fee"].as_i64().unwrap_or_default(),
         plain: matches!(raw["fee"].as_i64(), None | Some(0) | Some(8)),
     })
@@ -136,7 +134,14 @@ pub async fn fetch_lyric(id: u64) -> Result<(String, Option<String>, Option<Stri
     .await?;
     let yrc = body["yrc"]["lyric"].as_str().map(str::to_string);
     let tlyric = body["tlyric"]["lyric"].as_str().map(str::to_string);
-    Ok((body["lrc"]["lyric"].as_str().unwrap_or_default().to_string(), yrc, tlyric))
+    Ok((
+        body["lrc"]["lyric"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        yrc,
+        tlyric,
+    ))
 }
 
 #[tauri::command]
