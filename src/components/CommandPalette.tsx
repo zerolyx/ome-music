@@ -28,7 +28,7 @@ import { openPlaylist, playlists } from "../state/playlists";
 import { setThemeChoice, THEME_PRESETS } from "../state/theme";
 import { openStage } from "../state/stage";
 import { openViz } from "../state/visualizer";
-import { deskLyricsOpen, toggleDeskLyrics } from "../state/desklyrics";
+import { deskLyricsLocked, deskLyricsOpen, toggleDeskLyrics, setDeskLyricsLocked } from "../state/desklyrics";
 import { cancelSleepTimer, setSleepAtTrackEnd, setSleepTimer } from "../state/sleeptimer";
 import { Icon } from "./Icon";
 
@@ -76,6 +76,7 @@ function buildCommands(): Command[] {
     { id: "stage.open", title: "打开歌词舞台", group: "播放", run: () => openStage() },
     { id: "viz.open", title: "打开视觉器", group: "播放", run: () => openViz() },
     { id: "desklyrics.toggle", title: deskLyricsOpen.value ? "关闭桌面歌词" : "打开桌面歌词", group: "播放", run: () => toggleDeskLyrics() },
+    { id: "desklyrics.lock", title: deskLyricsLocked.value ? "桌面歌词 · 解锁" : "桌面歌词 · 锁定（鼠标穿透）", group: "播放", run: () => setDeskLyricsLocked(!deskLyricsLocked.value) },
     // DJ
     { id: "dj.chat", title: "打开 DJ 对话", group: "DJ", run: () => goToDjTab("chat") },
     { id: "dj.memory", title: "打开 DJ 记忆", group: "DJ", run: () => goToDjTab("memory") },

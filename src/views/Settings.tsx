@@ -3,12 +3,12 @@ import type { ComponentChildren } from "preact";
 import { TtsSettings } from "../components/TtsSettings";
 import { Icon } from "../components/Icon";
 import { getAppVersion, isTauriRuntime } from "../lib/api";
-import { setThemeChoice, THEME_PRESETS, themeChoice, type ThemeChoice } from "../state/theme";
+import { setThemeChoice, THEME_PRESETS, THEME_SWATCHES, themeChoice, type ThemeChoice } from "../state/theme";
 import { djConfig, lastError, loadConfig, saveConfig } from "../state/dj";
 import { radioEnabled, setRadioEnabled } from "../state/radio";
 import { danmakuEnabled, setDanmakuEnabled } from "../state/danmaku";
 import { accentMode, setAccentMode } from "../state/tint";
-import { closeDeskLyrics, deskLyricsOpen, openDeskLyrics } from "../state/desklyrics";
+import { closeDeskLyrics, deskLyricsLocked, deskLyricsOpen, openDeskLyrics, setDeskLyricsLocked } from "../state/desklyrics";
 import {
   applyEqPreset,
   bandLabel,
@@ -415,19 +415,34 @@ export function SettingsView() {
           </Card>
 
           <Card title="外观" id="appearance" open={openMap.appearance} onToggle={() => toggleSection("appearance")}>
-            <div class="segmented" role="radiogroup" aria-label="主题">
-              {CHOICES.map((choice) => (
-                <button
-                  key={choice.value}
-                  role="radio"
-                  aria-checked={themeChoice.value === choice.value}
-                  class={`segment ${themeChoice.value === choice.value ? "is-active" : ""}`}
-                  onClick={() => setThemeChoice(choice.value)}
-                >
-                  {choice.label}
-                </button>
-              ))}
+            <div class="theme-grid" role="radiogroup" aria-label="主题">
+              {CHOICES.map((choice) => {
+                const swatch = THEME_SWATCHES[choice.value];
+                const active = themeChoice.value === choice.value;
+                return (
+                  <button
+                    key={choice.value}
+                    role="radio"
+                    aria-checked={active}
+                    class={`theme-card ${active ? "is-active" : ""}`}
+                    onClick={() => setThemeChoice(choice.value)}
+                  >
+                    <span
+                      class="theme-swatch"
+                      aria-hidden="true"
+                      style={{
+                        background: `linear-gradient(135deg, ${swatch.bg} 0 42%, ${swatch.elev} 42% 72%, ${swatch.accent} 72% 100%)`,
+                      }}
+                    />
+                    <span class="theme-card-name">{choice.label}</span>
+                    <span class="theme-card-check" aria-hidden="true">
+                      <Icon name="check" size={13} />
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+            <p class="view-hint">主题即取即用；「唱片取色」开启时按钮与辉光仍会跟随封面主色。</p>
             <div class="dj-radio-row settings-danmaku-row">
               <span class="dj-radio-label">强调色</span>
               <div class="segmented" role="radiogroup" aria-label="强调色">
@@ -494,6 +509,32 @@ export function SettingsView() {
               </div>
             </div>
             <p class="view-hint">独立悬浮歌词条：常驻桌面最上层、可拖动、不抢焦点，关掉应用再开会自动恢复。</p>
+            {deskLyricsOpen.value && (
+              <>
+                <div class="dj-radio-row settings-danmaku-row">
+                  <span class="dj-radio-label">歌词条锁定</span>
+                  <div class="segmented" role="radiogroup" aria-label="歌词条锁定">
+                    <button
+                      role="radio"
+                      aria-checked={deskLyricsLocked.value}
+                      class={`segment ${deskLyricsLocked.value ? "is-active" : ""}`}
+                      onClick={() => setDeskLyricsLocked(true)}
+                    >
+                      锁定（鼠标穿透）
+                    </button>
+                    <button
+                      role="radio"
+                      aria-checked={!deskLyricsLocked.value}
+                      class={`segment ${!deskLyricsLocked.value ? "is-active" : ""}`}
+                      onClick={() => setDeskLyricsLocked(false)}
+                    >
+                      解锁
+                    </button>
+                  </div>
+                </div>
+                <p class="view-hint">锁定后歌词条不再响应鼠标（不挡桌面操作），解锁只能回这里或用命令面板。</p>
+              </>
+            )}
           </Card>
 
           <Card title="声音（DSP）" id="sound" open={openMap.sound} onToggle={() => toggleSection("sound")}>

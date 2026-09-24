@@ -9,7 +9,8 @@
 [data-theme="dark"],
 [data-theme="noir"],
 [data-theme="ember"],
-[data-theme="jade"] {
+[data-theme="jade"],
+[data-theme="aurora"] {
   --cursor: rgba(236, 234, 231, 0.6);
   --cursor-strong: #ffffff;
 }

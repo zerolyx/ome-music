@@ -105,6 +105,48 @@ html {
   --glow-opacity: 0;
 }
 
+/* 樱雪：暖粉白 daylight，樱粉强调（ECHO 预设思路扩充） */
+[data-theme="sakura"] {
+  --bg: #faf3f4;
+  --bg-elev: #fffafb;
+  --bg-veil: rgba(250, 243, 244, 0.76);
+  --text: #2a1e22;
+  --text-dim: #8a737b;
+  --accent: #e0637f;
+  --accent-soft: rgba(224, 99, 127, 0.12);
+  --border: rgba(42, 30, 34, 0.08);
+  --shadow: 0 8px 32px rgba(42, 30, 34, 0.08);
+  --glow-opacity: 0;
+}
+
+/* 薄荷：冷白微绿 daylight，清爽 */
+[data-theme="mint"] {
+  --bg: #f1f7f4;
+  --bg-elev: #fbfefd;
+  --bg-veil: rgba(241, 247, 244, 0.76);
+  --text: #17251f;
+  --text-dim: #6d8378;
+  --accent: #2fa381;
+  --accent-soft: rgba(47, 163, 129, 0.12);
+  --border: rgba(23, 37, 31, 0.08);
+  --shadow: 0 8px 32px rgba(23, 37, 31, 0.08);
+  --glow-opacity: 0;
+}
+
+/* 极光：极深夜空，冷青绿光（暗色族新成员——暗色选择器族需同步维护） */
+[data-theme="aurora"] {
+  --bg: #070b12;
+  --bg-elev: #0f1622;
+  --bg-veil: rgba(7, 11, 18, 0.62);
+  --text: #e6edf5;
+  --text-dim: #7f92a8;
+  --accent: #4fd8c2;
+  --accent-soft: rgba(79, 216, 194, 0.15);
+  --border: rgba(230, 237, 245, 0.08);
+  --shadow: 0 8px 32px rgba(0, 2, 8, 0.6);
+  --glow-opacity: 1;
+}
+
 /* ---- 封面氛围光（tint.ts 写入 --ambient-a/b；无封面时透明） ---- */
 @property --ambient-a {
   syntax: "<color>";
@@ -131,11 +173,14 @@ html {
 [data-theme="dark"],
 [data-theme="noir"],
 [data-theme="ember"],
-[data-theme="jade"] {
+[data-theme="jade"],
+[data-theme="aurora"] {
   --ambient-opacity: 1;
 }
 [data-theme="light"],
-[data-theme="paper"] {
+[data-theme="paper"],
+[data-theme="sakura"],
+[data-theme="mint"] {
   --ambient-opacity: 0.35;
 }
 
@@ -151,6 +196,15 @@ html {
 }
 [data-theme="paper"] {
   --vignette: 0.14;
+}
+[data-theme="sakura"] {
+  --vignette: 0.12;
+}
+[data-theme="mint"] {
+  --vignette: 0.12;
+}
+[data-theme="aurora"] {
+  --vignette: 0.5;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }

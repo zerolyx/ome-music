@@ -29,10 +29,15 @@ export const DESK_LYRIC_EVENT = "ome://desk-lyric";
 export const DESK_HELLO_EVENT = "ome://desk-lyric-hello";
 /** 歌词窗 → 主窗：用户点了歌词窗上的关闭 */
 export const DESK_CLOSE_EVENT = "ome://desk-lyric-close";
+/** 歌词窗 → 主窗：用户点了歌词窗上的锁定（锁定后本窗再无鼠标事件，只能主窗解锁） */
+export const DESK_LOCK_EVENT = "ome://desk-lyric-lock";
 
 const ON_KEY = "ome.desklyrics.on";
 const SIZE_KEY = "ome.desklyrics.size";
 const RECT_KEY = "ome.desklyrics.rect";
+const LOCK_KEY = "ome.desklyrics.locked";
+/** 无歌词播放持续多久后隐藏窗口（来歌词/切歌/暂停即回） */
+const HIDE_WITHOUT_LYRIC_MS = 8000;
 const PUBLISH_INTERVAL_MS = 250;
 
 /* ---- 快照（跨窗协议，纯逻辑可单测） ---- */
@@ -218,6 +223,57 @@ export function saveDeskRect(rect: DeskRect): void {
 /** 开关状态；开启意图持久化（下次开机随主窗自动恢复） */
 export const deskLyricsOpen = signal(false);
 
+/** 锁定 = 全鼠标穿透（ECHO 式）；锁定后歌词窗收不到事件，只能主窗解锁 */
+export const deskLyricsLocked = signal(readLocked());
+
+function readLocked(): boolean {
+  try {
+    return localStorage.getItem(LOCK_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** 无歌词自动隐藏的运行态（不持久化） */
+let nolyricSince = 0;
+let lyriclessHidden = false;
+
+async function applyCursorEvents(locked: boolean): Promise<void> {
+  if (!isTauriRuntime()) return;
+  const win = await WebviewWindow.getByLabel(DESKLYRICS_LABEL).catch(() => null);
+  if (win) await win.setIgnoreCursorEvents(locked).catch(() => undefined);
+}
+
+export function setDeskLyricsLocked(locked: boolean): void {
+  deskLyricsLocked.value = locked;
+  try {
+    localStorage.setItem(LOCK_KEY, locked ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  void applyCursorEvents(locked);
+}
+
+/** 无歌词自动隐藏：仅在播放中判定；暂停/来歌词/切歌立即回显 */
+async function syncLyriclessVisibility(snap: DeskLyricSnapshot): Promise<void> {
+  const starved = snap.playing && !!snap.track && !snap.pending && !snap.line && !snap.next;
+  if (starved) {
+    if (!nolyricSince) nolyricSince = Date.now();
+    if (!lyriclessHidden && Date.now() - nolyricSince > HIDE_WITHOUT_LYRIC_MS) {
+      lyriclessHidden = true;
+      const win = await WebviewWindow.getByLabel(DESKLYRICS_LABEL).catch(() => null);
+      await win?.hide().catch(() => undefined);
+    }
+    return;
+  }
+  nolyricSince = 0;
+  if (lyriclessHidden) {
+    lyriclessHidden = false;
+    const win = await WebviewWindow.getByLabel(DESKLYRICS_LABEL).catch(() => null);
+    await win?.show().catch(() => undefined);
+  }
+}
+
 let publishTimer: number | null = null;
 let unlisteners: Array<UnlistenFn> = [];
 let lastPayload: string | null = null;
@@ -251,7 +307,9 @@ async function publishSnapshot(): Promise<void> {
     await emitTo(DESKLYRICS_LABEL, DESK_LYRIC_EVENT, snap);
   } catch {
     markClosed(); // 歌词窗已不在（外部销毁/崩溃）：自愈关闭
+    return;
   }
+  await syncLyriclessVisibility(snap);
 }
 
 function startPublisher(): void {
@@ -267,6 +325,9 @@ function startPublisher(): void {
     .then((un) => unlisteners.push(un))
     .catch(() => undefined);
   void listen(DESK_CLOSE_EVENT, () => void closeDeskLyrics())
+    .then((un) => unlisteners.push(un))
+    .catch(() => undefined);
+  void listen(DESK_LOCK_EVENT, () => setDeskLyricsLocked(true))
     .then((un) => unlisteners.push(un))
     .catch(() => undefined);
 }
@@ -297,6 +358,7 @@ export async function openDeskLyrics(): Promise<void> {
   const existing = await WebviewWindow.getByLabel(DESKLYRICS_LABEL).catch(() => null);
   if (existing) {
     await existing.show().catch(() => undefined);
+    if (deskLyricsLocked.value) await applyCursorEvents(true);
     startPublisher();
     return;
   }
@@ -327,6 +389,7 @@ export async function openDeskLyrics(): Promise<void> {
     win.once("tauri://created", settle);
     win.once("tauri://error", settle);
   });
+  if (deskLyricsLocked.value) await applyCursorEvents(true);
   startPublisher();
 }
 

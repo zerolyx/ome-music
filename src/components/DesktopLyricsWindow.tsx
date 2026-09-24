@@ -15,6 +15,7 @@ import {
   deskSizeFor,
   DESK_CLOSE_EVENT,
   DESK_HELLO_EVENT,
+  DESK_LOCK_EVENT,
   DESK_LYRIC_EVENT,
   readDeskRect,
   saveDeskRect,
@@ -192,6 +193,14 @@ export function DesktopLyricsWindow() {
             aria-label={`切换字号（当前${deskSizeFor(sizeId).label}）`}
           >
             {deskSizeFor(sizeId).label}
+          </button>
+          <button
+            class="dlx-btn"
+            onClick={() => void emit(DESK_LOCK_EVENT)}
+            aria-label="锁定桌面歌词（在主窗设置中解锁）"
+            title="锁定（在主窗设置中解锁）"
+          >
+            <Icon name="lock" size={13} />
           </button>
           <button class="dlx-btn" onClick={() => void emit(DESK_CLOSE_EVENT)} aria-label="关闭桌面歌词">
             <Icon name="close" size={13} />

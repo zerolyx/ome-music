@@ -1,5 +1,6 @@
+import { computed } from "@preact/signals";
 import { coverUrl } from "../lib/api";
-import { playTracks } from "../state/player";
+import { currentTrack, playTracks } from "../state/player";
 import { Icon } from "./Icon";
 import type { Track } from "../types/music";
 
@@ -26,8 +27,17 @@ export function groupAlbums(tracks: Track[]): AlbumGroup[] {
   return [...map.values()];
 }
 
-/** ECHO 式专辑墙：封面 + 专辑名 + 艺人 + 曲数，点击整专播放 */
+/** 当前播放曲目所属专辑（folia Lattice 式「点亮在播」的判定键） */
+const currentAlbumKey = computed(() => {
+  const track = currentTrack.value;
+  if (!track) return null;
+  const title = track.album?.trim() || "单曲";
+  return `${title}␟${track.artist}`;
+});
+
+/** ECHO 式专辑墙：封面 + 专辑名 + 艺人 + 曲数，点击整专播放；在播专辑点亮 */
 export function AlbumGrid({ albums }: { albums: AlbumGroup[] }) {
+  const playingKey = currentAlbumKey.value;
   return (
     <ul class="album-grid">
       {albums.map((album) => {
@@ -35,7 +45,7 @@ export function AlbumGrid({ albums }: { albums: AlbumGroup[] }) {
         return (
           <li key={album.key}>
             <button
-              class="album-card"
+              class={`album-card ${album.key === playingKey ? "is-current" : ""}`}
               aria-label={`播放专辑 ${album.title}`}
               onClick={() => playTracks(album.tracks, 0)}
             >

@@ -34,6 +34,11 @@ const PATHS = {
   lyrics: "M4 5h16M4 10h16M4 15h16M4 20h8",
   moon: "M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5z",
   folder: "M3.5 6.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z",
+  check: "M5 12.5l4.5 4.5L19 7.5",
+  lock:
+    "M8 10.5V8a4 4 0 0 1 8 0v2.5M6.5 10.5h11a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-7.5a1 1 0 0 1 1-1z",
+  "lock-open":
+    "M8 10.5V8a4 4 0 0 1 7.7-1.5M6.5 10.5h11a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-7.5a1 1 0 0 1 1-1z",
 } as const;
 
 export function Icon({ name, size = 20 }: IconProps) {

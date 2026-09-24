@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { Icon } from "../components/Icon";
 import { HomeLyrics } from "../components/HomeWidgets";
 import { WelcomeCard } from "../components/WelcomeCard";
@@ -56,6 +56,36 @@ function LyricOffsetControl({ trackId }: { trackId: string }) {
 const demo =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo");
 
+/**
+ * 黑胶旋转驱动：rAF 角度积分，播放渐起、暂停指数衰减真缓停
+ * （CSS animation-play-state 只能冻结；folia 的 MotionValue 同思路）。
+ * reduced-motion 完全静止；缓停到位后自动停表省电。
+ */
+function useRecordSpin(playing: boolean) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let raf = 0;
+    let angle = 0;
+    let velocity = 0; // deg/s
+    let last = performance.now();
+    const step = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      const target = playing ? 26 : 0; // ≈14s/圈，与原碟面转速一致
+      velocity += (target - velocity) * Math.min(1, dt * (playing ? 2.2 : 1.5));
+      angle = (angle + velocity * dt) % 360;
+      const el = ref.current;
+      if (el) el.style.transform = `rotate(${angle}deg)`;
+      if (!playing && velocity < 0.02) return; // 已缓停：不再空转 rAF
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
+  return ref;
+}
+
 const DEMO_COVER =
   "data:image/svg+xml," +
   encodeURIComponent(
@@ -89,6 +119,7 @@ export function HomeView() {
   const track = demo ? demoTrack : currentTrack.value;
   const cover = track?.coverPath ? coverUrl(track.coverPath) : "";
   const [coverBroken, setCoverBroken] = useState(false);
+  const spinRef = useRecordSpin(isPlaying.value);
 
   // 换封面时重置加载失败标记
   useEffect(() => setCoverBroken(false), [cover]);
@@ -157,15 +188,26 @@ export function HomeView() {
         <div class="home-stage">
           <div class="home-art-col">
             {showCover ? (
-              <img
-                class="home-art"
-                key={cover}
-                src={cover}
-                alt=""
-                onError={() => setCoverBroken(true)}
-              />
+              /* 封面 = 唱片套：黑胶自右侧探出 1/3，播放时旋转、暂停缓停 */
+              <div class="home-vinyl-rig" key={cover}>
+                <img
+                  class="home-art"
+                  src={cover}
+                  alt=""
+                  onError={() => setCoverBroken(true)}
+                />
+                <div class="home-vinyl" aria-hidden="true">
+                  <div class="home-vinyl-disc" ref={spinRef}>
+                    <div
+                      class="home-vinyl-label"
+                      style={{ backgroundImage: `url("${cover}")` }}
+                    />
+                  </div>
+                </div>
+              </div>
             ) : (
               <div class="home-disc" aria-hidden="true">
+                <div class="home-disc-texture" ref={spinRef} />
                 <div class="home-disc-face">
                   <span class="home-disc-label">
                     <Icon name="music-note" size={30} />
@@ -198,6 +240,7 @@ export function HomeView() {
         <div class="home-empty">
           <p class="home-kicker">OME RADIO · 私人电台</p>
           <div class="home-disc" aria-hidden="true">
+            <div class="home-disc-texture" />
             <div class="home-disc-face">
               <span class="home-disc-label">
                 <Icon name="music-note" size={30} />

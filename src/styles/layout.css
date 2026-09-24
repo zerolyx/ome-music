@@ -361,6 +361,17 @@ body::before {
   transform: translateY(-4px);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
 }
+/* folia Lattice 质感：hover 提饱和提亮；在播专辑点亮而非贴纸（描边+内发光） */
+.album-card:hover .album-cover img {
+  filter: saturate(1.08) brightness(1.05);
+}
+.album-card.is-current .album-cover {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow:
+    inset 0 0 15px -7px color-mix(in srgb, var(--accent) 46%, transparent),
+    0 14px 34px rgba(0, 0, 0, 0.22);
+}
 .album-cover img {
   width: 100%;
   height: 100%;
@@ -559,6 +570,53 @@ body::before {
 }
 .segment.is-active { background: var(--accent); color: #fff; }
 
+/* 主题卡（ECHO 预设 / folia ThemePark 式可视化选择）：三段色板条 + 名称 + 选中态 */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  gap: 10px;
+  max-width: 640px;
+}
+.theme-card {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  transition: border-color 0.22s var(--ease-signature), box-shadow 0.22s var(--ease-signature), transform 0.22s var(--ease-signature);
+}
+.theme-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--text) 22%, transparent); }
+.theme-card.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 8px 24px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.theme-swatch {
+  display: block;
+  width: 100%;
+  aspect-ratio: 21 / 9;
+  border-radius: 8px;
+  outline: 1px solid var(--border);
+  outline-offset: -1px;
+}
+.theme-card-name { font-size: 12px; color: var(--text-dim); text-align: left; }
+.theme-card.is-active .theme-card-name { color: var(--text); }
+.theme-card-check {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 18px;
+  height: 18px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+}
+.theme-card.is-active .theme-card-check { display: inline-flex; }
+
 /* Home */
 .view-home { position: relative; }
 .home-glow {
@@ -653,7 +711,8 @@ body::before {
 [data-theme="dark"],
 [data-theme="noir"],
 [data-theme="ember"],
-[data-theme="jade"] {
+[data-theme="jade"],
+[data-theme="aurora"] {
   --vignette: 0.45;
 }
 
@@ -694,13 +753,84 @@ body::before {
   justify-items: center;
   width: 100%;
 }
-.home-art-col .home-art {
+/* 封面 = 唱片套的 rig：宽度即封面宽度，黑胶相对它定位探出 */
+.home-vinyl-rig {
+  position: relative;
   width: min(100%, 400px);
+}
+.home-vinyl-rig .home-art {
+  position: relative;
+  z-index: 1;
+  width: 100%;
   border-radius: 18px;
   box-shadow:
     0 24px 64px rgba(0, 0, 0, 0.42),
     0 4px 16px rgba(0, 0, 0, 0.28);
   outline: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* 黑胶：藏在套后、自右探出约 14%（留在列间距内，不压歌词区）；旋转由 useRecordSpin 内联驱动 */
+.home-vinyl {
+  position: absolute;
+  top: 50%;
+  left: 30%;
+  width: 84%;
+  aspect-ratio: 1;
+  transform: translateY(-50%);
+  border-radius: 50%;
+}
+.home-vinyl-disc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, 0.05) 0 1px,
+      rgba(255, 255, 255, 0.012) 1px 2px,
+      transparent 2px 3.4px
+    ),
+    radial-gradient(circle at 50% 50%, #121214 0 30%, #0b0b0d 30% 100%);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.3);
+  will-change: transform;
+}
+/* 中心 label 贴封面（真唱片工艺）；主轴孔用 ::after */
+.home-vinyl-label {
+  position: absolute;
+  inset: 30.5%;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25);
+}
+.home-vinyl-label::after {
+  content: "";
+  position: absolute;
+  inset: 46%;
+  border-radius: 50%;
+  background: #0a0a0c;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+/* 静态光源高光：不随盘转（室内光不转） */
+.home-vinyl::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 208deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.09) 16deg,
+    transparent 44deg 178deg,
+    rgba(255, 255, 255, 0.06) 202deg,
+    transparent 232deg
+  );
+  mix-blend-mode: screen;
+}
+/* 窄屏收起探出的黑胶，保持居中堆叠的简洁 */
+@media (max-width: 1079px) {
+  .home-vinyl { display: none; }
 }
 .home-info-col {
   display: grid;
@@ -718,7 +848,7 @@ body::before {
     text-align: left;
     padding: 24px 48px;
   }
-  .home-stage .home-art-col .home-art {
+  .home-stage .home-vinyl-rig {
     width: min(100%, 430px);
   }
   .home-stage .home-info-col {
@@ -742,7 +872,7 @@ body::before {
   }
 }
 
-/* 黑胶唱片：本体缓旋，唱面高光固定（模拟室内光源） */
+/* 黑胶唱片（无封面碟）：底纹密纹 + 静态光源高光；旋转层单独挂 scuff 刻痕 */
 .home-disc {
   position: relative;
   width: 236px;
@@ -754,7 +884,6 @@ body::before {
   box-shadow:
     0 26px 70px rgba(0, 0, 0, 0.5),
     0 6px 20px rgba(0, 0, 0, 0.35);
-  animation: disc-spin 14s linear infinite;
 }
 
 .home-disc::after {
@@ -771,6 +900,28 @@ body::before {
     transparent 232deg
   );
   mix-blend-mode: screen;
+}
+
+/* 旋转层：两道弧形刻痕让转动可见（密纹径向对称，转起来本身不可见） */
+.home-disc-texture {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  will-change: transform;
+}
+.home-disc-texture::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 24deg,
+    transparent 0 10deg,
+    rgba(255, 255, 255, 0.05) 19deg,
+    transparent 32deg 196deg,
+    rgba(255, 255, 255, 0.038) 206deg,
+    transparent 220deg 360deg
+  );
 }
 
 .home-disc-face {
@@ -802,15 +953,6 @@ body::before {
   aspect-ratio: 1;
   border-radius: 50%;
   background: #0c0c0e;
-}
-
-@keyframes disc-spin {
-  from {
-    rotate: 0deg;
-  }
-  to {
-    rotate: 360deg;
-  }
 }
 
 /* ============ 网易云 ============ */
@@ -1264,14 +1406,17 @@ body::before {
   animation: backdrop-drift 26s ease-in-out infinite alternate;
   pointer-events: none;
 }
-[data-theme="light"] {
+[data-theme="light"],
+[data-theme="sakura"],
+[data-theme="mint"] {
   --backdrop-brightness: 1.06;
   --backdrop-opacity: 0.42;
 }
 [data-theme="dark"],
 [data-theme="noir"],
 [data-theme="ember"],
-[data-theme="jade"] {
+[data-theme="jade"],
+[data-theme="aurora"] {
   --backdrop-brightness: 0.5;
   --backdrop-opacity: 0.55;
 }
