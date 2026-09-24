@@ -70,7 +70,8 @@ src/
                            DesktopLyricsWindow(桌面歌词窗体)/WelcomeCard/
                            ImmersiveCursor(环+点双光标)/Icon 等
   views/                   Home/Search/Library/Settings/Playlists
-  lib/                     api.ts(invoke 封装/coverUrl)、audio.ts(toPlayableSrc)
+  lib/                     api.ts(invoke 封装/coverUrl)、audio.ts(toPlayableSrc)、
+                           lyricfmt.ts(本地歌词嗅探：ttml/qrc/krc→lrc+yrc)
 dev-preview/desklyrics.html  桌面歌词视觉调试页（mock Tauri IPC，仅 dev 服务器可用）
 ```
 
@@ -100,7 +101,7 @@ src-tauri/src/
 
 **声音（DSP）**：10 段参数 EQ（31Hz-16kHz，±12dB，6 预设，localStorage 持久化）；输出设备选择（setSinkId，拔出自动回退）；切歌 1.2s 自动淡变（token 防竞态）。
 
-**视觉**：4 套预设主题（noir 月夜/ember 茜影/jade 青川/paper 纸墨）+ 跟随系统；封面取色（accent + 双团氛围光背景）；全屏歌词舞台（浮流/群唱/心象三动效，逐字+扫光双模式）；全屏视觉器（极光/圆环/脉冲 Canvas 三模式）；沉浸光标（环 lerp + 点快随，差值混合恒可见）；Kimi 式设置页（侧栏导航+折叠分区）；页面切换过渡、细滚动条。
+**视觉**：9 选主题（跟随系统/浅色/深色 + 手工预设 noir 月夜/ember 茜影/jade 青川/paper 纸墨/sakura 樱雪/mint 薄荷/aurora 极光，设置页三段色板主题卡）+ 封面取色（accent + 双团氛围光背景）；首页旋转黑胶（封面=唱片套，播放渐转/暂停缓停，rAF 驱动）；专辑墙在播专辑点亮（accent 描边+内发光）；全屏歌词舞台（浮流/群唱/心象三动效，逐字+扫光双模式）；全屏视觉器（极光/圆环/脉冲 Canvas 三模式）；沉浸光标（环 lerp + 点快随，差值混合恒可见）；Kimi 式设置页（侧栏导航+折叠分区）；页面切换过渡、细滚动条。
 
 **功能入口**：Ctrl+K 命令面板（模糊匹配+最近使用置顶：导航/曲库视图/播放控制/音量/歌词重匹配与候选挑选/睡眠定时/主题/桌面歌词/歌单一键播放）；新手引导卡（首启可关）；迷你播放器（非首页悬浮，切歌自动弹出）；桌面歌词（独立第二窗口，设置页外观区与命令面板可开关）；歌词偏移微调（±0.5s 步进，按曲目记忆）。
 
@@ -139,11 +140,11 @@ element.volume = 用户音量 × fadeFactor()
 
 ### 4.5 歌词系统
 
-解析：lrc（一行多时间戳）/ yrc 逐字 / tlyric 翻译按时间戳就近对齐（容差 0.6s）。来源优先级：本地同目录 .lrc（base64→UTF-8 严格解码，失败回退 GBK）> 网易云直取（sourceId）> 智能匹配（标题归一化：完全一致 > 互相包含 > 第一首）。匹配结果内存缓存；手动重匹配/候选挑选会清缓存重拉。偏移按曲目存 localStorage（`ome.lyric.offsets`），±20s 上限，调时立即重解析生效。
+解析：lrc（一行多时间戳）/ yrc 逐字 / tlyric 翻译按时间戳就近对齐（容差 0.6s）/ **ttml（词级 span）/ qrc、krc（`[ms,ms]<ms,ms>字`；krc 文件在 Rust 侧 XOR+zlib 解密为明文）**。本地 sidecar 优先级 `.lrc > .ttml > .qrc > .krc`，内容嗅探在 `lib/lyricfmt.ts`（`<tt` → TTML；`[ms,ms]` 行头 → qrc 族；其余 lrc 直通），统一合成标准 lrc + yrc 风格字级文本，下游解析渲染零改动。来源优先级：本地同目录歌词（base64→UTF-8 严格解码，失败回退 GBK）> 网易云直取（sourceId）> 智能匹配（标题归一化：完全一致 > 互相包含 > 第一首）。匹配结果内存缓存；手动重匹配/候选挑选会清缓存重拉。偏移按曲目存 localStorage（`ome.lyric.offsets`），±20s 上限，调时立即重解析生效。
 
 ### 4.6 持久化键清单（localStorage）
 
-`ome.theme` `ome.accentMode` `ome.library.view` `ome.library.likedOnly` `ome.eq.gains/enabled/preset` `ome.fade` `ome.audioout` `ome.palette.recent` `ome.lyric.offsets` `ome.welcome.dismissed` `ome.danmaku` `ome.radio` `ome.desklyrics.on/size/rect` 等；后端另有 saveLastPlayback（续播恢复）与 DB（曲目/歌单/播放事件/播放历史/DJ 记忆/授权目录）。
+`ome.theme` `ome.accentMode` `ome.library.view` `ome.library.likedOnly` `ome.eq.gains/enabled/preset` `ome.fade` `ome.audioout` `ome.palette.recent` `ome.lyric.offsets` `ome.welcome.dismissed` `ome.danmaku` `ome.radio` `ome.desklyrics.on/size/rect/locked` 等；后端另有 saveLastPlayback（续播恢复）与 DB（曲目/歌单/播放事件/播放历史/DJ 记忆/授权目录）。
 
 ### 4.7 桌面歌词独立窗口（第二窗口 + 事件快照）
 
@@ -151,6 +152,8 @@ element.volume = 用户音量 × fadeFactor()
 
 - 窗口 `focus:false` + 组件自行 show（定位就绪后），**永不抢焦点**；`visible:false` 避免原点闪现。
 - 开关意图持久化（`ome.desklyrics.on`），开机随主窗恢复；位置物理像素自存自愈（显示器拓扑变化回中）；字号三档 s/m/l 联动窗口尺寸。
+- **锁定穿透**（ECHO 三态思路的诚实版）：歌词窗工具条锁定 → 主窗 `setIgnoreCursorEvents(true)` 全鼠标穿透；穿透后歌词窗收不到任何鼠标事件，解锁只能回主窗设置页/命令面板（无托盘不做 hover 唤出）。锁定态持久化（`ome.desklyrics.locked`），开机恢复时补 applied。
+- **无歌词自动隐藏**：播放中且无歌词（无当前行/预览行）持续 8s → `hide()`；来歌词/切歌/暂停立即回显。
 - emitTo 失败自愈：歌词窗被外部销毁时发布循环捕获并自动关停状态。
 - **新窗口必踩坑**：index.html 的 `<html class="booting">` 会遮蔽 `#app`，第二窗口分支必须同样在双 rAF 后移除 booting，否则窗口永久隐形（窗口显隐由 CSS 与 show() 双重控制）。
 - capabilities `windows` 必须包含 `desklyrics`，否则歌词窗内所有 window/event IPC 被拒。
@@ -199,11 +202,11 @@ cargo clippy --workspace -- -D warnings && cargo fmt --all -- --check
 
 ## 七、远期路线图（已记录在案，按优先级）
 
-1. ~~桌面歌词独立窗口~~ **已实现**（第二窗口 + 事件快照同步，见 4.7；鼠标穿透锁定模式为后续扩展）。
+1. ~~桌面歌词独立窗口~~ **已实现**（第二窗口 + 事件快照同步，见 4.7；锁定穿透已随移植批次完成）。
 2. **壁纸模式**（WorkerW SetParent，把播放器钉到桌面壁纸层）。
-3. 歌词格式扩展：TTML / qrc / krc。
+3. ~~歌词格式扩展：TTML / qrc / krc~~ **已实现**（本地 sidecar，见 4.5）。
 4. Sync Server / Now Playing 接入 / gapless 播放。
-5. 继续挖 folia/ECHO：页面动效细节、更多 ECHO DSP（headroom/FIR 不重做）。
+5. 继续挖 folia/ECHO（已挖一轮：主题预设、旋转黑胶、专辑点亮、桌面歌词三态；候选剩余：folia 的歌词走带手感/4 变量主题架构、ECHO 的迷你播放器展开队列）。
 
 **Spec 索引**（`docs/superpowers/specs/`）：设计总纲 `2026-09-21-ome-lightweight-personal-radio-design.md`、UI 改版 `2026-09-23-ui-redesign-folia-echo-design.md`、移植计划 `2026-09-23-v060-folia-echo-port.md`、**v0.7.0 批次进度 `2026-09-23-v070-ui-deep-dive.md`（每批 hash 与验收点在此追加）**。
 
