@@ -63,6 +63,9 @@ src/
     equalizer.ts fade.ts audioout.ts   B1 声音三件套（DSP）
     stage.ts visualizer.ts 歌词舞台 / 视觉器开关与动效选择
     commands.ts            命令面板纯逻辑（模糊匹配/最近使用）
+    settings-nav.ts        设置页信息架构（四组分区/关键词搜索定位）
+    hotkeys.ts             全局键盘快捷键（含 SHORTCUTS 参考表数据）
+    mediasession.ts        Media Session 系统媒体键
     dj.ts radio.ts tts.ts  DJ 配置/电台流程/语音合成
     netease.ts bilibili.ts danmaku.ts playlists.ts sleeptimer.ts
   components/              TrackList/PlayerBar/Rail/CommandPalette/QueueDrawer/
@@ -101,7 +104,7 @@ src-tauri/src/
 
 **声音（DSP）**：10 段参数 EQ（31Hz-16kHz，±12dB，6 预设，localStorage 持久化；**SVG 频响曲线可视化 + 节点纵向拖拽调增益**，RBJ 幅频数学与 WebAudio 滤波同参数）；输出设备选择（setSinkId，拔出自动回退）；切歌 1.2s 自动淡变（token 防竞态）。
 
-**视觉**：9 选主题（跟随系统/浅色/深色 + 手工预设 noir 月夜/ember 茜影/jade 青川/paper 纸墨/sakura 樱雪/mint 薄荷/aurora 极光，设置页三段色板主题卡）+ 封面取色（accent + 双团氛围光背景）；首页旋转黑胶（封面=唱片套，播放渐转/暂停缓停，rAF 驱动）；专辑墙在播专辑点亮（accent 描边+内发光）；全屏歌词舞台（浮流/群唱/心象三动效，逐字+扫光双模式）；全屏视觉器（极光/圆环/脉冲 Canvas 三模式）；沉浸光标（环 lerp + 点快随，差值混合恒可见）；Kimi 式设置页（侧栏导航+折叠分区）；页面切换过渡、细滚动条。
+**视觉**：9 选主题（跟随系统/浅色/深色 + 手工预设 noir 月夜/ember 茜影/jade 青川/paper 纸墨/sakura 樱雪/mint 薄荷/aurora 极光，设置页三段色板主题卡）+ 封面取色（accent + 双团氛围光背景）；首页旋转黑胶（封面=唱片套，播放渐转/暂停缓停，rAF 驱动）；专辑墙在播专辑点亮（accent 描边+内发光）；全屏歌词舞台（浮流/群唱/心象三动效，逐字+扫光双模式）；全屏视觉器（极光/圆环/脉冲 Canvas 三模式）；沉浸光标（环 lerp + 点快随，差值混合恒可见）；Kimi 式设置页（**四组分区导航：常用=播放/外观/声音 · 内容=音乐源/歌词 · DJ · 高级=快捷键/关于；设置内搜索关键词定位分区；统一 SettingRow 行 + Switch 开关 + kbd 快捷键参考表 + 重置偏好两步确认**，信息架构见 state/settings-nav.ts）；页面切换过渡、细滚动条。
 
 **功能入口**：Ctrl+K 命令面板（模糊匹配+最近使用置顶：导航/曲库视图/播放控制/音量/歌词重匹配与候选挑选/睡眠定时/主题/桌面歌词/歌单一键播放；**面板底部内嵌音量条**）；新手引导卡（首启可关）；迷你播放器（非首页悬浮，切歌自动弹出）；桌面歌词（独立第二窗口，设置页外观区与命令面板可开关，**工具条可切横排/竖排**）；歌词偏移微调（±0.5s 步进，按曲目记忆）。
 

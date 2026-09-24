@@ -31,6 +31,21 @@ export type HotkeyAction =
   | "visualizer"
   | "queue";
 
+/** 快捷键参考表（设置页「快捷键」分区与 hotkeys 实现共用的事实源） */
+export const SHORTCUTS: ReadonlyArray<{ keys: string[]; label: string }> = [
+  { keys: ["Space"], label: "播放 / 暂停" },
+  { keys: ["←", "→"], label: "快退 / 快进 5 秒" },
+  { keys: ["↑", "↓"], label: "音量 ±5%" },
+  { keys: ["M"], label: "静音 / 取消静音" },
+  { keys: ["N"], label: "下一首" },
+  { keys: ["P"], label: "上一首" },
+  { keys: ["L"], label: "歌词舞台" },
+  { keys: ["V"], label: "视觉器" },
+  { keys: ["Q"], label: "播放队列" },
+  { keys: ["Ctrl", "K"], label: "命令面板" },
+  { keys: ["Esc"], label: "退出舞台 / 视觉器 / 关闭面板" },
+];
+
 const SEEK_STEP = 5;
 const VOLUME_STEP = 0.05;
 

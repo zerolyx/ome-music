@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
 import { h } from "preact";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/preact";
+import { cleanup, fireEvent, render, screen } from "@testing-library/preact";
 import type { Track } from "../types/music";
 import { tracks } from "./library";
 import { queueIndexFor } from "./player";
@@ -144,15 +144,14 @@ describe("queueIndexFor", () => {
 describe("设置页 · 自动电台开关", () => {
   afterEach(cleanup);
 
-  it("点击「关」关闭电台并持久化，点击「开」恢复", () => {
+  it("播放区开关切换电台并持久化", () => {
     render(h(SettingsView, null));
-    // 私人 DJ 卡默认折叠：先展开
-    fireEvent.click(screen.getByRole("button", { name: "展开DJ 电台与语音" }));
-    const group = screen.getByRole("radiogroup", { name: "自动电台" });
-    fireEvent.click(within(group).getByRole("radio", { name: "关" }));
+    // 自动电台已收拢到「播放」分区：播放卡默认展开
+    const toggle = screen.getByRole("switch", { name: "自动电台" });
+    fireEvent.click(toggle);
     expect(radioEnabled.value).toBe(false);
     expect(localStorage.getItem("ome.radio")).toBe("0");
-    fireEvent.click(within(group).getByRole("radio", { name: "开" }));
+    fireEvent.click(screen.getByRole("switch", { name: "自动电台" }));
     expect(radioEnabled.value).toBe(true);
     expect(localStorage.getItem("ome.radio")).toBe("1");
   });
