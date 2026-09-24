@@ -130,3 +130,59 @@ export function createEqChain(ctx: AudioContext): BiquadFilterNode[] {
 export function bandLabel(frequency: number): string {
   return frequency >= 1000 ? `${frequency / 1000}K` : String(frequency);
 }
+
+/* ---- 频响曲线（ECHO EqCurveView 思路）：RBJ peaking 幅频响应求和 ---- */
+
+const EQ_FS = 48000; // 曲线只是可视化近似；实际滤波在 WebAudio 里按真实采样率工作
+export const EQ_Q = 0.9; // 与 createEqChain 的滤波器一致
+/** 曲线绘制范围（Hz，对数轴） */
+export const EQ_FREQ_MIN = 20;
+export const EQ_FREQ_MAX = 20000;
+/** 曲线纵轴范围（dB），略大于 ±12 的调节范围 */
+export const EQ_DB_RANGE = 15;
+
+/** 单个 peaking 滤波器在 freq 处的增益（dB，RBJ 系数取模） */
+export function peakingResponseDb(freq: number, f0: number, gainDb: number, q: number): number {
+  if (gainDb === 0) return 0;
+  const A = Math.pow(10, gainDb / 40);
+  const w0 = (2 * Math.PI * f0) / EQ_FS;
+  const alpha = Math.sin(w0) / (2 * q);
+  const cw0 = Math.cos(w0);
+  const b0 = 1 + alpha * A;
+  const b1 = -2 * cw0;
+  const b2 = 1 - alpha * A;
+  const a0 = 1 + alpha / A;
+  const a1 = -2 * cw0;
+  const a2 = 1 - alpha / A;
+  const w = (2 * Math.PI * freq) / EQ_FS;
+  const cw = Math.cos(w);
+  const sw = Math.sin(w);
+  const cw2 = Math.cos(2 * w);
+  const sw2 = Math.sin(2 * w);
+  const numRe = b0 + b1 * cw + b2 * cw2;
+  const numIm = -(b1 * sw + b2 * sw2);
+  const denRe = a0 + a1 * cw + a2 * cw2;
+  const denIm = -(a1 * sw + a2 * sw2);
+  const mag2 = (numRe * numRe + numIm * numIm) / (denRe * denRe + denIm * denIm);
+  return 20 * Math.log10(Math.sqrt(mag2));
+}
+
+/** 全链总响应：各频段 dB 线性叠加（dB 域串联即相加） */
+export function eqResponseDb(freq: number, gains: readonly number[]): number {
+  let total = 0;
+  for (let i = 0; i < EQ_BANDS.length; i += 1) {
+    total += peakingResponseDb(freq, EQ_BANDS[i], gains[i] ?? 0, EQ_Q);
+  }
+  return total;
+}
+
+/** 采样 N 个对数频点的总响应，供 SVG 画线 */
+export function eqCurvePoints(gains: readonly number[], samples = 96): number[] {
+  const points: number[] = [];
+  for (let i = 0; i < samples; i += 1) {
+    const freq =
+      EQ_FREQ_MIN * Math.pow(EQ_FREQ_MAX / EQ_FREQ_MIN, i / (samples - 1));
+    points.push(eqResponseDb(freq, gains));
+  }
+  return points;
+}

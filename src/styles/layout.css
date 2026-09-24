@@ -570,6 +570,77 @@ body::before {
 }
 .segment.is-active { background: var(--accent); color: #fff; }
 
+/* ============ EQ 频响曲线（ECHO EqCurveView 思路） ============ */
+.eq-curve {
+  width: 100%;
+  max-width: 640px;
+  display: block;
+  touch-action: none;
+  user-select: none;
+}
+.eq-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.eq-grid.is-zero { stroke: color-mix(in srgb, var(--text) 24%, transparent); }
+.eq-curve-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--accent) 36%, transparent));
+}
+.eq-node {
+  fill: var(--bg-elev);
+  stroke: var(--accent);
+  stroke-width: 2;
+  cursor: ns-resize;
+  transition: r 0.15s var(--ease-signature);
+}
+.eq-node:hover, .eq-node:active { r: 9; }
+.eq-node-label {
+  font-size: 10px;
+  fill: var(--text-dim);
+  pointer-events: none;
+}
+
+/* ============ 历史统计摘要（ECHO HistoryPage 思路） ============ */
+.history-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.history-stat {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+.history-stat-value { font-size: 22px; font-weight: 600; color: var(--accent); }
+.history-stat-label { font-size: 12px; color: var(--text-dim); }
+.history-ranges { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+
+/* 队列抽屉：拖拽重排 + 头部动作 */
+.track-row.is-draggable { cursor: grab; }
+.track-row.is-draggable:active { cursor: grabbing; }
+.queue-header-actions { display: inline-flex; gap: 4px; }
+
+/* 命令面板内嵌音量条（folia surface 思路） */
+.palette-volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.palette-volume-slider { flex: 1; }
+.palette-volume-value { font-size: 12px; min-width: 34px; text-align: right; }
+
 /* 主题卡（ECHO 预设 / folia ThemePark 式可视化选择）：三段色板条 + 名称 + 选中态 */
 .theme-grid {
   display: grid;

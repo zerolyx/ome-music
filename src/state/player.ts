@@ -231,6 +231,28 @@ export function clearQueue(): void {
   stopAtQueueEnd();
 }
 
+/** 纯逻辑：移动元素后，原 currentIndex 落在哪里（可单测） */
+export function currentIndexAfterMove(
+  current: number,
+  from: number,
+  to: number,
+): number {
+  if (current === from) return to;
+  if (from < current && to >= current) return current - 1;
+  if (from > current && to <= current) return current + 1;
+  return current;
+}
+
+/** 队列拖拽重排：把 from 位置的曲目移到 to 位置；正在播的曲目跟随移动 */
+export function moveInQueue(from: number, to: number): void {
+  const items = [...queue.value];
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return;
+  const [moved] = items.splice(from, 1);
+  items.splice(to, 0, moved);
+  queue.value = items;
+  currentIndex.value = currentIndexAfterMove(currentIndex.value, from, to);
+}
+
 /** 网易云曲目：取流换成真实 https 直链并缓存回 track.filePath（togglePlayback/seek 复用） */
 async function resolveNeteaseSrc(track: Track): Promise<string> {
   if (/^https?:\/\//i.test(track.filePath)) return toPlayableSrc(track);

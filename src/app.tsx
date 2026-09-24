@@ -4,6 +4,8 @@ import { activeView } from "./state/app";
 import { chromeVisible, initChromeAutoHide } from "./state/chrome";
 import { greet } from "./state/dj";
 import { restoreDeskLyrics } from "./state/desklyrics";
+import { initHotkeys } from "./state/hotkeys";
+import { initMediaSession } from "./state/mediasession";
 import { stopAllSpeech } from "./state/tts";
 import { startRadioIfIdle } from "./state/radio";
 import { Rail } from "./components/Rail";
@@ -27,6 +29,10 @@ import { vizOpen } from "./state/visualizer";
 
 export function App() {
   useEffect(() => initChromeAutoHide(), []);
+
+  // 全局快捷键 + 系统媒体键（Media Session）：挂载即接线，浏览器预览同样可用
+  useEffect(() => initHotkeys(), []);
+  useEffect(() => initMediaSession(), []);
 
   // 桌面歌词窗随主窗恢复（上开着才开，稍等主窗入场完成后创建）
   useEffect(() => {

@@ -22,8 +22,7 @@ import {
   setVolume,
   togglePlayback,
   volume,
-} from "../state/player";
-import { rematchLyric, findMatchCandidates } from "../state/lyrics";
+} from "../state/player";import { rematchLyric, findMatchCandidates } from "../state/lyrics";
 import { openPlaylist, playlists } from "../state/playlists";
 import { setThemeChoice, THEME_PRESETS } from "../state/theme";
 import { openStage } from "../state/stage";
@@ -235,6 +234,22 @@ export function CommandPalette() {
               </button>
             ),
           )}
+        </div>
+
+        {/* folia 式内嵌音量 surface：面板里直接调音量，不必先执行命令 */}
+        <div class="palette-volume" onClick={(event) => event.stopPropagation()}>
+          <Icon name="volume" size={15} />
+          <input
+            class="slider palette-volume-slider"
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume.value}
+            aria-label="音量"
+            onInput={(event) => setVolume(Number((event.target as HTMLInputElement).value))}
+          />
+          <span class="palette-volume-value">{Math.round(volume.value * 100)}%</span>
         </div>
       </div>
     </div>

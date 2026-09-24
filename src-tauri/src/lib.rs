@@ -55,6 +55,7 @@ pub fn run() {
             library::set_track_liked_command,
             library::record_playback_event_command,
             library::playback_history_command,
+            library::playback_history_entries_command,
             library::local_lyric,
             playlists::playlist_list,
             playlists::playlist_create,

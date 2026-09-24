@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { advance, endEventType, insertNext, appendToQueue, removeAt, queue, currentIndex } from "./player";
+import {
+  advance,
+  currentIndexAfterMove,
+  endEventType,
+  insertNext,
+  appendToQueue,
+  removeAt,
+  moveInQueue,
+  queue,
+  currentIndex,
+} from "./player";
 import type { Track } from "../types/music";
 
 describe("endEventType", () => {
@@ -64,5 +74,40 @@ describe("队列管理", () => {
     currentIndex.value = 0;
     removeAt(5);
     expect(queue.value.length).toBe(1);
+  });
+});
+
+describe("队列拖拽重排（currentIndexAfterMove / moveInQueue）", () => {
+  it("纯逻辑：移动元素后当前下标的落点", () => {
+    expect(currentIndexAfterMove(1, 1, 3)).toBe(3); // 当前自己被拖走 → 跟随
+    expect(currentIndexAfterMove(2, 0, 3)).toBe(1); // 前面的移到当前之后 → 左移
+    expect(currentIndexAfterMove(1, 3, 0)).toBe(2); // 后面的移到当前之前 → 右移
+    expect(currentIndexAfterMove(2, 3, 4)).toBe(2); // 同侧移动 → 不变
+  });
+
+  it("moveInQueue 重排且当前曲目跟随", () => {
+    queue.value = [t("a"), t("b"), t("c"), t("d")];
+    currentIndex.value = 1; // 正在播 b
+    moveInQueue(1, 3);
+    expect(queue.value.map((x) => x.id)).toEqual(["a", "c", "d", "b"]);
+    expect(currentIndex.value).toBe(3);
+  });
+
+  it("moveInQueue 移动非当前曲目时 currentIndex 补偿", () => {
+    queue.value = [t("a"), t("b"), t("c")];
+    currentIndex.value = 2;
+    moveInQueue(0, 2); // a 拖到末尾：b 左移到 0，c 左移到 1
+    expect(queue.value.map((x) => x.id)).toEqual(["b", "c", "a"]);
+    expect(currentIndex.value).toBe(1);
+  });
+
+  it("moveInQueue 越界/同位无副作用", () => {
+    queue.value = [t("a"), t("b")];
+    currentIndex.value = 0;
+    moveInQueue(0, 0);
+    moveInQueue(-1, 2);
+    moveInQueue(0, 5);
+    expect(queue.value.map((x) => x.id)).toEqual(["a", "b"]);
+    expect(currentIndex.value).toBe(0);
   });
 });

@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
-import { isTauriRuntime, playbackHistory } from "../lib/api";
+import { isTauriRuntime, playbackHistoryEntries } from "../lib/api";
 import { demoLibraryTracks } from "../lib/demo";
+import {
+  filterHistory,
+  HISTORY_RANGES,
+  historyStats,
+  type HistoryEntry,
+  type HistoryRange,
+} from "../lib/history";
 import {
   importFolder,
   importing,
@@ -86,7 +93,8 @@ function loadLikedOnly(): boolean {
 export function LibraryView() {
   const [mode, setMode] = useState<LibraryMode>(loadMode);
   const [likedOnly, setLikedOnly] = useState<boolean>(loadLikedOnly);
-  const [history, setHistory] = useState<Track[] | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[] | null>(null);
+  const [historyRange, setHistoryRange] = useState<HistoryRange>("all");
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
   useEffect(() => {
@@ -97,10 +105,17 @@ export function LibraryView() {
   useEffect(() => {
     if (mode !== "history") return;
     if (!isTauriRuntime()) {
-      setHistory([...demoLibraryTracks()].reverse());
+      const now = Date.now();
+      const stamp = (minutesAgo: number) => new Date(now - minutesAgo * 60000).toISOString().slice(0, 19).replace("T", " ");
+      setHistory(
+        [...demoLibraryTracks()].reverse().map((track, index) => ({
+          ...track,
+          playedAt: stamp(index * 95 + 3),
+        })),
+      );
       return;
     }
-    playbackHistory(50)
+    playbackHistoryEntries(200)
       .then(setHistory)
       .catch(() => setHistory([]));
   }, [mode]);
@@ -115,6 +130,15 @@ export function LibraryView() {
   const folderTracks = useMemo(
     () => (selectedFolder ? (folders.find((group) => group.dir === selectedFolder)?.tracks ?? []) : []),
     [folders, selectedFolder]
+  );
+  // 历史条目：按范围筛选 + 统计摘要（ECHO HistoryPage 思路）
+  const historyFiltered = useMemo(
+    () => (history ? filterHistory(history, historyRange, Date.now()) : []),
+    [history, historyRange]
+  );
+  const historySummary = useMemo(
+    () => (history ? historyStats(history, historyRange, Date.now()) : null),
+    [history, historyRange]
   );
 
   const switchMode = (next: LibraryMode) => {
@@ -213,15 +237,54 @@ export function LibraryView() {
             <p class="view-hint">电台开播后，这里会记下你听过的每一首</p>
           </div>
         ) : (
-          <TrackList
-            tracks={history}
-            currentIndex={-1}
-            onPlay={(index) => playTracks(history, index)}
-            onToggleLike={(track) => void toggleLiked(track)}
-            onPlayNext={insertNext}
-            onEnqueue={appendToQueue}
-            onAddToPlaylist={openAddToPlaylist}
-          />
+          <>
+            {historySummary && (
+              <div class="history-summary">
+                <div class="history-stat">
+                  <span class="history-stat-value">{historySummary.today}</span>
+                  <span class="history-stat-label">今天播放</span>
+                </div>
+                <div class="history-stat">
+                  <span class="history-stat-value">{historySummary.week}</span>
+                  <span class="history-stat-label">最近 7 天</span>
+                </div>
+                <div class="history-stat">
+                  <span class="history-stat-value">{historySummary.plays}</span>
+                  <span class="history-stat-label">播放次数</span>
+                </div>
+                <div class="history-stat">
+                  <span class="history-stat-value">{historySummary.tracks}</span>
+                  <span class="history-stat-label">不重复曲目</span>
+                </div>
+                <div class="history-stat">
+                  <span class="history-stat-value">{historySummary.minutes}</span>
+                  <span class="history-stat-label">累计收听（分钟）</span>
+                </div>
+              </div>
+            )}
+            <div class="history-ranges" role="radiogroup" aria-label="历史范围">
+              {HISTORY_RANGES.map((range) => (
+                <button
+                  key={range.id}
+                  role="radio"
+                  aria-checked={historyRange === range.id}
+                  class={`chip-toggle ${historyRange === range.id ? "is-active" : ""}`}
+                  onClick={() => setHistoryRange(range.id)}
+                >
+                  {range.label}
+                </button>
+              ))}
+            </div>
+            <TrackList
+              tracks={historyFiltered}
+              currentIndex={-1}
+              onPlay={(index) => playTracks(historyFiltered, index)}
+              onToggleLike={(track) => void toggleLiked(track)}
+              onPlayNext={insertNext}
+              onEnqueue={appendToQueue}
+              onAddToPlaylist={openAddToPlaylist}
+            />
+          </>
         )
       ) : mode === "folders" ? (
         selectedFolder ? (

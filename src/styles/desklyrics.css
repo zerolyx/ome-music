@@ -101,6 +101,23 @@ html.desklyrics body {
 .dlx[data-size="m"] { --dlx-font: 34px; }
 .dlx[data-size="l"] { --dlx-font: 44px; }
 
+/* 竖排（ECHO 桌面歌词思路）：writing-mode 竖排，胶囊变窄高 */
+.dlx[data-vertical] .dlx-glass {
+  writing-mode: vertical-rl;
+  padding: 26px 10px;
+  gap: 4px;
+}
+.dlx[data-vertical] .dlx-line,
+.dlx[data-vertical] .dlx-sub {
+  max-height: 100%;
+  max-width: none;
+}
+.dlx[data-vertical] .dlx-tools {
+  writing-mode: horizontal-tb; /* 工具条保持横排可读 */
+  top: 6px;
+  right: 8px;
+}
+
 /* hover 工具条：平时零干扰，浮现于右上角 */
 .dlx-tools {
   position: absolute;

@@ -23,6 +23,7 @@ import {
   setEqEnabled,
 } from "../state/equalizer";
 import { fadeEnabled, setFadeEnabled } from "../state/fade";
+import { EqCurve } from "../components/EqCurve";
 import {
   outputDevices,
   outputDeviceId,
@@ -275,6 +276,7 @@ function SoundBody() {
           </button>
         ))}
       </div>
+      <EqCurve />
       <div class="eq-bands" aria-label="均衡器频段">
         {EQ_BANDS.map((frequency, index) => {
           const gain = eqGains.value[index] ?? 0;

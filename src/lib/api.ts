@@ -170,6 +170,9 @@ export interface HourPreference {
 }
 export const profileHourPreferences = () => invoke<HourPreference[]>("profile_hour_preferences");
 export const playbackHistory = (limit?: number) => invoke<Track[]>("playback_history", { limit });
+/** 历史条目：每次播放一条 + playedAt（历史页统计/筛选用），结构见 lib/history.ts */
+export const playbackHistoryEntries = (limit?: number) =>
+  invoke<import("./history").HistoryEntry[]>("playback_history_entries", { limit });
 
 /** 本地曲目同目录 .lrc：返回 base64 原始字节（null = 没有同目录歌词），编码由前端探测 */
 export const localLyric = (id: string) => invoke<string | null>("local_lyric", { id });

@@ -131,6 +131,38 @@ pub fn playback_history(conn: &Connection, limit: i64) -> Result<Vec<TrackDto>, 
     rows.collect()
 }
 
+/// 历史条目：曲目 + 播放时间（每次播放一条，供前端做时间筛选与统计）
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryEntryDto {
+    #[serde(flatten)]
+    pub track: TrackDto,
+    pub played_at: String,
+}
+
+pub fn playback_history_entries(
+    conn: &Connection,
+    limit: i64,
+) -> Result<Vec<HistoryEntryDto>, rusqlite::Error> {
+    // TRACK_SELECT 自带 FROM/JOIN 子句：把 e.played_at 注入 SELECT 列表
+    let sql = TRACK_SELECT.replacen(
+        "FROM tracks t",
+        ", e.played_at AS played_at FROM tracks t",
+        1,
+    ) + " JOIN playback_events e ON t.id = e.track_id
+         WHERE e.event_type IN ('play', 'completed', 'replayed')
+         ORDER BY e.played_at DESC
+         LIMIT ?1";
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![limit], |row| {
+        Ok(HistoryEntryDto {
+            track: row_to_track(row)?,
+            played_at: row.get("played_at")?,
+        })
+    })?;
+    rows.collect()
+}
+
 pub fn record_playback_event(
     conn: &Connection,
     track_id: &str,
@@ -396,6 +428,16 @@ pub fn playback_history_command(
     let conn = state.db.lock().map_err(|error| error.to_string())?;
     let limit = limit.unwrap_or(50).clamp(1, 200);
     playback_history(&conn, limit).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn playback_history_entries_command(
+    state: State<'_, AppState>,
+    limit: Option<i64>,
+) -> Result<Vec<HistoryEntryDto>, String> {
+    let conn = state.db.lock().map_err(|error| error.to_string())?;
+    let limit = limit.unwrap_or(200).clamp(1, 500);
+    playback_history_entries(&conn, limit).map_err(|error| error.to_string())
 }
 
 /// 本地曲目的同目录侧车歌词（原样字节，base64 编码）。
@@ -685,5 +727,58 @@ mod tests {
     #[test]
     fn krc_decrypt_rejects_garbage() {
         assert!(decrypt_krc(b"definitely not zlib").is_none());
+    }
+
+    // ---------- 历史条目（每次播放一条 + 时间戳） ----------
+
+    #[test]
+    fn history_entries_list_each_play_newest_first() {
+        let conn = memory_db();
+        insert_track(
+            &conn,
+            &NewTrack {
+                title: "歌一".into(),
+                artist: "歌手".into(),
+                album: "专辑".into(),
+                duration_seconds: 200,
+                file_path: "C:\\music\\a.flac".into(),
+                cover_path: None,
+            },
+        )
+        .unwrap();
+        insert_track(
+            &conn,
+            &NewTrack {
+                title: "歌二".into(),
+                artist: "歌手".into(),
+                album: "专辑".into(),
+                duration_seconds: 210,
+                file_path: "C:\\music\\b.flac".into(),
+                cover_path: None,
+            },
+        )
+        .unwrap();
+        let tracks = load_tracks(&conn).unwrap();
+        let (a, b) = (&tracks[0].id, &tracks[1].id);
+        // 同一首歌播两次：条目不去重
+        let plays = [
+            (a.as_str(), "2026-09-24 08:00:00"),
+            (b.as_str(), "2026-09-24 09:00:00"),
+            (a.as_str(), "2026-09-24 10:00:00"),
+        ];
+        for (id, at) in plays {
+            conn.execute(
+                "INSERT INTO playback_events (id, track_id, event_type, position_seconds, played_at)
+                 VALUES (?1, ?2, 'play', 0, ?3)",
+                params![format!("evt-{id}-{at}"), id, at],
+            )
+            .unwrap();
+        }
+        let entries = playback_history_entries(&conn, 50).unwrap();
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].played_at, "2026-09-24 10:00:00");
+        assert_eq!(entries[0].track.title, "歌一"); // 最新在前
+        assert_eq!(entries[1].track.title, "歌二");
+        assert_eq!(entries[2].track.title, "歌一"); // 同一首多次播放不去重
     }
 }

@@ -15,7 +15,12 @@ interface TrackListProps {
   onRemove?: (index: number) => void;
   /** 加入歌单（hover 显示，唤起全局选择器） */
   onAddToPlaylist?: (track: Track) => void;
+  /** 提供时行可拖拽重排（播放列表抽屉，ECHO 式） */
+  onReorder?: (from: number, to: number) => void;
 }
+
+/** 拖拽中的来源下标（仅队列抽屉开启拖拽；模块级防拖拽中被重渲染清掉） */
+let dragFrom = -1;
 
 export function TrackList({
   tracks,
@@ -26,13 +31,38 @@ export function TrackList({
   onEnqueue,
   onRemove,
   onAddToPlaylist,
+  onReorder,
 }: TrackListProps) {
+  const rowProps = (index: number) =>
+    onReorder
+      ? {
+          draggable: true,
+          onDragStart: () => {
+            dragFrom = index;
+          },
+          onDragOver: (event: MouseEvent) => {
+            if (dragFrom !== -1) event.preventDefault(); // 允许放置
+          },
+          onDrop: (event: MouseEvent) => {
+            event.preventDefault();
+            if (dragFrom !== -1 && dragFrom !== index) onReorder(dragFrom, index);
+            dragFrom = -1;
+          },
+          onDragEnd: () => {
+            dragFrom = -1;
+          },
+        }
+      : {};
   return (
     <ul class="track-list" role="list">
       {tracks.map((track, index) => (
         <li
           key={track.id}
-          class={`track-row ${index === currentIndex ? "is-current" : ""}`}
+          data-index={index}
+          class={`track-row ${index === currentIndex ? "is-current" : ""} ${
+            onReorder ? "is-draggable" : ""
+          }`}
+          {...rowProps(index)}
         >
           <button class="track-play" aria-label={`播放 ${track.title}`} onClick={() => onPlay(index)}>
             <Icon name="play" size={14} />

@@ -18,9 +18,11 @@ import {
   DESK_LOCK_EVENT,
   DESK_LYRIC_EVENT,
   readDeskRect,
+  readDeskSizeId,
+  readDeskVertical,
   saveDeskRect,
   saveDeskSizeId,
-  readDeskSizeId,
+  saveDeskVertical,
   type DeskLyricSnapshot,
   type DeskSizeId,
   type DeskSnapshotWord,
@@ -64,6 +66,7 @@ export function DesktopLyricsWindow() {
   const [pos, setPos] = useState(0);
   const [hover, setHover] = useState(false);
   const [sizeId, setSizeId] = useState<DeskSizeId>(() => readDeskSizeId());
+  const [vertical, setVertical] = useState<boolean>(() => readDeskVertical());
   const snapRef = useRef<DeskLyricSnapshot | null>(null);
   snapRef.current = snap;
 
@@ -144,12 +147,21 @@ export function DesktopLyricsWindow() {
   const applySize = (next: DeskSizeId) => {
     setSizeId(next);
     saveDeskSizeId(next);
-    if (isTauriRuntime()) {
-      const size = deskSizeFor(next);
-      void getCurrentWindow()
-        .setSize(new LogicalSize(size.width, size.height))
-        .catch(() => undefined);
-    }
+    resizeWindow(next, vertical);
+  };
+
+  const applyVertical = (next: boolean) => {
+    setVertical(next);
+    saveDeskVertical(next);
+    resizeWindow(sizeId, next);
+  };
+
+  const resizeWindow = (id: DeskSizeId, isVertical: boolean) => {
+    if (!isTauriRuntime()) return;
+    const size = deskSizeFor(id, isVertical);
+    void getCurrentWindow()
+      .setSize(new LogicalSize(size.width, size.height))
+      .catch(() => undefined);
   };
 
   const track = snap?.track ?? null;
@@ -165,6 +177,7 @@ export function DesktopLyricsWindow() {
     <div
       class="dlx"
       data-size={sizeId}
+      data-vertical={vertical || undefined}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -190,9 +203,17 @@ export function DesktopLyricsWindow() {
           <button
             class="dlx-btn dlx-btn-text"
             onClick={() => applySize(cycleDeskSize(sizeId))}
-            aria-label={`切换字号（当前${deskSizeFor(sizeId).label}）`}
+            aria-label={`切换字号（当前${deskSizeFor(sizeId, vertical).label}）`}
           >
-            {deskSizeFor(sizeId).label}
+            {deskSizeFor(sizeId, vertical).label}
+          </button>
+          <button
+            class="dlx-btn dlx-btn-text"
+            onClick={() => applyVertical(!vertical)}
+            aria-label={vertical ? "切换为横排" : "切换为竖排"}
+            title={vertical ? "横排" : "竖排"}
+          >
+            {vertical ? "横" : "竖"}
           </button>
           <button
             class="dlx-btn"

@@ -155,14 +155,35 @@ export function deskLineProgress(line: DeskSnapshotLine, position: number): numb
 /* ---- 字号三档：窗口尺寸随档位走，持久化在歌词窗自己的 localStorage ---- */
 
 export const DESK_SIZES = [
-  { id: "s", label: "小", width: 640, height: 120 },
-  { id: "m", label: "中", width: 780, height: 152 },
-  { id: "l", label: "大", width: 960, height: 188 },
+  { id: "s", label: "小", width: 640, height: 120, vwidth: 132, vheight: 420 },
+  { id: "m", label: "中", width: 780, height: 152, vwidth: 160, vheight: 520 },
+  { id: "l", label: "大", width: 960, height: 188, vwidth: 196, vheight: 660 },
 ] as const;
 export type DeskSizeId = (typeof DESK_SIZES)[number]["id"];
 
-export function deskSizeFor(id: DeskSizeId): { width: number; height: number; label: string } {
-  return DESK_SIZES.find((size) => size.id === id) ?? DESK_SIZES[1];
+const VERTICAL_KEY = "ome.desklyrics.vertical";
+
+export function readDeskVertical(): boolean {
+  try {
+    return localStorage.getItem(VERTICAL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveDeskVertical(vertical: boolean): void {
+  try {
+    localStorage.setItem(VERTICAL_KEY, vertical ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
+export function deskSizeFor(id: DeskSizeId, vertical = false): { width: number; height: number; label: string } {
+  const size = DESK_SIZES.find((item) => item.id === id) ?? DESK_SIZES[1];
+  return vertical
+    ? { width: size.vwidth, height: size.vheight, label: size.label }
+    : { width: size.width, height: size.height, label: size.label };
 }
 
 export function cycleDeskSize(id: DeskSizeId): DeskSizeId {
@@ -362,7 +383,7 @@ export async function openDeskLyrics(): Promise<void> {
     startPublisher();
     return;
   }
-  const size = deskSizeFor(readDeskSizeId());
+  const size = deskSizeFor(readDeskSizeId(), readDeskVertical());
   const win = new WebviewWindow(DESKLYRICS_LABEL, {
     url: "index.html",
     title: "桌面歌词",

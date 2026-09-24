@@ -93,19 +93,19 @@ src-tauri/src/
 
 ## 三、功能全景（v0.7.0）
 
-**播放核心**：队列管理（下一首播放/追加/移除/清空）、进度拖动、音量、上一首/下一首、播放历史自动记录。
+**播放核心**：队列管理（下一首播放/追加/移除/清空/**拖拽重排 + 定位当前曲目**）、进度拖动、音量、上一首/下一首、播放历史自动记录；**全局快捷键**（Space 播放暂停 · ←→ ±5s · ↑↓ 音量 · M 静音 · N/P 上下曲 · L 舞台 · V 视觉器 · Q 队列；输入框/按钮焦点/组字/面板打开时不劫持）；**Media Session 系统媒体键**（媒体浮层元数据/封面/进度，键盘媒体键可控播放）。
 
 **三个音乐源**：本地文件夹导入（ authorized_directories 授权机制）；网易云扫码登录、搜索、VIP 检测（fee/freeTrialInfo）、逐字歌词(yrc)+翻译(tlyric)；B站视频音频（CDN 防盗链走 /remote 代理）+ 同屏弹幕氛围层（可关）。
 
 **DJ 电台**：OpenAI 兼容 LLM 配置（服务商/接口/模型/密钥）；开播问候、歌前介绍（TTS 说完淡入）、播完自动接播（自动电台开关）、记忆（聊天/播放事件入库）、画像页。TTS 三层兜底：WebView2 speechSynthesis → Edge 神经语音 → OpenAI 兼容 TTS。
 
-**声音（DSP）**：10 段参数 EQ（31Hz-16kHz，±12dB，6 预设，localStorage 持久化）；输出设备选择（setSinkId，拔出自动回退）；切歌 1.2s 自动淡变（token 防竞态）。
+**声音（DSP）**：10 段参数 EQ（31Hz-16kHz，±12dB，6 预设，localStorage 持久化；**SVG 频响曲线可视化 + 节点纵向拖拽调增益**，RBJ 幅频数学与 WebAudio 滤波同参数）；输出设备选择（setSinkId，拔出自动回退）；切歌 1.2s 自动淡变（token 防竞态）。
 
 **视觉**：9 选主题（跟随系统/浅色/深色 + 手工预设 noir 月夜/ember 茜影/jade 青川/paper 纸墨/sakura 樱雪/mint 薄荷/aurora 极光，设置页三段色板主题卡）+ 封面取色（accent + 双团氛围光背景）；首页旋转黑胶（封面=唱片套，播放渐转/暂停缓停，rAF 驱动）；专辑墙在播专辑点亮（accent 描边+内发光）；全屏歌词舞台（浮流/群唱/心象三动效，逐字+扫光双模式）；全屏视觉器（极光/圆环/脉冲 Canvas 三模式）；沉浸光标（环 lerp + 点快随，差值混合恒可见）；Kimi 式设置页（侧栏导航+折叠分区）；页面切换过渡、细滚动条。
 
-**功能入口**：Ctrl+K 命令面板（模糊匹配+最近使用置顶：导航/曲库视图/播放控制/音量/歌词重匹配与候选挑选/睡眠定时/主题/桌面歌词/歌单一键播放）；新手引导卡（首启可关）；迷你播放器（非首页悬浮，切歌自动弹出）；桌面歌词（独立第二窗口，设置页外观区与命令面板可开关）；歌词偏移微调（±0.5s 步进，按曲目记忆）。
+**功能入口**：Ctrl+K 命令面板（模糊匹配+最近使用置顶：导航/曲库视图/播放控制/音量/歌词重匹配与候选挑选/睡眠定时/主题/桌面歌词/歌单一键播放；**面板底部内嵌音量条**）；新手引导卡（首启可关）；迷你播放器（非首页悬浮，切歌自动弹出）；桌面歌词（独立第二窗口，设置页外观区与命令面板可开关，**工具条可切横排/竖排**）；歌词偏移微调（±0.5s 步进，按曲目记忆）。
 
-**曲库视图**：列表 / 专辑墙 / 艺人 / 文件夹（按磁盘目录分组）/ 歌单 / 播放历史，「只看收藏」过滤，全部 localStorage 记忆上次视图。
+**曲库视图**：列表 / 专辑墙 / 艺人 / 文件夹（按磁盘目录分组）/ 歌单 / 播放历史（**统计摘要卡：今天/7天/总次数/不重复曲目/累计时长 + 全部/今天/7天/30天时间筛选**；条目=每次播放一条，新命令 `playback_history_entries`），「只看收藏」过滤，全部 localStorage 记忆上次视图。
 
 ---
 
@@ -144,7 +144,7 @@ element.volume = 用户音量 × fadeFactor()
 
 ### 4.6 持久化键清单（localStorage）
 
-`ome.theme` `ome.accentMode` `ome.library.view` `ome.library.likedOnly` `ome.eq.gains/enabled/preset` `ome.fade` `ome.audioout` `ome.palette.recent` `ome.lyric.offsets` `ome.welcome.dismissed` `ome.danmaku` `ome.radio` `ome.desklyrics.on/size/rect/locked` 等；后端另有 saveLastPlayback（续播恢复）与 DB（曲目/歌单/播放事件/播放历史/DJ 记忆/授权目录）。
+`ome.theme` `ome.accentMode` `ome.library.view` `ome.library.likedOnly` `ome.eq.gains/enabled/preset` `ome.fade` `ome.audioout` `ome.palette.recent` `ome.lyric.offsets` `ome.welcome.dismissed` `ome.danmaku` `ome.radio` `ome.desklyrics.on/size/rect/locked/vertical` 等；后端另有 saveLastPlayback（续播恢复）与 DB（曲目/歌单/播放事件/播放历史/DJ 记忆/授权目录）。
 
 ### 4.7 桌面歌词独立窗口（第二窗口 + 事件快照）
 
