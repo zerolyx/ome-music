@@ -398,10 +398,12 @@ pub fn playback_history_command(
     playback_history(&conn, limit).map_err(|error| error.to_string())
 }
 
-/// 本地曲目的同目录 .lrc 歌词（原样字节，base64 编码）。
+/// 本地曲目的同目录侧车歌词（原样字节，base64 编码）。
 ///
+/// 支持 .lrc / .ttml / .qrc / .krc（优先级即此顺序；.krc 在本侧解密为明文）。
 /// 编码探测交给前端 TextDecoder（utf-8 fatal → gbk 回退）：Windows 下歌词
-/// 大量是 GBK，Rust 侧不加编码依赖也能正确解码。
+/// 大量是 GBK，Rust 侧不加编码依赖也能正确解码。格式嗅探同样在前端
+/// （lib/lyricfmt.ts），本侧只管找文件与解密。
 #[tauri::command]
 pub fn local_lyric(state: State<'_, AppState>, id: String) -> Result<Option<String>, String> {
     let conn = state.db.lock().map_err(|error| error.to_string())?;
@@ -422,7 +424,24 @@ pub fn local_lyric(state: State<'_, AppState>, id: String) -> Result<Option<Stri
     read_sidecar_lrc(Path::new(&file_path))
 }
 
-/// 同目录查找 `<音频主名>.lrc`（兼容大写 .LRC），命中返回 base64 字节
+/// 同目录按优先级查找侧车歌词（lrc > ttml > qrc > krc，兼容大写扩展名）
+fn find_sidecar_lrc(audio_path: &Path) -> Option<std::path::PathBuf> {
+    let stem = audio_path.file_stem()?.to_string_lossy();
+    let dir = audio_path.parent()?;
+    for ext in ["lrc", "ttml", "qrc", "krc"] {
+        for name in [
+            format!("{stem}.{ext}"),
+            format!("{stem}.{}", ext.to_uppercase()),
+        ] {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
 fn read_sidecar_lrc(audio_path: &Path) -> Result<Option<String>, String> {
     let Some(found) = find_sidecar_lrc(audio_path) else {
         return Ok(None);
@@ -430,19 +449,32 @@ fn read_sidecar_lrc(audio_path: &Path) -> Result<Option<String>, String> {
     let bytes = std::fs::read(&found).map_err(|error| error.to_string())?;
     use base64::engine::general_purpose::STANDARD as BASE64;
     use base64::Engine as _;
-    Ok(Some(BASE64.encode(bytes)))
+    let is_krc = found
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("krc"));
+    let plain = if is_krc {
+        decrypt_krc(&bytes).ok_or_else(|| "krc 歌词解密失败".to_string())?
+    } else {
+        bytes
+    };
+    Ok(Some(BASE64.encode(plain)))
 }
 
-fn find_sidecar_lrc(audio_path: &Path) -> Option<std::path::PathBuf> {
-    let stem = audio_path.file_stem()?.to_string_lossy();
-    let dir = audio_path.parent()?;
-    for name in [format!("{stem}.lrc"), format!("{stem}.LRC")] {
-        let candidate = dir.join(name);
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-    None
+/// 酷狗 krc：逐字节与 [0x40, 0x47, 0x61, 0x62] 循环异或后 zlib 解压
+fn decrypt_krc(bytes: &[u8]) -> Option<Vec<u8>> {
+    use std::io::Read;
+    const KEY: [u8; 4] = [0x40, 0x47, 0x61, 0x62];
+    let xored: Vec<u8> = bytes
+        .iter()
+        .enumerate()
+        .map(|(index, byte)| byte ^ KEY[index % KEY.len()])
+        .collect();
+    let mut plain = Vec::new();
+    flate2::read::ZlibDecoder::new(&xored[..])
+        .read_to_end(&mut plain)
+        .ok()?;
+    Some(plain)
 }
 
 #[cfg(test)]
@@ -601,5 +633,57 @@ mod tests {
         let audio = dir.join("陷阱.flac");
         std::fs::write(&audio, b"fake-audio").unwrap();
         assert!(read_sidecar_lrc(&audio).unwrap().is_none());
+    }
+
+    #[test]
+    fn sidecar_priority_lrc_wins_over_ttml() {
+        let dir = std::env::temp_dir().join(format!(
+            "ome-lrc-test-prio-{:x}",
+            md5::compute(std::process::id().to_string())
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let audio = dir.join("歌.flac");
+        std::fs::write(&audio, b"fake-audio").unwrap();
+        std::fs::write(dir.join("歌.ttml"), b"<tt/>").unwrap();
+        std::fs::write(dir.join("歌.krc"), b"junk").unwrap();
+        let found = find_sidecar_lrc(&audio).unwrap();
+        assert_eq!(found.extension().and_then(|e| e.to_str()), Some("ttml"));
+        std::fs::write(dir.join("歌.lrc"), b"[00:01.00]x").unwrap();
+        let found = find_sidecar_lrc(&audio).unwrap();
+        assert_eq!(found.extension().and_then(|e| e.to_str()), Some("lrc"));
+    }
+
+    #[test]
+    fn krc_decrypt_roundtrip_via_zlib_xor() {
+        use flate2::write::ZlibEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+        const KEY: [u8; 4] = [0x40, 0x47, 0x61, 0x62];
+        let plain = b"[1200,3000]<1200,300>hello".to_vec();
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&plain).unwrap();
+        let compressed = encoder.finish().unwrap();
+        let encrypted: Vec<u8> = compressed
+            .iter()
+            .enumerate()
+            .map(|(i, b)| b ^ KEY[i % 4])
+            .collect();
+        let dir = std::env::temp_dir().join(format!(
+            "ome-lrc-test-krc-{:x}",
+            md5::compute(std::process::id().to_string())
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let audio = dir.join("歌.flac");
+        std::fs::write(&audio, b"fake-audio").unwrap();
+        std::fs::write(dir.join("歌.krc"), &encrypted).unwrap();
+        let encoded = read_sidecar_lrc(&audio).unwrap().expect("应命中 .krc");
+        use base64::engine::general_purpose::STANDARD as BASE64;
+        use base64::Engine as _;
+        assert_eq!(BASE64.decode(encoded).unwrap(), plain);
+    }
+
+    #[test]
+    fn krc_decrypt_rejects_garbage() {
+        assert!(decrypt_krc(b"definitely not zlib").is_none());
     }
 }

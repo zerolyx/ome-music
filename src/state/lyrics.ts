@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals";
 import { localLyric, neteaseLyric, neteaseSearch } from "../lib/api";
+import { sniffLyricText } from "../lib/lyricfmt";
 import type { NeteaseSong, Track } from "../types/music";
 
 export interface LyricLine {
@@ -260,8 +261,9 @@ async function fetchLocalTrackLyric(track: Track): Promise<RawLyric | null> {
   try {
     const encoded = await localLyric(track.id);
     if (encoded) {
-      const lrc = decodeLrcBase64(encoded).trim();
-      if (lrc) result = { lrc };
+      const text = decodeLrcBase64(encoded).trim();
+      // sidecar 可能是 lrc/ttml/qrc/krc（明文），嗅探后统一成 {lrc, yrc}
+      if (text) result = sniffLyricText(text);
     }
   } catch {
     result = null;
