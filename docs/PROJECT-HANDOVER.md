@@ -58,6 +58,7 @@ src/
     player.ts              播放队列/当前曲目/进度/音量；WebAudio 建链；淡变包装
     library.ts             曲库列表/导入/喜欢
     lyrics.ts              歌词解析(lrc/yrc/tlyric)/匹配/偏移/候选弹窗状态
+    desklyrics.ts          桌面歌词第二窗口：快照协议/发布循环/窗口生命周期
     theme.ts tint.ts       主题预设 + 封面取色（--accent/--ambient-a/b）
     equalizer.ts fade.ts audioout.ts   B1 声音三件套（DSP）
     stage.ts visualizer.ts 歌词舞台 / 视觉器开关与动效选择
@@ -66,9 +67,11 @@ src/
     netease.ts bilibili.ts danmaku.ts playlists.ts sleeptimer.ts
   components/              TrackList/PlayerBar/Rail/CommandPalette/QueueDrawer/
                            StageView/VisualizerView/MiniPlayer/LyricsMatchPicker/
-                           WelcomeCard/ImmersiveCursor(环+点双光标)/Icon 等
+                           DesktopLyricsWindow(桌面歌词窗体)/WelcomeCard/
+                           ImmersiveCursor(环+点双光标)/Icon 等
   views/                   Home/Search/Library/Settings/Playlists
   lib/                     api.ts(invoke 封装/coverUrl)、audio.ts(toPlayableSrc)
+dev-preview/desklyrics.html  桌面歌词视觉调试页（mock Tauri IPC，仅 dev 服务器可用）
 ```
 
 **Rust 目录地图**：
@@ -99,7 +102,7 @@ src-tauri/src/
 
 **视觉**：4 套预设主题（noir 月夜/ember 茜影/jade 青川/paper 纸墨）+ 跟随系统；封面取色（accent + 双团氛围光背景）；全屏歌词舞台（浮流/群唱/心象三动效，逐字+扫光双模式）；全屏视觉器（极光/圆环/脉冲 Canvas 三模式）；沉浸光标（环 lerp + 点快随，差值混合恒可见）；Kimi 式设置页（侧栏导航+折叠分区）；页面切换过渡、细滚动条。
 
-**功能入口**：Ctrl+K 命令面板（模糊匹配+最近使用置顶：导航/曲库视图/播放控制/音量/歌词重匹配与候选挑选/睡眠定时/主题/歌单一键播放）；新手引导卡（首启可关）；迷你播放器（非首页悬浮，切歌自动弹出）；歌词偏移微调（±0.5s 步进，按曲目记忆）。
+**功能入口**：Ctrl+K 命令面板（模糊匹配+最近使用置顶：导航/曲库视图/播放控制/音量/歌词重匹配与候选挑选/睡眠定时/主题/桌面歌词/歌单一键播放）；新手引导卡（首启可关）；迷你播放器（非首页悬浮，切歌自动弹出）；桌面歌词（独立第二窗口，设置页外观区与命令面板可开关）；歌词偏移微调（±0.5s 步进，按曲目记忆）。
 
 **曲库视图**：列表 / 专辑墙 / 艺人 / 文件夹（按磁盘目录分组）/ 歌单 / 播放历史，「只看收藏」过滤，全部 localStorage 记忆上次视图。
 
@@ -140,7 +143,18 @@ element.volume = 用户音量 × fadeFactor()
 
 ### 4.6 持久化键清单（localStorage）
 
-`ome.theme` `ome.accentMode` `ome.library.view` `ome.library.likedOnly` `ome.eq.gains/enabled/preset` `ome.fade` `ome.audioout` `ome.palette.recent` `ome.lyric.offsets` `ome.welcome.dismissed` `ome.danmaku` `ome.radio` 等；后端另有 saveLastPlayback（续播恢复）与 DB（曲目/歌单/播放事件/播放历史/DJ 记忆/授权目录）。
+`ome.theme` `ome.accentMode` `ome.library.view` `ome.library.likedOnly` `ome.eq.gains/enabled/preset` `ome.fade` `ome.audioout` `ome.palette.recent` `ome.lyric.offsets` `ome.welcome.dismissed` `ome.danmaku` `ome.radio` `ome.desklyrics.on/size/rect` 等；后端另有 saveLastPlayback（续播恢复）与 DB（曲目/歌单/播放事件/播放历史/DJ 记忆/授权目录）。
+
+### 4.7 桌面歌词独立窗口（第二窗口 + 事件快照）
+
+架构：主窗口持有全部状态，第二窗口 `label=desklyrics` **复用同一前端 bundle**，`main.tsx` 按 `getCurrentWindow().label` 分流渲染 `DesktopLyricsWindow`。跨窗同步不走共享信号（各窗 JS 上下文独立），而是主窗每 250ms `emitTo` 一帧快照（当前行/字级时间轴/翻译/下一行/position+sentAt），歌词窗用 `Date.now()` 差值本地 rAF 插值出连续进度驱动卡拉OK，无需逐帧 IPC；暂停时快照字节级不变，发布循环按 JSON 去重零流量。要点：
+
+- 窗口 `focus:false` + 组件自行 show（定位就绪后），**永不抢焦点**；`visible:false` 避免原点闪现。
+- 开关意图持久化（`ome.desklyrics.on`），开机随主窗恢复；位置物理像素自存自愈（显示器拓扑变化回中）；字号三档 s/m/l 联动窗口尺寸。
+- emitTo 失败自愈：歌词窗被外部销毁时发布循环捕获并自动关停状态。
+- **新窗口必踩坑**：index.html 的 `<html class="booting">` 会遮蔽 `#app`，第二窗口分支必须同样在双 rAF 后移除 booting，否则窗口永久隐形（窗口显隐由 CSS 与 show() 双重控制）。
+- capabilities `windows` 必须包含 `desklyrics`，否则歌词窗内所有 window/event IPC 被拒。
+- 远期扩展位：鼠标穿透锁定模式、颜色/双行排布设置。
 
 ---
 
@@ -176,6 +190,8 @@ cargo clippy --workspace -- -D warnings && cargo fmt --all -- --check
 | 网易云封面空白 | picUrl 是 http，被白名单拒 | coverUrl 升级 https |
 | 指针整个消失 | 主题改版后 --cursor 挂旧 dark；或浅主题+深电台区撞色 | 暗色四联选择器 + difference 混合 |
 | 封面批量 404 | app_cache 被系统清理 | media.rs 自愈重提取 |
+| 第二窗口内容永久隐形 | 新窗口没移除 index.html 的 `.booting` 遮蔽 | 分流分支双 rAF 后 remove("booting") |
+| 歌词窗 IPC 全部被拒 | capabilities `windows` 没含新窗口 label | main.json windows 加 `desklyrics` |
 | 本机构建失败 | 卡巴斯基隔离 build-script | 退出杀软 |
 | push 443 超时 | 网络直连被断 | 开代理重试 |
 
@@ -183,7 +199,7 @@ cargo clippy --workspace -- -D warnings && cargo fmt --all -- --check
 
 ## 七、远期路线图（已记录在案，按优先级）
 
-1. **桌面歌词独立窗口**（Tauri 第二窗口；需歌词信号跨窗同步，工作量最大，单独立项）。
+1. ~~桌面歌词独立窗口~~ **已实现**（第二窗口 + 事件快照同步，见 4.7；鼠标穿透锁定模式为后续扩展）。
 2. **壁纸模式**（WorkerW SetParent，把播放器钉到桌面壁纸层）。
 3. 歌词格式扩展：TTML / qrc / krc。
 4. Sync Server / Now Playing 接入 / gapless 播放。
@@ -200,5 +216,9 @@ npm run tauri dev          # 开发（Rust 改动会自动重编译）
 npm run test               # 前端测试
 npm run tauri build        # 本地出安装包（先退卡巴斯基）
 ```
+
+桌面歌词视觉调试（无需起 Tauri）：`npm run dev` 后浏览器开
+`http://127.0.0.1:1420/dev-preview/desklyrics.html?state=yrc&size=m&bg=dark`
+（state: yrc/lrc/idle/nolyric · size: s/m/l · bg: dark/light，mock IPC 推真实快照帧）。
 
 DJ 人格、B站从属原则、PersonalConfig/ 禁读禁印等纪律条款见 AGENTS.md 与 PROJECT.md，本文不再重复。

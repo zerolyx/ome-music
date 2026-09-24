@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>桌面歌词 dev 预览（mock Tauri）</title>
+    <link rel="stylesheet" href="/src/styles/theme.css" />
+    <link rel="stylesheet" href="/src/styles/motion.css" />
+    <link rel="stylesheet" href="/src/styles/desklyrics.css" />
+    <style>
+      /* 模拟"叠加在桌面"：?bg=light|dark 切换（放独立层，避免被 html.desklyrics body 透明覆盖） */
+      .desk-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+      }
+      body.desk-dark .desk-backdrop {
+        background:
+          radial-gradient(900px 500px at 70% 20%, #2b3a55 0%, transparent 60%),
+          radial-gradient(700px 600px at 20% 80%, #3d2b4f 0%, transparent 55%),
+          linear-gradient(160deg, #10131c 0%, #1a1f2e 100%);
+      }
+      body.desk-light .desk-backdrop {
+        background:
+          radial-gradient(900px 500px at 70% 20%, #ffd9a0 0%, transparent 60%),
+          radial-gradient(700px 600px at 20% 80%, #a8d8ff 0%, transparent 55%),
+          linear-gradient(160deg, #dfe6f2 0%, #f4efe6 100%);
+      }
+      /* 模拟真实窗口尺寸：胶囊按对应档位固定大小居中悬浮 */
+      #app {
+        position: relative;
+        z-index: 1;
+        margin: 40px auto;
+      }
+      .desk-note {
+        position: fixed;
+        left: 12px;
+        top: 10px;
+        z-index: 2;
+        font: 12px/1.6 "Segoe UI", sans-serif;
+        color: #888;
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body class="desk-dark">
+    <div class="desk-backdrop"></div>
+    <div class="desk-note">dev preview only</div>
+    <div id="app"></div>
+    <script type="module">
+      /* ---- 迷你 Tauri IPC mock：只覆盖桌面歌词窗用到的面 ---- */
+      const params = new URLSearchParams(location.search);
+      const state = params.get("state") ?? "yrc";
+      const size = params.get("size") ?? "m";
+      const bg = params.get("bg") ?? "dark";
+      document.body.className = bg === "light" ? "desk-light" : "desk-dark";
+      const SIZES = { s: [640, 120], m: [780, 152], l: [960, 188] };
+      const [w, h] = SIZES[size] ?? SIZES.m;
+      const app = document.getElementById("app");
+      app.style.width = `${w}px`;
+      app.style.height = `${h}px`;
+      localStorage.setItem("ome.desklyrics.size", size);
+
+      let lyricHandlerId = null;
+      let handlerSeq = 1;
+      const magic = (obj) => obj; // Tauri 2 IPC 只要求 JSON 兼容
+      window.__TAURI_INTERNALS__ = {
+        metadata: {
+          currentWindow: { label: "desklyrics" },
+          currentWebview: { label: "desklyrics" },
+        },
+        plugins: {},
+        transformCallback(callback) {
+          const id = handlerSeq++;
+          Object.defineProperty(window, `_${id}`, {
+            value: callback,
+            writable: false,
+            configurable: true,
+          });
+          return id;
+        },
+        invoke: (cmd, args) => {
+          if (cmd === "plugin:event|listen") {
+            if (args?.event === "ome://desk-lyric") lyricHandlerId = args.handler;
+            return Promise.resolve(handlerSeq++);
+          }
+          if (cmd === "plugin:window|outer_position") {
+            return Promise.resolve(magic({ x: 120, y: 80 }));
+          }
+          if (cmd === "plugin:window|available_monitors") {
+            return Promise.resolve([
+              magic({ name: "display-1", position: { x: 0, y: 0 }, size: { width: 1920, height: 1080 }, scaleFactor: 1 }),
+            ]);
+          }
+          // set_position / set_size / show / center / emit / unlisten → no-op
+          return Promise.resolve(null);
+        },
+      };
+
+      // 快照发送器：模拟主窗 250ms 一帧（含 sentAt 让插值持续走）
+      const push = (snapshot) => {
+        if (lyricHandlerId === null || !window[`_${lyricHandlerId}`]) return;
+        window[`_${lyricHandlerId}`]({
+          event: { event: "ome://desk-lyric", id: -1 },
+          id: 0,
+          payload: snapshot,
+        });
+      };
+
+      const STATES = {
+        yrc: () => ({
+          track: { title: "夜空中最亮的星", artist: "逃跑计划" },
+          pending: false,
+          playing: true,
+          position: 63.2,
+          sentAt: Date.now(),
+          line: { text: "夜空中最亮的星 能否听清", start: 62, end: 67.2 },
+          translation: null,
+          next: "那仰望的人 心底的孤独和叹息",
+          words: [
+            { text: "夜空中", start: 62, end: 63.05 },
+            { text: "最亮的星", start: 63.05, end: 63.9 },
+            { text: " ", start: 63.9, end: 64.1 },
+            { text: "能否听清", start: 64.1, end: 67.2 },
+          ],
+        }),
+        lrc: () => ({
+          track: { title: "Take Me To Your Heart", artist: "Michael Learns To Rock" },
+          pending: false,
+          playing: true,
+          position: 40,
+          sentAt: Date.now(),
+          line: { text: "Take me to your heart, take me to your soul", start: 38, end: 44 },
+          translation: "把我带进你的心扉，深入你的灵魂",
+          next: "Give me your hand before I'm old",
+          words: null,
+        }),
+        idle: () => ({
+          track: null, pending: false, playing: false, position: 0, sentAt: 0,
+          line: null, translation: null, next: null, words: null,
+        }),
+        nolyric: () => ({
+          track: { title: "雨的印记", artist: "纯音乐" },
+          pending: false, playing: true, position: 12, sentAt: Date.now(),
+          line: null, translation: null, next: null, words: null,
+        }),
+      };
+
+      await import("/src/main.tsx"); // 真实组件入口（desklyrics 分支）
+
+      // 等 Preact 渲染 + listen 注册完成，然后按真实节奏推帧
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const make = STATES[state] ?? STATES.yrc;
+      const pushNow = () => {
+        const snap = make();
+        if (snap.playing) snap.position += 0.25; // 与真实发布循环同频
+        push(snap);
+      };
+      window.__dlxPreview = {
+        handlerId: () => lyricHandlerId,
+        push: pushNow,
+        callbackCount: () => Object.keys(window).filter((k) => k.startsWith("_")).length,
+      };
+      setInterval(pushNow, 250);
+    </script>
+  </body>
+</html>

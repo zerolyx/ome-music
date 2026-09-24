@@ -8,6 +8,7 @@ import { djConfig, lastError, loadConfig, saveConfig } from "../state/dj";
 import { radioEnabled, setRadioEnabled } from "../state/radio";
 import { danmakuEnabled, setDanmakuEnabled } from "../state/danmaku";
 import { accentMode, setAccentMode } from "../state/tint";
+import { closeDeskLyrics, deskLyricsOpen, openDeskLyrics } from "../state/desklyrics";
 import {
   applyEqPreset,
   bandLabel,
@@ -471,6 +472,28 @@ export function SettingsView() {
               </div>
             </div>
             <p class="view-hint">播放 B站视频时在首页漂浮同屏弹幕，纯氛围装饰。</p>
+            <div class="dj-radio-row settings-danmaku-row">
+              <span class="dj-radio-label">桌面歌词</span>
+              <div class="segmented" role="radiogroup" aria-label="桌面歌词">
+                <button
+                  role="radio"
+                  aria-checked={deskLyricsOpen.value}
+                  class={`segment ${deskLyricsOpen.value ? "is-active" : ""}`}
+                  onClick={() => void openDeskLyrics()}
+                >
+                  开
+                </button>
+                <button
+                  role="radio"
+                  aria-checked={!deskLyricsOpen.value}
+                  class={`segment ${!deskLyricsOpen.value ? "is-active" : ""}`}
+                  onClick={() => void closeDeskLyrics()}
+                >
+                  关
+                </button>
+              </div>
+            </div>
+            <p class="view-hint">独立悬浮歌词条：常驻桌面最上层、可拖动、不抢焦点，关掉应用再开会自动恢复。</p>
           </Card>
 
           <Card title="声音（DSP）" id="sound" open={openMap.sound} onToggle={() => toggleSection("sound")}>

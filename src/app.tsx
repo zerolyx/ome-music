@@ -3,6 +3,7 @@ import { isTauriRuntime } from "./lib/api";
 import { activeView } from "./state/app";
 import { chromeVisible, initChromeAutoHide } from "./state/chrome";
 import { greet } from "./state/dj";
+import { restoreDeskLyrics } from "./state/desklyrics";
 import { stopAllSpeech } from "./state/tts";
 import { startRadioIfIdle } from "./state/radio";
 import { Rail } from "./components/Rail";
@@ -26,6 +27,11 @@ import { vizOpen } from "./state/visualizer";
 
 export function App() {
   useEffect(() => initChromeAutoHide(), []);
+
+  // 桌面歌词窗随主窗恢复（上开着才开，稍等主窗入场完成后创建）
+  useEffect(() => {
+    if (isTauriRuntime()) restoreDeskLyrics();
+  }, []);
 
   // 开机单链：入场动画 → 问候（说完）→ 电台接播（续播上次 / 今日推荐）
   // 顺序执行杜绝多路人声重叠；卸载时停掉一切播报

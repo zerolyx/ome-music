@@ -28,4 +28,10 @@ Context: 依赖审计可能将这三个 crate 误判为未使用的死重。
 Decision: 保留在 Cargo 依赖中，供 Plan 2（NetEase 计划）与媒体协议使用。
 Consequences: 当前编译体积略增；避免 Plan 2 重复引入与版本摇摆。
 
+## DEC-005 — 桌面歌词用同 bundle 第二窗口 + 事件快照同步
+Date: 2026-09（v0.7.0 后，T5c 立项） · Status: Accepted
+Context: 路线图 #1 桌面歌词需要跨窗歌词同步；preact signals 各窗 JS 上下文独立，无法直接共享。
+Decision: 第二窗口 `label=desklyrics` 复用同一前端 bundle，main.tsx 按 label 分流渲染；主窗 250ms `emitTo` 一帧歌词快照（行/字级/翻译/position+sentAt），歌词窗本地 rAF 插值出连续进度；窗口 focus:false 不抢焦点，开关/位置/字号持久化。备选方案：独立小 bundle（构建与双份维护成本高）、共享 WebView（Tauri 2 无此能力）、逐帧 IPC（流量大）。详见 handover 4.7。
+Consequences: capabilities 需始终包含 desklyrics；新增窗口必须处理 index.html 的 `.booting` 遮蔽；歌词窗 UI 叠加系统桌面，固定深色玻璃样式不随主题。
+
 新决策一律使用 ADR 格式（Context / Decision / Why / Alternatives / Consequences）追加到本文件。
