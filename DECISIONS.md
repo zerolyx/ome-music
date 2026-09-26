@@ -29,3 +29,11 @@ Decision: 保留在 Cargo 依赖中，供 Plan 2（NetEase 计划）与媒体协
 Consequences: 当前编译体积略增；避免 Plan 2 重复引入与版本摇摆。
 
 新决策一律使用 ADR 格式（Context / Decision / Why / Alternatives / Consequences）追加到本文件。
+
+## DEC-005 — Reference-project migration is selective and radio-first
+Date: 2026-09-26 · Status: Accepted
+Context: The approved 2026-09-21 product design and 2026-09-23 Folia/ECHO UI design define Ome as a small AI personal radio and explicitly reject full DSP/output-chain and remote-library parity. Recent inventory work treated upstream gaps as a feature backlog and risked changing the product into a general-purpose media workstation.
+Decision: Keep local music/lyrics, NetEase, subordinate Bilibili atmosphere, and the memory/personality/voice of the AI DJ as the product boundary. Borrow only interactions or small capabilities that directly improve listening, the radio/DJ experience, lyrics/playback, or core visual immersion while preserving local-first behavior, the three frontend runtime dependencies, and the approximately 10 MB package-size target. Existing optional utilities may remain documented and maintained, but do not make them a reason to expand their domain.
+Why: The product promise is low-effort listening with a personal DJ. Upstream feature parity would add package, permission, and maintenance costs while weakening that promise.
+Alternatives: Port every upstream feature (rejected as scope drift); stop all reference-based changes (would discard useful UX patterns); select only product-fitting improvements (chosen).
+Consequences: “Not implemented” in an inventory is a fact, not a delivery commitment. Reopening excluded areas requires a separate product decision covering user value, size, privacy/permissions, complexity, and rollback. Existing capabilities are not bulk-deleted by this correction.

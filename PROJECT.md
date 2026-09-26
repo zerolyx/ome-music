@@ -13,6 +13,13 @@ v0.7.0 已发布（UI 逐页对照重做 + 迷你播放器 + 歌词候选弹窗�
 docs/PROJECT-HANDOVER.md（背景/架构/机制/踩坑/路线图）。待办：桌面歌词独立
 窗口（远期，见 handover 第七节）。
 
+
+## Product Boundary
+
+Ome Music is a small AI-powered personal radio: “press play without choosing a song.” Its four product domains are local music and lyrics, NetEase, subordinate Bilibili atmosphere, and the memory/personality/voice of the AI DJ. The core path is open the app, listen, and talk to the DJ.
+
+Folia and ECHO are references for selected interactions and narrowly scoped capabilities, not feature-parity targets. Preserve local-first behavior, music-first navigation, the approximately 10 MB package-size target, and the three frontend runtime dependencies. Do not expand the product into a DSP workstation, remote-library platform, plugin host, cloud-sync service, or bulk media-management suite. Existing optional utilities remain documented and maintained; their presence does not authorize continued scope expansion. Reopen an excluded area only through a product decision that explains direct user value, size, privacy, permissions, complexity, and rollback.
+
 ## Tech Stack
 
 - 前端：Preact + @preact/signals + @tauri-apps/api + 手写 CSS（双主题 tokens）
