@@ -2,6 +2,8 @@
  * 分组顺序即侧栏顺序；keywords 供设置内搜索（中英混合，命中即定位分区）。
  */
 
+import { signal } from "@preact/signals";
+
 export type SectionId =
   | "playback"
   | "appearance"
@@ -10,7 +12,11 @@ export type SectionId =
   | "lyrics"
   | "dj"
   | "shortcuts"
+  | "data"
   | "about";
+
+/** 页面间的显式设置定位请求；SettingsView 读取并消费一次。 */
+export const requestedSettingsSection = signal<SectionId | null>(null);
 
 export interface SettingsSection {
   id: SectionId;
@@ -30,7 +36,7 @@ export const SETTINGS_SECTIONS: ReadonlyArray<SettingsSection> = [
     id: "appearance",
     label: "外观",
     group: "常用",
-    keywords: ["主题", "外观", "强调色", "唱片取色", "弹幕", "theme", "appearance"],
+    keywords: ["主题", "外观", "配色", "自由配色", "自定义颜色", "强调色", "唱片取色", "弹幕", "theme", "appearance"],
   },
   {
     id: "sound",
@@ -42,7 +48,7 @@ export const SETTINGS_SECTIONS: ReadonlyArray<SettingsSection> = [
     id: "source",
     label: "音乐源",
     group: "内容",
-    keywords: ["网易云", "登录", "扫码", "本地", "导入", "曲库", "netease"],
+    keywords: ["网易云", "登录", "扫码", "本地", "导入", "曲库", "远程曲库", "Navidrome", "Subsonic", "Jellyfin", "Emby", "WebDAV", "SMB", "服务器", "目录", "文件夹", "扫描", "授权", "恢复", "重扫", "directory", "scan", "rescan", "netease", "remote library"],
   },
   {
     id: "lyrics",
@@ -61,6 +67,12 @@ export const SETTINGS_SECTIONS: ReadonlyArray<SettingsSection> = [
     label: "快捷键",
     group: "高级",
     keywords: ["快捷键", "键盘", "空格", "space", "hotkey", "shortcut"],
+  },
+  {
+    id: "data",
+    label: "数据与备份",
+    group: "高级",
+    keywords: ["备份", "恢复", "曲库", "播放记录", "数据", "backup", "restore"],
   },
   {
     id: "about",

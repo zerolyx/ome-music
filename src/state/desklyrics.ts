@@ -13,12 +13,18 @@ import { currentTrack, isPlaying, position } from "./player";
 import {
   activeLine,
   activeYrcLine,
+  lyricSubtitlesFor,
   lyricLines,
   lyricTrackId,
+  lyricSubtitleMode,
+  plainLyricText,
+  plainRomanizationLines,
+  romanizationLines,
   tlyricLines,
-  translationFor,
   yrcLines,
   type LyricLine,
+  type LyricSubtitle,
+  type LyricSubtitleMode,
   type YrcLine,
 } from "./lyrics";
 
@@ -36,6 +42,7 @@ const ON_KEY = "ome.desklyrics.on";
 const SIZE_KEY = "ome.desklyrics.size";
 const RECT_KEY = "ome.desklyrics.rect";
 const LOCK_KEY = "ome.desklyrics.locked";
+const COLOR_KEY = "ome.desklyrics.color";
 /** 无歌词播放持续多久后隐藏窗口（来歌词/切歌/暂停即回） */
 const HIDE_WITHOUT_LYRIC_MS = 8000;
 const PUBLISH_INTERVAL_MS = 250;
@@ -62,9 +69,10 @@ export interface DeskLyricSnapshot {
   /** 发送方墙钟（Date.now()），暂停时恒 0 保证字节级去重 */
   sentAt: number;
   line: DeskSnapshotLine | null;
-  translation: string | null;
+  subtitles: LyricSubtitle[];
   next: string | null;
   words: DeskSnapshotWord[] | null;
+  plain: boolean;
 }
 
 export interface DeskSnapshotInput {
@@ -72,7 +80,11 @@ export interface DeskSnapshotInput {
   lyricTrackId: string | null;
   lyricLines: LyricLine[];
   yrcLines: YrcLine[];
+  plainLyricText?: string;
+  plainRomanizationLines?: string[];
   tlyricLines: LyricLine[];
+  romanizationLines?: LyricLine[];
+  subtitleMode?: LyricSubtitleMode;
   playing: boolean;
   position: number;
   now: number;
@@ -90,9 +102,10 @@ export function buildDeskSnapshot(input: DeskSnapshotInput): DeskLyricSnapshot {
     position,
     sentAt: playing ? input.now : 0,
     line: null,
-    translation: null,
+    subtitles: [],
     next: null,
     words: null,
+    plain: false,
   };
   if (!track) return base;
   // 歌词还挂在上一个曲目（拉取中）：显示加载态
@@ -111,6 +124,14 @@ export function buildDeskSnapshot(input: DeskSnapshotInput): DeskLyricSnapshot {
       line: current
         ? { text: joinWords(current.words), start: current.start, end: current.end }
         : null,
+      subtitles: current
+        ? lyricSubtitlesFor(
+            { time: current.start, text: joinWords(current.words) },
+            input.subtitleMode,
+            input.tlyricLines,
+            input.romanizationLines ?? [],
+          )
+        : [],
       words: current ? current.words : null,
       next: preview ? joinWords(preview.words) : null,
     };
@@ -131,10 +152,33 @@ export function buildDeskSnapshot(input: DeskSnapshotInput): DeskLyricSnapshot {
             end: upcoming?.time ?? current.time + 8,
           }
         : null,
-      translation: current
-        ? translationFor(current, input.tlyricLines)?.text ?? null
-        : null,
+      subtitles: current
+        ? lyricSubtitlesFor(
+            current,
+            input.subtitleMode,
+            input.tlyricLines,
+            input.romanizationLines ?? [],
+          )
+        : [],
       next: preview?.text ?? null,
+    };
+  }
+
+  const plainLines = (input.plainLyricText ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (plainLines.length > 0) {
+    return {
+      ...base,
+      line: { text: plainLines[0], start: 0, end: 0 },
+      subtitles: input.subtitleMode === "romanization" || input.subtitleMode === "combined"
+        ? input.plainRomanizationLines?.[0]
+          ? [{ kind: "romanization", text: input.plainRomanizationLines[0] }]
+          : []
+        : [],
+      next: plainLines[1] ?? null,
+      plain: true,
     };
   }
   return base;
@@ -160,6 +204,35 @@ export const DESK_SIZES = [
   { id: "l", label: "大", width: 960, height: 188, vwidth: 196, vheight: 660 },
 ] as const;
 export type DeskSizeId = (typeof DESK_SIZES)[number]["id"];
+
+/** ECHO desktop-lyrics color idea, simplified to a few lightweight local palettes. */
+export const DESK_LYRIC_PALETTES = [
+  { id: "aurora", label: "极光", swatch: "linear-gradient(135deg, #78EECF, #C09AFF)", gradient: "linear-gradient(96deg, #78EECF 0%, #C09AFF 100%)" },
+  { id: "sunset", label: "晚霞", swatch: "linear-gradient(135deg, #FFD36A, #FF718E)", gradient: "linear-gradient(96deg, #FFD36A 0%, #FF718E 100%)" },
+  { id: "neon", label: "霓虹", swatch: "linear-gradient(135deg, #72E7FF, #F28AFF)", gradient: "linear-gradient(96deg, #72E7FF 0%, #F28AFF 100%)" },
+  { id: "white", label: "雾白", swatch: "#F8F7FF", gradient: null },
+] as const;
+export type DeskLyricPaletteId = (typeof DESK_LYRIC_PALETTES)[number]["id"];
+
+export function readDeskLyricPalette(): DeskLyricPaletteId {
+  try {
+    const saved = localStorage.getItem(COLOR_KEY);
+    if (DESK_LYRIC_PALETTES.some((palette) => palette.id === saved)) return saved as DeskLyricPaletteId;
+  } catch {
+    /* 存储不可用时使用鲜明但易读的默认色 */
+  }
+  return "aurora";
+}
+
+export function saveDeskLyricPalette(palette: DeskLyricPaletteId): void {
+  try {
+    if (DESK_LYRIC_PALETTES.some((item) => item.id === palette)) {
+      localStorage.setItem(COLOR_KEY, palette);
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 const VERTICAL_KEY = "ome.desklyrics.vertical";
 
@@ -316,7 +389,11 @@ async function publishSnapshot(): Promise<void> {
     lyricTrackId: lyricTrackId.value,
     lyricLines: lyricLines.value,
     yrcLines: yrcLines.value,
+    plainLyricText: plainLyricText.value,
+    plainRomanizationLines: plainRomanizationLines.value,
     tlyricLines: tlyricLines.value,
+    romanizationLines: romanizationLines.value,
+    subtitleMode: lyricSubtitleMode.value,
     playing: isPlaying.value,
     position: position.value,
     now: Date.now(),

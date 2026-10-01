@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   advance,
+  radioQueueContinuation,
   currentIndexAfterMove,
   endEventType,
   insertNext,
   appendToQueue,
   removeAt,
   moveInQueue,
+  removeTracksFromQueue,
+  forgetSavedManualQueue,
+  isPlaybackEventRecordable,
+  lastManualQueueSession,
   queue,
   currentIndex,
 } from "./player";
@@ -19,6 +24,17 @@ describe("endEventType", () => {
   });
   it("时长未知时不判 completed", () => {
     expect(endEventType(100, 0)).toBe("skip");
+  });
+});
+
+describe("收听事件的本机记录边界", () => {
+  it("保留既有音源记录，但不把私人服务器收听写入本地历史", () => {
+    expect(isPlaybackEventRecordable(t("local-track"))).toBe(true);
+    expect(isPlaybackEventRecordable({ ...t("remote-track"), source: "netease" })).toBe(true);
+    expect(isPlaybackEventRecordable({ ...t("server-track"), source: "subsonic" })).toBe(false);
+    expect(isPlaybackEventRecordable({ ...t("jellyfin-track"), source: "jellyfin" })).toBe(false);
+    expect(isPlaybackEventRecordable({ ...t("emby-track"), source: "emby" })).toBe(false);
+    expect(isPlaybackEventRecordable(null)).toBe(false);
   });
 });
 
@@ -74,6 +90,45 @@ describe("队列管理", () => {
     currentIndex.value = 0;
     removeAt(5);
     expect(queue.value.length).toBe(1);
+  });
+
+  it("忘记已保存队列只删除恢复快照，不清空当前播放列表", () => {
+    const saved = [{
+      version: 1 as const,
+      currentIndex: 0,
+      tracks: [{ source: "local" as const, id: "saved" }],
+    }];
+    localStorage.setItem("ome.queue-session", JSON.stringify(saved[0]));
+    lastManualQueueSession.value = saved[0];
+    queue.value = [t("currently-playing")];
+    currentIndex.value = 0;
+
+    forgetSavedManualQueue();
+
+    expect(localStorage.getItem("ome.queue-session")).toBeNull();
+    expect(lastManualQueueSession.value).toBeNull();
+    expect(queue.value.map((track) => track.id)).toEqual(["currently-playing"]);
+  });
+
+  it("批量移除多个 ID 的所有队列副本，并保留当前曲目的正确下标", () => {
+    queue.value = [t("remove-a"), t("keep-a"), t("remove-b"), t("keep-b"), t("remove-a")];
+    currentIndex.value = 3;
+
+    removeTracksFromQueue(["remove-a", "remove-b"]);
+
+    expect(queue.value.map((track) => track.id)).toEqual(["keep-a", "keep-b"]);
+    expect(currentIndex.value).toBe(1);
+  });
+});
+
+describe("AI 电台与手动队列衔接", () => {
+  it("手动队列仍有下一首时先播队列", () => {
+    expect(radioQueueContinuation(true, 0, 3)).toEqual({ type: "manual", index: 1 });
+  });
+
+  it("手动队列耗尽或没有手动接管时恢复电台选曲", () => {
+    expect(radioQueueContinuation(true, 2, 3)).toEqual({ type: "radio" });
+    expect(radioQueueContinuation(false, 0, 3)).toEqual({ type: "radio" });
   });
 });
 

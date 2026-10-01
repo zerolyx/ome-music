@@ -12,16 +12,39 @@ export const STAGE_EFFECTS: ReadonlyArray<{ id: StageEffect; label: string }> = 
   { id: "muse", label: "心象" },
 ];
 
-const KEY = "ome.stage.effect";
+export const STAGE_FONT_SCALE_MIN = 75;
+export const STAGE_FONT_SCALE_MAX = 145;
+export const STAGE_FONT_SCALE_STEP = 5;
+export const STAGE_FONT_SCALE_DEFAULT = 100;
+
+const EFFECT_KEY = "ome.stage.effect";
+const FONT_SCALE_KEY = "ome.stage.font-scale";
 
 export const stageOpen = signal(false);
 export const stageEffect = signal<StageEffect>(loadEffect());
+export const stageFontScale = signal<number>(loadFontScale());
 
 function loadEffect(): StageEffect {
-  const saved = localStorage.getItem(KEY);
+  const saved = localStorage.getItem(EFFECT_KEY);
   return STAGE_EFFECTS.some((effect) => effect.id === saved)
     ? (saved as StageEffect)
     : "flow";
+}
+
+function normalizeFontScale(value: number): number {
+  const stepped = Math.round(value / STAGE_FONT_SCALE_STEP) * STAGE_FONT_SCALE_STEP;
+  return Math.min(STAGE_FONT_SCALE_MAX, Math.max(STAGE_FONT_SCALE_MIN, stepped));
+}
+
+function loadFontScale(): number {
+  try {
+    const saved = localStorage.getItem(FONT_SCALE_KEY);
+    if (saved === null) return STAGE_FONT_SCALE_DEFAULT;
+    const parsed = Number(saved);
+    return Number.isFinite(parsed) ? normalizeFontScale(parsed) : STAGE_FONT_SCALE_DEFAULT;
+  } catch {
+    return STAGE_FONT_SCALE_DEFAULT;
+  }
 }
 
 export function openStage(): void {
@@ -35,8 +58,20 @@ export function closeStage(): void {
 export function setStageEffect(effect: StageEffect): void {
   stageEffect.value = effect;
   try {
-    localStorage.setItem(KEY, effect);
+    localStorage.setItem(EFFECT_KEY, effect);
   } catch {
     /* 存储不可用忽略 */
+  }
+}
+
+/** Scale all lyric text in the immersive stage while preserving responsive sizing. */
+export function setStageFontScale(scale: number): void {
+  if (!Number.isFinite(scale)) return;
+  const next = normalizeFontScale(scale);
+  stageFontScale.value = next;
+  try {
+    localStorage.setItem(FONT_SCALE_KEY, String(next));
+  } catch {
+    /* 存储不可用时仍允许本次会话预览 */
   }
 }

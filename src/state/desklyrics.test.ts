@@ -5,9 +5,12 @@ import {
   deskLineProgress,
   deskPositionAt,
   deskSizeFor,
+  DESK_LYRIC_PALETTES,
   readDeskRect,
+  readDeskLyricPalette,
   readDeskSizeId,
   saveDeskSizeId,
+  saveDeskLyricPalette,
   deskLyricsOpen,
   toggleDeskLyrics,
   type DeskSnapshotInput,
@@ -20,6 +23,7 @@ const lrcLines: LyricLine[] = [
   { time: 30, text: "第三句" },
 ];
 const tlyricLines: LyricLine[] = [{ time: 20, text: "second line" }];
+const romanizationLines: LyricLine[] = [{ time: 20.1, text: "ni hao" }];
 const yrcData: YrcLine[] = [
   {
     start: 10,
@@ -57,9 +61,20 @@ describe("buildDeskSnapshot（主窗→歌词窗跨窗协议）", () => {
   it("lrc：当前行 + 翻译 + 下一行；行尾取下一行时间", () => {
     const snap = buildDeskSnapshot(makeInput());
     expect(snap.line).toEqual({ text: "第二句", start: 20, end: 30 });
-    expect(snap.translation).toBe("second line");
+    expect(snap.subtitles).toEqual([{ kind: "translation", text: "second line" }]);
     expect(snap.next).toBe("第三句");
     expect(snap.words).toBeNull();
+  });
+
+  it("combined mode publishes romanization and translation as separate rows", () => {
+    const snap = buildDeskSnapshot(makeInput({
+      subtitleMode: "combined",
+      romanizationLines,
+    }));
+    expect(snap.subtitles).toEqual([
+      { kind: "romanization", text: "ni hao" },
+      { kind: "translation", text: "second line" },
+    ]);
   });
 
   it("前奏期：无当前行，预览第一句", () => {
@@ -105,6 +120,16 @@ describe("buildDeskSnapshot（主窗→歌词窗跨窗协议）", () => {
     expect(snap.line).toBeNull();
   });
 
+  it("无时间轴歌词的 combined 模式只发布逐行罗马音", () => {
+    const snap = buildDeskSnapshot(makeInput({
+      lyricLines: [],
+      plainLyricText: "你好\n世界",
+      plainRomanizationLines: ["ni hao", "shi jie"],
+      subtitleMode: "combined",
+    }));
+    expect(snap.subtitles).toEqual([{ kind: "romanization", text: "ni hao" }]);
+  });
+
   it("暂停帧：sentAt 恒 0，同参数快照字节级一致（发布去重依据）", () => {
     const a = buildDeskSnapshot(makeInput({ playing: false }));
     const b = buildDeskSnapshot(makeInput({ playing: false, now: 9999 }));
@@ -146,6 +171,15 @@ describe("字号与窗口位置记忆", () => {
     saveDeskSizeId("l");
     expect(readDeskSizeId()).toBe("l");
     expect(deskSizeFor("l").label).toBe("大");
+  });
+
+  it("歌词配色默认使用极光渐变，并记住用户选择", () => {
+    expect(readDeskLyricPalette()).toBe("aurora");
+    expect(DESK_LYRIC_PALETTES).toHaveLength(4);
+    saveDeskLyricPalette("sunset");
+    expect(readDeskLyricPalette()).toBe("sunset");
+    localStorage.setItem("ome.desklyrics.color", "unknown");
+    expect(readDeskLyricPalette()).toBe("aurora");
   });
 
   it("位置记忆：合法存取，坏数据丢弃", () => {

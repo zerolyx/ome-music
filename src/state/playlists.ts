@@ -8,6 +8,8 @@ import {
   playlistAdd,
   playlistCreate,
   playlistDelete,
+  playlistExportM3u,
+  playlistImportM3u,
   playlistList,
   playlistRemove,
   playlistRename,
@@ -127,5 +129,27 @@ export async function removeFromPlaylist(playlistId: string, trackId: string): P
     await loadPlaylists();
   } catch (e) {
     playlistError.value = e instanceof Error ? e.message : String(e);
+  }
+}
+
+export async function importM3uPlaylist() {
+  playlistError.value = null;
+  try {
+    const result = await playlistImportM3u();
+    if (result?.playlist) await loadPlaylists();
+    return result;
+  } catch (e) {
+    playlistError.value = e instanceof Error ? e.message : String(e);
+    return null;
+  }
+}
+
+export async function exportM3uPlaylist(playlistId: string) {
+  playlistError.value = null;
+  try {
+    return await playlistExportM3u(playlistId);
+  } catch (e) {
+    playlistError.value = e instanceof Error ? e.message : String(e);
+    return null;
   }
 }

@@ -1,8 +1,8 @@
 import { signal } from "@preact/signals";
 
 /**
- * 均衡器（ECHO DSP Center 的轻量版）：10 段参数 EQ，Peaking 滤波器串在
- * 播放链 source → …filters… → analyser 之间。关闭 = 所有增益归零（链路透明，无爆音）。
+ * 均衡器（ECHO DSP Center 的轻量版）：10 段参数 EQ 与可选前级衰减串在
+ * source → filters → preamp → analyser。关闭时滤波器归零、前级单位增益（链路透明）。
  */
 export const EQ_BANDS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000] as const;
 export const EQ_MIN = -12;
@@ -22,13 +22,21 @@ export const EQ_PRESETS: ReadonlyArray<{ id: EqPresetId; label: string; gains: n
 const GAINS_KEY = "ome.eq.gains";
 const ENABLED_KEY = "ome.eq.enabled";
 const PRESET_KEY = "ome.eq.preset";
+const PREAMP_KEY = "ome.eq.preamp-db";
+
+export const EQ_PREAMP_MIN = -12;
+export const EQ_PREAMP_MAX = 0;
+export const EQ_PREAMP_STEP = 0.5;
 
 export const eqEnabled = signal<boolean>(loadEnabled());
 export const eqGains = signal<number[]>(loadGains());
 /** 当前预设 id；手动改动后变为 "custom" */
 export const eqPreset = signal<string>(loadPreset());
+/** EQ 开启时串接在滤波器后的线性前级衰减设置（dB） */
+export const eqPreampDb = signal<number>(loadPreampDb());
 
 let filters: BiquadFilterNode[] = [];
+let preamp: GainNode | null = null;
 
 function loadEnabled(): boolean {
   try {
@@ -58,8 +66,21 @@ function loadPreset(): string {
   }
 }
 
+function loadPreampDb(): number {
+  try {
+    return clampPreampDb(Number(localStorage.getItem(PREAMP_KEY)) || 0);
+  } catch {
+    return 0;
+  }
+}
+
 export function clampGain(db: number): number {
   return Math.min(EQ_MAX, Math.max(EQ_MIN, Math.round(db * 10) / 10));
+}
+
+export function clampPreampDb(db: number): number {
+  const finiteDb = Number.isFinite(db) ? db : 0;
+  return Math.min(EQ_PREAMP_MAX, Math.max(EQ_PREAMP_MIN, Math.round(finiteDb / EQ_PREAMP_STEP) * EQ_PREAMP_STEP));
 }
 
 /** player.ts 建链时注册滤波器；此后增益变化实时生效 */
@@ -68,10 +89,19 @@ export function registerEqFilters(nodes: BiquadFilterNode[]): void {
   applyGains();
 }
 
+/** player.ts 建链时注册前级；EQ 关闭时强制单位增益，保持旁路透明。 */
+export function registerEqPreamp(node: GainNode): void {
+  preamp = node;
+  applyGains();
+}
+
 function applyGains(): void {
   const gains = eqGains.value;
   for (let i = 0; i < filters.length; i += 1) {
     filters[i].gain.value = eqEnabled.value ? clampGain(gains[i] ?? 0) : 0;
+  }
+  if (preamp) {
+    preamp.gain.value = eqEnabled.value ? Math.pow(10, eqPreampDb.value / 20) : 1;
   }
 }
 
@@ -80,6 +110,7 @@ function persist(): void {
     localStorage.setItem(GAINS_KEY, JSON.stringify(eqGains.value));
     localStorage.setItem(ENABLED_KEY, eqEnabled.value ? "1" : "0");
     localStorage.setItem(PRESET_KEY, eqPreset.value);
+    localStorage.setItem(PREAMP_KEY, String(eqPreampDb.value));
   } catch {
     /* 存储不可用忽略 */
   }
@@ -87,6 +118,12 @@ function persist(): void {
 
 export function setEqEnabled(enabled: boolean): void {
   eqEnabled.value = enabled;
+  applyGains();
+  persist();
+}
+
+export function setEqPreampDb(db: number): void {
+  eqPreampDb.value = clampPreampDb(db);
   applyGains();
   persist();
 }
@@ -108,6 +145,31 @@ export function applyEqPreset(id: EqPresetId): void {
   eqPreset.value = id;
   applyGains();
   persist();
+}
+
+/** Replace a complete EQ preference snapshot with one signal/audio update and one persistence write. */
+export function restoreEqSettings(settings: {
+  enabled: boolean;
+  gains: readonly number[];
+  preset: EqPresetId | "custom";
+  preampDb: number;
+}): boolean {
+  if (
+    !settings ||
+    typeof settings.enabled !== "boolean" ||
+    !Array.isArray(settings.gains) || settings.gains.length !== EQ_BANDS.length ||
+    !settings.gains.every((gain) => Number.isFinite(gain)) ||
+    !(settings.preset === "custom" || EQ_PRESETS.some((item) => item.id === settings.preset)) ||
+    !Number.isFinite(settings.preampDb)
+  ) return false;
+
+  eqEnabled.value = settings.enabled;
+  eqGains.value = settings.gains.map(clampGain);
+  eqPreset.value = settings.preset;
+  eqPreampDb.value = clampPreampDb(settings.preampDb);
+  applyGains();
+  persist();
+  return true;
 }
 
 /** 建链：10 个 Peaking 滤波器串联（gains 由注册后的状态接管） */
@@ -185,4 +247,26 @@ export function eqCurvePoints(gains: readonly number[], samples = 96): number[] 
     points.push(eqResponseDb(freq, gains));
   }
   return points;
+}
+
+/** 基于离散频响曲线估算 EQ 的最大频带增益；不是实测真峰值或削波检测。 */
+export function estimateEqResponsePeakDb(gains: readonly number[], samples = 512): number {
+  const peak = Math.max(0, ...eqCurvePoints(gains, samples));
+  return Math.round(peak * 10) / 10;
+}
+
+/** 推荐抵消曲线中的正向峰值，受可调范围限制；超范围时估算仍可能高于 0 dB。 */
+export function recommendedEqPreampDb(gains: readonly number[]): number {
+  const attenuation = Math.min(EQ_PREAMP_MAX - EQ_PREAMP_MIN, estimateEqResponsePeakDb(gains));
+  return clampPreampDb(-attenuation);
+}
+
+/** EQ 关闭时链路为透明旁路，故估算为 0 dB。 */
+export function estimateEqPeakWithPreampDb(
+  gains: readonly number[],
+  preampDb: number,
+  enabled: boolean,
+): number {
+  if (!enabled) return 0;
+  return Math.round((estimateEqResponsePeakDb(gains) + clampPreampDb(preampDb)) * 10) / 10;
 }

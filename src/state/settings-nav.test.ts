@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { searchSections, SETTINGS_GROUPS, SETTINGS_SECTIONS } from "./settings-nav";
+import { searchSections, requestedSettingsSection, SETTINGS_GROUPS, SETTINGS_SECTIONS } from "./settings-nav";
 
 describe("settings-nav（设置信息架构与搜索）", () => {
-  it("八个分区，且都归属已声明的分组", () => {
-    expect(SETTINGS_SECTIONS).toHaveLength(8);
+  it("九个分区，且都归属已声明的分组", () => {
+    expect(SETTINGS_SECTIONS).toHaveLength(9);
     for (const section of SETTINGS_SECTIONS) {
       expect(SETTINGS_GROUPS).toContain(section.group);
     }
@@ -25,6 +25,22 @@ describe("settings-nav（设置信息架构与搜索）", () => {
     expect(searchSections("EQ")).toEqual(["sound"]);
     expect(searchSections("deepseek")).toEqual(["dj"]);
     expect(searchSections("Space")).toEqual(["shortcuts"]);
+  });
+
+  it("远程曲库协议关键词定位音乐源", () => {
+    expect(searchSections("Navidrome")).toContain("source");
+    expect(searchSections("Subsonic")).toContain("source");
+  });
+
+  it("跨页面远程曲库入口可请求展开音乐源分区", () => {
+    requestedSettingsSection.value = "source";
+    expect(requestedSettingsSection.value).toBe("source");
+    requestedSettingsSection.value = null;
+  });
+
+  it("数据备份可由中文和英文关键词找到", () => {
+    expect(searchSections("备份")).toEqual(["data"]);
+    expect(searchSections("restore")).toEqual(["data"]);
   });
 
   it("标题也能命中；未命中返回空", () => {

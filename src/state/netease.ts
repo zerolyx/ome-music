@@ -20,6 +20,8 @@ export interface QrState {
 
 export const status = signal<NeteaseStatus | null>(null);
 export const qrState = signal<QrState | null>(null);
+export const qrLoading = signal(false);
+export const loginError = signal<string | null>(null);
 export const searching = signal(false);
 export const results = signal<Track[]>([]);
 export const error = signal<string | null>(null);
@@ -111,7 +113,8 @@ async function pollCheck(key: string, session: number, timer: number): Promise<v
 export async function startQrLogin(): Promise<void> {
   stopPolling(); // 同步清掉现有定时器并推进会话号（先于首个 await，防并发申请互踩）
   const session = pollSession;
-  error.value = null;
+  loginError.value = null;
+  qrLoading.value = true;
   try {
     const { key, qrSvg } = await neteaseQrKey();
     if (session !== pollSession) return; // 等 key 期间又开了新一轮：本轮作废，不装定时器
@@ -119,13 +122,17 @@ export async function startQrLogin(): Promise<void> {
     const timer = window.setInterval(() => void pollCheck(key, session, timer), 2000);
     pollTimer = timer;
   } catch (e) {
-    error.value = toMessage(e);
+    if (session === pollSession) loginError.value = toMessage(e);
+  } finally {
+    if (session === pollSession) qrLoading.value = false;
   }
 }
 
 export function cancelQrLogin(): void {
   stopPolling();
   qrState.value = null;
+  qrLoading.value = false;
+  loginError.value = null;
 }
 
 export async function logout(): Promise<void> {

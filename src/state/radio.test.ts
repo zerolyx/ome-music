@@ -1,9 +1,12 @@
-import { beforeEach, afterEach, describe, expect, it } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { h } from "preact";
 import { cleanup, fireEvent, render, screen } from "@testing-library/preact";
 import type { Track } from "../types/music";
 import { tracks } from "./library";
-import { queueIndexFor } from "./player";
+import * as library from "./library";
+import * as player from "./player";
+import { djConfig } from "./dj";
+import { isPlaying, queue, queueIndexFor } from "./player";
 import { SettingsView } from "../views/Settings";
 import {
   pickNextLocal,
@@ -11,6 +14,9 @@ import {
   recordSkip,
   recentSkipIds,
   scoreCandidate,
+  genreAffinityScore,
+  canStartRadioFromHome,
+  startRadioIfIdle,
   setRadioEnabled,
   type ScoreContext,
 } from "./radio";
@@ -64,6 +70,30 @@ describe("scoreCandidate", () => {
   });
 });
 
+describe("时段 × 曲风画像", () => {
+  const preferences = [
+    { genre: "Ambient", plays: 8, completions: 4, skips: 0, likes: 1, unlikes: 0 },
+    { genre: "Metal", plays: 8, completions: 0, skips: 5, likes: 0, unlikes: 0 },
+  ];
+
+  it("归一化标签后提升常听且常听完的风格、降低常跳过的风格", () => {
+    expect(genreAffinityScore([" ambient "], preferences)).toBeGreaterThan(1);
+    expect(genreAffinityScore(["METAL"], preferences)).toBeLessThan(0);
+    expect(genreAffinityScore(["未知风格"], preferences)).toBe(0);
+  });
+
+  it("历史很少时渐进加权，并且只使用当前小时的风格画像", () => {
+    const sparse = [{ genre: "Ambient", plays: 1, completions: 0, skips: 0, likes: 0, unlikes: 0 }];
+    const sparseScore = genreAffinityScore(["ambient"], sparse);
+    expect(sparseScore).toBeGreaterThan(0);
+    expect(sparseScore).toBeLessThan(0.3);
+    expect(scoreCandidate(
+      { id: "a", liked: false, playCount: 0, durationSeconds: 180, genres: ["ambient"] },
+      baseCtx({ hourProfile: [{ hour: 8, plays: 0, genrePreferences: preferences }] }),
+    )).toBe(0);
+  });
+});
+
 describe("跳过记忆", () => {
   it("记录后能在 recentSkipIds 中查到", () => {
     recordSkip("t1");
@@ -81,6 +111,45 @@ describe("radioEnabled 持久化", () => {
     setRadioEnabled(true);
     expect(radioEnabled.value).toBe(true);
     expect(localStorage.getItem("ome.radio")).toBe("1");
+  });
+});
+
+describe("DJ 离线时的本地电台", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    queue.value = [];
+    tracks.value = [];
+    isPlaying.value = false;
+    djConfig.value = null;
+    radioEnabled.value = true;
+  });
+
+  it("首页入口只在电台开启、有曲目且播放器空闲时出现", () => {
+    expect(canStartRadioFromHome(true, true, false, 0)).toBe(true);
+    expect(canStartRadioFromHome(false, true, false, 0)).toBe(false);
+    expect(canStartRadioFromHome(true, false, false, 0)).toBe(false);
+    expect(canStartRadioFromHome(true, true, true, 0)).toBe(false);
+    expect(canStartRadioFromHome(true, true, false, 1)).toBe(false);
+  });
+
+  it("没有配置 DJ 时仍能从本地曲库启动画像电台", async () => {
+    const track = makeTrack("offline-radio");
+    tracks.value = [track];
+    djConfig.value = {
+      configured: false,
+      providerName: "",
+      baseUrl: "",
+      model: "",
+      maskedKey: "",
+    };
+    vi.spyOn(library, "refreshTracks").mockResolvedValue(undefined);
+    vi.spyOn(player, "readLastPlayback").mockReturnValue(null);
+    const play = vi.spyOn(player, "playWithRadioIntro").mockResolvedValue(undefined);
+
+    await startRadioIfIdle();
+
+    expect(queue.value).toEqual([track]);
+    expect(play).toHaveBeenCalledWith(track, 0);
   });
 });
 

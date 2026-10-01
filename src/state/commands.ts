@@ -16,6 +16,54 @@ export const paletteOpen = signal(false);
 
 const RECENT_KEY = "ome.palette.recent";
 const RECENT_LIMIT = 8;
+const PINNED_KEY = "ome.palette.pinned";
+export const PINNED_COMMAND_LIMIT = 3;
+const DEFAULT_PINNED_COMMANDS = ["play.prev", "play.next", "play.queue"];
+
+function readPinnedCommands(): string[] {
+  try {
+    const raw = localStorage.getItem(PINNED_KEY);
+    if (raw === null) return [...DEFAULT_PINNED_COMMANDS];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [...DEFAULT_PINNED_COMMANDS];
+    return [...new Set(parsed.filter((item): item is string => typeof item === "string" && item.length > 0))]
+      .slice(0, PINNED_COMMAND_LIMIT);
+  } catch {
+    return [...DEFAULT_PINNED_COMMANDS];
+  }
+}
+
+export const pinnedCommandIds = signal<string[]>(readPinnedCommands());
+
+function writePinnedCommands(ids: string[]): void {
+  pinnedCommandIds.value = ids;
+  try {
+    localStorage.setItem(PINNED_KEY, JSON.stringify(ids));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Drop persisted shortcuts whose commands no longer exist (for example, a deleted playlist). */
+export function reconcilePinnedCommands(availableIds: string[]): void {
+  const available = new Set(availableIds);
+  const next = pinnedCommandIds.value.filter((id) => available.has(id)).slice(0, PINNED_COMMAND_LIMIT);
+  if (next.length !== pinnedCommandIds.value.length || next.some((id, index) => id !== pinnedCommandIds.value[index])) {
+    writePinnedCommands(next);
+  }
+}
+
+/** Toggle a command shortcut; a full row asks the user to unpin an item first. */
+export function togglePinnedCommand(id: string): "pinned" | "unpinned" | "limit" {
+  const current = pinnedCommandIds.value;
+  if (current.includes(id)) {
+    writePinnedCommands(current.filter((item) => item !== id));
+    return "unpinned";
+  }
+  if (current.length >= PINNED_COMMAND_LIMIT) return "limit";
+  writePinnedCommands([...current, id]);
+  return "pinned";
+}
 
 export function openPalette(): void {
   paletteOpen.value = true;

@@ -4,6 +4,7 @@ import {
   getTrackOffset,
   readOffsets,
   setTrackOffset,
+  lyricSubtitlesFor,
   translationFor,
   type LyricLine,
 } from "./lyrics";
@@ -57,5 +58,24 @@ describe("translationFor", () => {
 
   it("对不齐（>0.6s）返回 null", () => {
     expect(translationFor(line(10), translations)).toBeNull();
+  });
+});
+
+describe("lyricSubtitlesFor", () => {
+  const translations = [line(4, "hello")];
+  const romanizations = [line(4.1, "ni hao")];
+
+  it("shows matched romanization and translation together in reading order", () => {
+    expect(lyricSubtitlesFor(line(4, "你好"), "combined", translations, romanizations)).toEqual([
+      { kind: "romanization", text: "ni hao" },
+      { kind: "translation", text: "hello" },
+    ]);
+  });
+
+  it("keeps whichever timed subtitle is available and hides both when disabled", () => {
+    expect(lyricSubtitlesFor(line(4, "你好"), "combined", translations, [])).toEqual([
+      { kind: "translation", text: "hello" },
+    ]);
+    expect(lyricSubtitlesFor(line(4, "你好"), "none", translations, romanizations)).toEqual([]);
   });
 });

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { resolvedTheme, setThemeChoice, themeChoice } from "./theme";
+import {
+  customTheme,
+  DEFAULT_CUSTOM_THEME,
+  resolvedTheme,
+  setCustomTheme,
+  setThemeChoice,
+  themeChoice,
+} from "./theme";
 
 describe("resolvedTheme", () => {
   it("system 跟随系统偏好", () => {
@@ -29,5 +36,20 @@ describe("setThemeChoice", () => {
     setThemeChoice("system");
     expect(localStorage.getItem("ome.theme")).toBeNull();
     expect(themeChoice.value).toBe("system");
+  });
+});
+
+describe("setCustomTheme", () => {
+  it("replaces and persists only the four validated palette colors", () => {
+    const colors = {
+      bg: "#102030",
+      surface: "#203040",
+      text: "#F0F0F0",
+      accent: "#FF4080",
+    };
+    setCustomTheme(colors);
+    expect(customTheme.value).toEqual(colors);
+    expect(JSON.parse(localStorage.getItem("ome.theme.custom") ?? "{}")).toEqual(colors);
+    setCustomTheme(DEFAULT_CUSTOM_THEME);
   });
 });

@@ -142,11 +142,30 @@ const escapeXml = (text: string): string =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
+/**
+ * 在文本里为停顿符号注入 SSML break 标签，让 Edge 神经语音朗读更自然。
+ * 注意：先 escapeXml 再做替换，此处接收的是已转义的文本，
+ * 因此直接在转义结果上追加 SSML 标签。
+ * 句号/问号/叹号 → 300ms；分号 → 200ms；逗号/顿号 → 150ms。
+ */
+function injectSsmlBreaks(escaped: string): string {
+  return escaped
+    // 中文句末标点（包括英文句点 .）→ 300ms
+    .replace(/([。！？!?])/g, "$1<break time='300ms'/>")
+    // 分号
+    .replace(/([；;])/g, "$1<break time='200ms'/>")
+    // 逗号和顿号
+    .replace(/([，、,])/g, "$1<break time='150ms'/>");
+}
+
 function edgeSsml(text: string, voice: string, rate: number, pitch: number): string {
+  // 截断过长文本防止 TTS 超时（Edge TTS 对长文本敏感）
+  const trimmed = text.length > 120 ? text.slice(0, 120) : text;
+  const escaped = injectSsmlBreaks(escapeXml(trimmed));
   return (
     `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='zh-CN'>` +
     `<voice name='${voice}'><prosody rate='${prosodyPercent(rate)}' pitch='${prosodyPercent(pitch)}'>` +
-    `${escapeXml(text)}</prosody></voice></speak>`
+    `${escaped}</prosody></voice></speak>`
   );
 }
 

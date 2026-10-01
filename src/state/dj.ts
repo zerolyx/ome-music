@@ -19,7 +19,7 @@ import {
   type HourPreference,
 } from "../lib/api";
 import { results, search as neteaseSearch } from "./netease";
-import { playTracks, queue } from "./player";
+import { appendTracksToQueue, playTracks } from "./player";
 import { speak } from "./tts";
 
 export interface DjMsg {
@@ -160,8 +160,8 @@ export async function ask(text: string): Promise<void> {
       messages.value = [...messages.value, { id: nextMsgId(), role: "dj", text: reply.say, ts: Date.now() }];
       speakAside(reply.say);
     } else if (djConfig.value?.configured) {
-      // 已配置但后端返回空 say（未配置 / LLM 失败被后端折叠）：兜底提示，且不朗读道歉
-      lastError.value = "LLM 调用失败";
+      // 已配置但后端返回空 say（LLM 失败被后端折叠）：静默兜底，不暴露技术报错
+      console.warn("[DJ] LLM 返回空 say，已兜底");
       messages.value = [
         ...messages.value,
         { id: nextMsgId(), role: "dj", text: CHAT_FALLBACK, ts: Date.now() },
@@ -169,7 +169,12 @@ export async function ask(text: string): Promise<void> {
     }
     await executeActions(reply.actions);
   } catch (e) {
-    lastError.value = toMessage(e);
+    // LLM 超时 / 网络失败：静默降级，仅 console.warn，不显示技术错误
+    console.warn("[DJ] ask 失败：", e);
+    messages.value = [
+      ...messages.value,
+      { id: nextMsgId(), role: "dj", text: CHAT_FALLBACK, ts: Date.now() },
+    ];
   } finally {
     thinking.value = false;
   }
@@ -199,7 +204,7 @@ async function executeActions(actions: DjAction[]): Promise<void> {
       case "queue":
         if (action.query) {
           await neteaseSearch(action.query);
-          if (results.value.length > 0) queue.value = [...queue.value, ...results.value];
+          if (results.value.length > 0) appendTracksToQueue(results.value);
         }
         break;
       case "mood":

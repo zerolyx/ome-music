@@ -1,6 +1,70 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NeteaseSong, Track } from "../types/music";
-import { neteaseNumericId, neteaseSongToTrack, qrPhaseFromCode } from "./netease";
+
+const api = vi.hoisted(() => ({
+  neteaseLike: vi.fn(),
+  neteaseLogout: vi.fn(),
+  neteaseQrCheck: vi.fn(),
+  neteaseQrKey: vi.fn(),
+  neteaseSearch: vi.fn(),
+  neteaseStatus: vi.fn(),
+}));
+
+vi.mock("../lib/api", () => api);
+
+import {
+  cancelQrLogin,
+  loginError,
+  neteaseNumericId,
+  neteaseSongToTrack,
+  qrLoading,
+  qrPhaseFromCode,
+  qrState,
+  startQrLogin,
+} from "./netease";
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.clearAllMocks();
+  qrState.value = null;
+  qrLoading.value = false;
+  loginError.value = null;
+});
+
+afterEach(() => {
+  cancelQrLogin();
+  vi.useRealTimers();
+});
+
+describe("startQrLogin", () => {
+  it("shows progress until the desktop command returns a QR code", async () => {
+    let resolveQr!: (value: { key: string; qrSvg: string }) => void;
+    api.neteaseQrKey.mockReturnValue(
+      new Promise((resolve) => {
+        resolveQr = resolve;
+      }),
+    );
+
+    const pending = startQrLogin();
+    expect(qrLoading.value).toBe(true);
+    resolveQr({ key: "qr-key", qrSvg: "<svg />" });
+    await pending;
+
+    expect(qrLoading.value).toBe(false);
+    expect(loginError.value).toBeNull();
+    expect(qrState.value).toEqual({ key: "qr-key", qrSvg: "<svg />", phase: "waiting" });
+  });
+
+  it("keeps QR acquisition failures visible for the settings UI", async () => {
+    api.neteaseQrKey.mockRejectedValue(new Error("网络请求失败"));
+
+    await startQrLogin();
+
+    expect(qrLoading.value).toBe(false);
+    expect(qrState.value).toBeNull();
+    expect(loginError.value).toBe("网络请求失败");
+  });
+});
 
 describe("qrPhaseFromCode", () => {
   it("801 → 等待扫描", () => {
