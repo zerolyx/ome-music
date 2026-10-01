@@ -1,11 +1,24 @@
 use rusqlite::Connection;
 use std::path::Path;
 
-const MIGRATIONS: &[&str] = &[
+pub(crate) const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/001_initial_schema.sql"),
     include_str!("../migrations/002_mood_note_rename_and_indexes.sql"),
     include_str!("../migrations/003_authorized_music_directories.sql"),
     include_str!("../migrations/004_dj.sql"),
+    include_str!("../migrations/005_track_metadata_override.sql"),
+    include_str!("../migrations/006_track_rule_exclusions.sql"),
+    include_str!("../migrations/007_library_scan_summary.sql"),
+    include_str!("../migrations/008_explicit_local_file_access.sql"),
+    include_str!("../migrations/009_track_metadata_original_snapshot.sql"),
+    include_str!("../migrations/010_catalog_entity_aliases.sql"),
+    include_str!("../migrations/011_track_metadata_sources.sql"),
+    include_str!("../migrations/012_saved_track_lyrics.sql"),
+    include_str!("../migrations/013_lyrics_backfill.sql"),
+    include_str!("../migrations/014_track_quick_identity.sql"),
+    include_str!("../migrations/015_track_replay_gain.sql"),
+    include_str!("../migrations/016_dj_memory_source.sql"),
+    include_str!("../migrations/017_dj_message_summarized.sql"),
 ];
 
 pub fn open_db(path: &Path) -> Result<Connection, rusqlite::Error> {

@@ -1,0 +1,9 @@
+CREATE TABLE library_scan_summary (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+  completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  added INTEGER NOT NULL DEFAULT 0,
+  updated INTEGER NOT NULL DEFAULT 0,
+  total INTEGER NOT NULL DEFAULT 0,
+  skipped INTEGER NOT NULL DEFAULT 0,
+  scan_errors INTEGER NOT NULL DEFAULT 0
+);
