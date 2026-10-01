@@ -3,7 +3,7 @@ import { useEffect } from "preact/hooks";
 import { Icon } from "./Icon";
 import { coverUrl } from "../lib/api";
 import { activeView } from "../state/app";
-import { currentTrack, isPlaying, next, togglePlayback } from "../state/player";
+import { currentTrack, isPlaying, next, queue, queueOpen, togglePlayback } from "../state/player";
 
 /** 迷你播放器悬浮窗：切走后仍能掌控播放（ECHO mini-player 思路） */
 export const miniPlayerDismissed = signal(false);
@@ -11,7 +11,7 @@ let lastTrackId: string | null = null;
 
 export function MiniPlayer() {
   const track = currentTrack.value;
-  const visible = !!track && activeView.value !== "home";
+  const visible = !!track && activeView.value !== "home" && !queueOpen.value;
 
   // 切歌时自动重新弹出（用户点过关闭也只关到下一首）
   useEffect(() => {
@@ -43,6 +43,22 @@ export function MiniPlayer() {
       </button>
       <button class="mini-btn" aria-label="下一首" onClick={() => next(true)}>
         <Icon name="skip-forward" size={16} />
+      </button>
+      <button
+        class="mini-btn"
+        aria-label="打开播放列表"
+        aria-controls="queue-drawer"
+        title={`播放列表 · ${queue.value.length} 首`}
+        onClick={() => {
+          queueOpen.value = true;
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              document.querySelector<HTMLButtonElement>("#queue-drawer [aria-label='关闭播放列表']")?.focus();
+            });
+          });
+        }}
+      >
+        <Icon name="queue" size={16} />
       </button>
       <button
         class="mini-btn mini-close"

@@ -12,6 +12,7 @@ import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
 import { ImmersiveCursor } from "./components/ImmersiveCursor";
 import { MiniPlayer } from "./components/MiniPlayer";
+import { LibraryImportStatus } from "./components/LibraryImportStatus";
 import { LyricsMatchPicker } from "./components/LyricsMatchPicker";
 import { DjDrawer } from "./components/DjDrawer";
 import { HomeView } from "./views/Home";
@@ -21,14 +22,23 @@ import { SettingsView } from "./views/Settings";
 import { PlayerBar } from "./components/PlayerBar";
 import { QueueDrawer } from "./components/QueueDrawer";
 import { PlaylistPicker } from "./components/PlaylistPicker";
+import { TrackMetadataEditor } from "./components/TrackMetadataEditor";
+import { AlbumTagEditor } from "./components/AlbumTagEditor";
+import { BatchAudioTagSelector } from "./components/BatchAudioTagSelector";
+import { BatchTrackAudioTagEditor } from "./components/BatchTrackAudioTagEditor";
+import { TrackRemovalConfirm } from "./components/TrackRemovalConfirm";
+import { BatchMetadataMatcher } from "./components/BatchMetadataMatcher";
 import { CommandPalette } from "./components/CommandPalette";
 import { StageView } from "./components/StageView";
 import { VisualizerView } from "./components/VisualizerView";
 import { stageOpen } from "./state/stage";
 import { vizOpen } from "./state/visualizer";
+import { batchMetadataTracks, closeBatchMetadataMatcher } from "./state/batch-metadata";
+import { initStartupLibraryRescan } from "./state/library-automation";
 
 export function App() {
   useEffect(() => initChromeAutoHide(), []);
+  useEffect(() => initStartupLibraryRescan(), []);
 
   // 全局快捷键 + 系统媒体键（Media Session）：挂载即接线，浏览器预览同样可用
   useEffect(() => initHotkeys(), []);
@@ -67,6 +77,7 @@ export function App() {
       <div class="app-body">
         <Rail />
         <main class="view-host">
+          <LibraryImportStatus />
           <div key={activeView.value} class="view-swap">
             {activeView.value === "home" && <HomeView />}
             {activeView.value === "search" && <SearchView />}
@@ -79,6 +90,14 @@ export function App() {
       <QueueDrawer />
       <DjDrawer />
       <PlaylistPicker />
+      <TrackMetadataEditor />
+      <AlbumTagEditor />
+      <BatchAudioTagSelector />
+      <BatchTrackAudioTagEditor />
+      <TrackRemovalConfirm />
+      {batchMetadataTracks.value && (
+        <BatchMetadataMatcher tracks={batchMetadataTracks.value} onClose={closeBatchMetadataMatcher} />
+      )}
       <CommandPalette />
       <MiniPlayer />
       <LyricsMatchPicker />

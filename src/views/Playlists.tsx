@@ -6,10 +6,13 @@ import {
   closePlaylist,
   createPlaylist,
   deletePlaylist,
+  exportM3uPlaylist,
+  importM3uPlaylist,
   loadPlaylists,
   openPlaylist,
   openAddToPlaylist,
   playlists,
+  playlistError,
   removeFromPlaylist,
   renamePlaylist,
 } from "../state/playlists";
@@ -17,6 +20,7 @@ import { currentIndex, playTracks, insertNext, appendToQueue } from "../state/pl
 import { toggleLiked } from "../state/library";
 import { TrackList } from "../components/TrackList";
 import { Icon } from "../components/Icon";
+import { openTrackMetadataEditor } from "../state/metadata-editor";
 
 /** 歌单视图：总览卡片墙 + 歌单详情（曲库第 5 个视图） */
 export function PlaylistBoard() {
@@ -38,12 +42,30 @@ export function PlaylistBoard() {
 function PlaylistOverview() {
   const list = playlists.value ?? [];
   const [draft, setDraft] = useState("");
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferMessage, setTransferMessage] = useState("");
 
   const create = async () => {
     const name = draft.trim();
     if (!name) return;
     setDraft("");
     await createPlaylist(name);
+  };
+
+  const importM3u = async () => {
+    setTransferBusy(true);
+    setTransferMessage("");
+    const result = await importM3uPlaylist();
+    setTransferBusy(false);
+    if (result) {
+      setTransferMessage(
+        result.playlist
+          ? `已导入「${result.playlist.name}」：${result.imported} 首，跳过 ${result.skipped} 条。`
+          : `没有匹配到曲库中的本地歌曲，跳过 ${result.skipped} 条。`,
+      );
+    } else if (playlistError.value) {
+      setTransferMessage(`导入失败：${playlistError.value}`);
+    }
   };
 
   return (
@@ -60,11 +82,23 @@ function PlaylistOverview() {
             if (event.key === "Enter") void create();
           }}
         />
-        <button class="btn-primary" disabled={!draft.trim()} onClick={() => void create()}>
-          <Icon name="plus" size={15} />
-          新建歌单
-        </button>
+        <div class="playlist-transfer-actions">
+          <button
+            class="btn-secondary"
+            disabled={!isTauriRuntime() || transferBusy}
+            title={isTauriRuntime() ? "从 M3U/M3U8 导入本地歌单" : "请在桌面版中导入 M3U 歌单"}
+            onClick={() => void importM3u()}
+          >
+            <Icon name="folder" size={15} />
+            导入 M3U
+          </button>
+          <button class="btn-primary" disabled={!draft.trim()} onClick={() => void create()}>
+            <Icon name="plus" size={15} />
+            新建歌单
+          </button>
+        </div>
       </div>
+      {transferMessage && <p class="playlist-transfer-status" role="status">{transferMessage}</p>}
       {list.length === 0 ? (
         <div class="library-empty">
           <Icon name="playlist" size={40} />
@@ -153,6 +187,8 @@ function PlaylistDetail() {
   const list = playlists.value ?? [];
   const meta = list.find((item) => item.id === id);
   const tracks = activePlaylistTracks.value;
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferMessage, setTransferMessage] = useState("");
 
   if (tracks === null) {
     return (
@@ -162,6 +198,19 @@ function PlaylistDetail() {
       </div>
     );
   }
+
+  const exportM3u = async () => {
+    if (!id) return;
+    setTransferBusy(true);
+    setTransferMessage("");
+    const result = await exportM3uPlaylist(id);
+    setTransferBusy(false);
+    if (result) {
+      setTransferMessage(`已导出 ${result.exported} 首${result.skipped ? `，跳过 ${result.skipped} 首非本地曲目` : ""}。`);
+    } else if (playlistError.value) {
+      setTransferMessage(`导出失败：${playlistError.value}`);
+    }
+  };
 
   return (
     <div class="playlist-detail">
@@ -174,13 +223,24 @@ function PlaylistDetail() {
           <h2 class="view-title">{meta?.name ?? "歌单"}</h2>
           {tracks.length > 0 && <span class="view-count">共 {tracks.length} 首</span>}
         </div>
-        {tracks.length > 0 && (
-          <button class="btn-primary" onClick={() => playTracks(tracks, 0)}>
-            <Icon name="play" size={15} />
-            播放全部
+        <div class="playlist-detail-actions">
+          <button
+            class="btn-secondary"
+            disabled={!isTauriRuntime() || transferBusy}
+            title={isTauriRuntime() ? "导出为 M3U8 歌单" : "请在桌面版中导出 M3U 歌单"}
+            onClick={() => void exportM3u()}
+          >
+            导出 M3U
           </button>
-        )}
+          {tracks.length > 0 && (
+            <button class="btn-primary" onClick={() => playTracks(tracks, 0)}>
+              <Icon name="play" size={15} />
+              播放全部
+            </button>
+          )}
+        </div>
       </div>
+      {transferMessage && <p class="playlist-transfer-status" role="status">{transferMessage}</p>}
       {tracks.length === 0 ? (
         <div class="library-empty">
           <Icon name="playlist" size={40} />
@@ -196,6 +256,7 @@ function PlaylistDetail() {
           onPlayNext={insertNext}
           onEnqueue={appendToQueue}
           onAddToPlaylist={openAddToPlaylist}
+          onEditMetadata={openTrackMetadataEditor}
           onRemove={(index) => {
             const track = tracks[index];
             if (id && track) void removeFromPlaylist(id, track.id);

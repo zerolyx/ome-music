@@ -1,14 +1,23 @@
 :root {
-  --bg: #f7f5f1;
-  --bg-elev: #ffffff;
-  --bg-veil: rgba(247, 245, 241, 0.72);
-  --text: #1a1817;
-  --text-dim: #6f6a66;
-  --accent: #c96f4a;
-  --accent-soft: rgba(201, 111, 74, 0.12);
-  --border: rgba(26, 24, 23, 0.08);
-  --shadow: 0 8px 32px rgba(26, 24, 23, 0.08);
-  --glow-opacity: 0;
+  --bg: #efe7ff;
+  --bg-elev: #fff2f8;
+  --bg-veil: rgba(239, 231, 255, 0.82);
+  --text: #271c3b;
+  --text-dim: #6f5f83;
+  --accent: #713eff;
+  --accent-soft: rgba(113, 62, 255, 0.15);
+  /* Ome 的唱片色谱；只用于音乐视觉，不改变文字/控件主强调色。 */
+  --spectrum-rose: #c72e5f;
+  --spectrum-amber: #a85e00;
+  --spectrum-teal: #08776f;
+  --spectrum-violet: #5142b7;
+  --ambient-a: rgba(0, 0, 0, 0);
+  --ambient-b: rgba(0, 0, 0, 0);
+  --ambient-c: rgba(0, 0, 0, 0);
+  --ambient-opacity: 0;
+  --border: rgba(49, 28, 77, 0.12);
+  --shadow: 0 8px 32px rgba(103, 60, 180, 0.16);
+  --glow-opacity: 0.72;
   --radius: 14px;
   --font: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
   /* 舞台大字衬线：Folia 式歌词 display（纯系统字体栈，零下载） */
@@ -21,12 +30,12 @@
 @property --accent {
   syntax: "<color>";
   inherits: true;
-  initial-value: #c96f4a;
+  initial-value: #713eff;
 }
 @property --accent-soft {
   syntax: "<color>";
   inherits: true;
-  initial-value: rgba(201, 111, 74, 0.12);
+  initial-value: rgba(113, 62, 255, 0.15);
 }
 html {
   transition:
@@ -35,16 +44,26 @@ html {
 }
 
 [data-theme="dark"] {
-  --bg: #0a0a0c;
-  --bg-elev: #141417;
-  --bg-veil: rgba(10, 10, 12, 0.6);
-  --text: #eceae7;
-  --text-dim: #8b8783;
-  --accent: #e08763;
-  --accent-soft: rgba(224, 135, 99, 0.16);
-  --border: rgba(236, 234, 231, 0.08);
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --bg: #0d1026;
+  --bg-elev: #21193f;
+  --bg-veil: rgba(13, 16, 38, 0.7);
+  --text: #f5efff;
+  --text-dim: #aa9bc4;
+  --accent: #ff62a7;
+  --accent-soft: rgba(255, 98, 167, 0.18);
+  --ambient-c: rgba(255, 151, 77, 0.34);
+  --border: rgba(245, 239, 255, 0.12);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.48);
+  --ambient-a: rgba(217, 63, 255, 0.56);
+  --ambient-b: rgba(33, 201, 255, 0.48);
   --glow-opacity: 1;
+}
+
+/* 默认浅色主题使用薰衣草底色、玫粉面板与粉、青双色环境光。 */
+[data-theme="light"] {
+  --ambient-a: rgba(234, 64, 203, 0.58);
+  --ambient-b: rgba(55, 187, 255, 0.46);
+  --ambient-c: rgba(255, 177, 71, 0.34);
 }
 
 /* ---- Folia Theme Park 式手工预设 ---- */
@@ -147,7 +166,28 @@ html {
   --glow-opacity: 1;
 }
 
-/* ---- 封面氛围光（tint.ts 写入 --ambient-a/b；无封面时透明） ---- */
+/* 自由配色：四个基础颜色由 theme.ts 提供，其余界面颜色从它们派生。 */
+[data-theme="custom"] {
+  --bg: var(--custom-bg, #160e24);
+  --bg-elev: var(--custom-surface, #251538);
+  --text: var(--custom-text, #f7ecff);
+  --accent: var(--custom-accent, #ff5c9a);
+  --bg-veil: color-mix(in srgb, var(--bg) 76%, transparent);
+  --text-dim: color-mix(in srgb, var(--text) 62%, var(--bg));
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --border: color-mix(in srgb, var(--text) 10%, transparent);
+  --shadow: 0 8px 32px color-mix(in srgb, var(--bg) 46%, transparent);
+  --glow-opacity: 1;
+  --ambient-opacity: 0.82;
+  --vignette: 0.3;
+  --backdrop-brightness: 0.72;
+  --backdrop-opacity: 0.52;
+  --ambient-a: color-mix(in srgb, var(--accent) 56%, transparent);
+  --ambient-b: color-mix(in srgb, #35c8ff 42%, transparent);
+  --ambient-c: color-mix(in srgb, #ffb14f 34%, transparent);
+}
+
+/* ---- 封面/默认氛围光（tint.ts 可覆盖 ambient-a/b；主题默认值保留） ---- */
 @property --ambient-a {
   syntax: "<color>";
   inherits: true;
@@ -158,17 +198,18 @@ html {
   inherits: true;
   initial-value: rgba(0, 0, 0, 0);
 }
-:root {
-  --ambient-a: rgba(0, 0, 0, 0);
-  --ambient-b: rgba(0, 0, 0, 0);
-  --ambient-opacity: 0;
+@property --ambient-c {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(0, 0, 0, 0);
 }
 html {
   transition:
     --accent 0.7s ease,
     --accent-soft 0.7s ease,
     --ambient-a 1.2s ease,
-    --ambient-b 1.2s ease;
+    --ambient-b 1.2s ease,
+    --ambient-c 1.2s ease;
 }
 [data-theme="dark"],
 [data-theme="noir"],
@@ -181,7 +222,7 @@ html {
 [data-theme="paper"],
 [data-theme="sakura"],
 [data-theme="mint"] {
-  --ambient-opacity: 0.35;
+  --ambient-opacity: 0.82;
 }
 
 /* 各预设暗角 */

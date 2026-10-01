@@ -5,13 +5,26 @@ import { WelcomeCard } from "../components/WelcomeCard";
 import { StageSpectrum } from "../components/StageSpectrum";
 import { currentTrack, currentIndex, duration, isPlaying, position, queue } from "../state/player";
 import { coverUrl } from "../lib/api";
-import { loadLyricFor, lyricLines, lyricTrackId, tlyricLines } from "../state/lyrics";
+import {
+  loadLyricFor,
+  lyricLines,
+  lyricSubtitleMode,
+  lyricTrackId,
+  plainLyricText,
+  plainRomanizationLines,
+  romanizationLines,
+  tlyricLines,
+  yrcLines,
+  parseLocalLyricPayload,
+  parsePlainRomanizationRows,
+} from "../state/lyrics";
 import { adjustTrackOffset, getTrackOffset, OFFSET_STEP } from "../state/lyrics";
+import { parseLrc } from "../state/lyrics";
 import { applyCoverAccent } from "../state/tint";
 import { loadDanmakuFor } from "../state/danmaku";
 import { DanmakuLayer } from "../components/DanmakuLayer";
-import { djConfig } from "../state/dj";
-import { startRadioIfIdle } from "../state/radio";
+import { startRadioIfIdle, canStartRadioFromHome, radioEnabled } from "../state/radio";
+import { tracks } from "../state/library";
 import { openStage } from "../state/stage";
 import { openViz } from "../state/visualizer";
 import type { Track } from "../types/music";
@@ -53,8 +66,19 @@ function LyricOffsetControl({ trackId }: { trackId: string }) {
   );
 }
 
-const demo =
-  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo");
+const homeDemoKind =
+  typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("demo") : null;
+const demo = homeDemoKind !== null && homeDemoKind !== "radio-idle";
+const demoPlainLyrics =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "plain-lyrics";
+const demoPlainRomanizationLyrics =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "plain-romanization";
+const demoPlainCombinedLyrics =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "plain-combined";
+const demoRomanizationLyrics =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "romanization";
+const demoCombinedLyrics =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "combined";
 
 /**
  * 黑胶旋转驱动：rAF 角度积分，播放渐起、暂停指数衰减真缓停
@@ -114,12 +138,22 @@ const DEMO_TRACK: Track = {
   playCount: 0,
 };
 
+function encodeLyricText(text: string): string {
+  return btoa(String.fromCharCode(...new TextEncoder().encode(text)));
+}
+
 export function HomeView() {
   const demoTrack = demo ? DEMO_TRACK : null;
   const track = demo ? demoTrack : currentTrack.value;
   const cover = track?.coverPath ? coverUrl(track.coverPath) : "";
   const [coverBroken, setCoverBroken] = useState(false);
   const spinRef = useRecordSpin(isPlaying.value);
+  const radioCtaVisible = canStartRadioFromHome(
+    radioEnabled.value,
+    tracks.value.length > 0,
+    isPlaying.value,
+    queue.value.length,
+  );
 
   // 换封面时重置加载失败标记
   useEffect(() => setCoverBroken(false), [cover]);
@@ -128,15 +162,69 @@ export function HomeView() {
   useEffect(() => {
     void applyCoverAccent(cover || null); // 唱片取色：强调色跟随封面（demo 分支 return 之前）
     if (demo) {
+      const previousSubtitleMode = lyricSubtitleMode.value;
+      if (demoPlainLyrics || demoPlainRomanizationLyrics || demoPlainCombinedLyrics) {
+        const sample = "街灯落在湿润的路面\n晚风把旧日轻轻吹远\n我在熟悉的旋律之间\n听见心跳慢慢回到从前\n\n如果明天仍然很遥远\n就把此刻唱给夜听见\n每一句都不需要时间\n你会在歌声里认出我\n\n天色慢慢靠近窗前\n钟声穿过安静房间\n我把没说完的话语\n藏进一首小小诗篇\n\n某天你若忽然想念\n不必回头寻找从前\n这首歌会停在这里\n等晚风再次经过你";
+        const embeddedLrc = btoa(String.fromCharCode(...new TextEncoder().encode(sample)));
+        const romanization = "Jie deng luo zai shi run de lu mian\nWan feng ba jiu ri qing qing chui yuan\nWo zai shu xi de xuan lv zhi jian\nTing jian xin tiao man man hui dao cong qian\n\nRu guo ming tian reng ran hen yao yuan\nJiu ba ci ke chang gei ye ting jian\nMei yi ju dou bu xu yao shi jian\nNi hui zai ge sheng li ren chu wo\n\nTian se man man kao jin chuang qian\nZhong sheng chuan guo an jing fang jian\nWo ba mei shuo wan de hua yu\nCang jin yi shou xiao xiao shi pian\n\nMou tian ni ruo hu ran xiang nian\nBu bi hui tou xun zhao cong qian\nZhe shou ge hui ting zai zhe li\nDeng wan feng zai ci jing guo ni";
+        const parsed = parseLocalLyricPayload({
+          lrc: "",
+          tlyric: null,
+          embeddedLrc,
+          rlyric: demoPlainRomanizationLyrics || demoPlainCombinedLyrics
+            ? btoa(String.fromCharCode(...new TextEncoder().encode(romanization)))
+            : null,
+        });
+        lyricLines.value = [];
+        yrcLines.value = [];
+        romanizationLines.value = [];
+        plainLyricText.value = parsed?.plainLyrics ?? "";
+        plainRomanizationLines.value = parsePlainRomanizationRows(parsed?.rlyric);
+        if (demoPlainRomanizationLyrics) lyricSubtitleMode.value = "romanization";
+        if (demoPlainCombinedLyrics) lyricSubtitleMode.value = "combined";
+        tlyricLines.value = [];
+        lyricTrackId.value = DEMO_TRACK.id;
+        queue.value = [DEMO_TRACK];
+        currentIndex.value = 0;
+        duration.value = DEMO_TRACK.durationSeconds;
+        isPlaying.value = true;
+        const timer = setInterval(() => {
+          position.value = (position.value + 0.25) % 24;
+        }, 250);
+        return () => {
+          clearInterval(timer);
+          position.value = 0;
+          isPlaying.value = false;
+          queue.value = [];
+          currentIndex.value = -1;
+          lyricLines.value = [];
+          yrcLines.value = [];
+          romanizationLines.value = [];
+          plainLyricText.value = "";
+          plainRomanizationLines.value = [];
+          tlyricLines.value = [];
+          lyricSubtitleMode.value = previousSubtitleMode;
+          lyricTrackId.value = null;
+        };
+      }
       // 演示：样例歌词 + 假播放进度驱动扫光/逐字
-      lyricLines.value = [
-        { time: 0, text: "一整个宇宙" },
-        { time: 4, text: "换一颗红豆" },
-        { time: 8, text: "回忆如困兽" },
-        { time: 12, text: "寂寞太长时间里发着呆" },
-        { time: 16, text: "时间能证明爱能穿越人海" },
-        { time: 20, text: "情歌深爱着的人啊" },
-      ];
+      const romanizationFixture = demoRomanizationLyrics || demoCombinedLyrics
+        ? parseLocalLyricPayload({
+            lrc: encodeLyricText("[00:00.00]夜色渐深\n[00:04.00]晚风穿过"),
+            tlyric: null,
+            rlyric: encodeLyricText("[00:00.00]Ye se jian shen\n[00:04.00]Wan feng chuan guo"),
+          })
+        : null;
+      lyricLines.value = romanizationFixture
+        ? parseLrc(romanizationFixture.lrc)
+        : [
+            { time: 0, text: "一整个宇宙" },
+            { time: 4, text: "换一颗红豆" },
+            { time: 8, text: "回忆如困兽" },
+            { time: 12, text: "寂寞太长时间里发着呆" },
+            { time: 16, text: "时间能证明爱能穿越人海" },
+            { time: 20, text: "情歌深爱着的人啊" },
+          ];
       tlyricLines.value = [
         { time: 0, text: "A whole universe" },
         { time: 4, text: "for a single red bean" },
@@ -145,6 +233,11 @@ export function HomeView() {
         { time: 16, text: "Time proves love crosses oceans of people" },
         { time: 20, text: "The one this love song cherishes" },
       ];
+      romanizationLines.value = romanizationFixture
+        ? parseLrc(romanizationFixture.rlyric ?? "")
+        : [];
+      if (demoRomanizationLyrics) lyricSubtitleMode.value = "romanization";
+      if (demoCombinedLyrics) lyricSubtitleMode.value = "combined";
       lyricTrackId.value = DEMO_TRACK.id;
       queue.value = [DEMO_TRACK];
       currentIndex.value = 0;
@@ -160,7 +253,12 @@ export function HomeView() {
         queue.value = [];
         currentIndex.value = -1;
         lyricLines.value = [];
+        yrcLines.value = [];
+        romanizationLines.value = [];
+        plainLyricText.value = "";
+        plainRomanizationLines.value = [];
         tlyricLines.value = [];
+        lyricSubtitleMode.value = previousSubtitleMode;
         lyricTrackId.value = null;
       };
     }
@@ -237,7 +335,7 @@ export function HomeView() {
           </div>
         </div>
       ) : (
-        <div class="home-empty">
+        <div class={`home-empty ${radioCtaVisible ? "home-radio-ready" : ""}`}>
           <p class="home-kicker">OME RADIO · 私人电台</p>
           <div class="home-disc" aria-hidden="true">
             <div class="home-disc-texture" />
@@ -247,10 +345,12 @@ export function HomeView() {
               </span>
             </div>
           </div>
-          <h1>电台即将开播</h1>
-          <p class="home-hint">导入音乐后，这里会成为你的私人电台</p>
-          {!demo && <WelcomeCard />}
-          {djConfig.value?.configured && (
+          <h1>{radioCtaVisible ? "你的私人电台已准备好" : "电台即将开播"}</h1>
+          <p class="home-hint">
+            {radioCtaVisible ? "按下播放，从本地曲库开始下一段聆听" : "导入音乐后，这里会成为你的私人电台"}
+          </p>
+          {!demo && !radioCtaVisible && <WelcomeCard />}
+          {radioCtaVisible && (
             <button class="btn-primary home-radio-cta" onClick={() => void startRadioIfIdle()}>
               不必选歌，按下播放就好
             </button>

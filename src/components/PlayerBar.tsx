@@ -184,6 +184,8 @@ export function PlayerBar() {
         <button
           class={`player-list-btn ${queueOpen.value ? "is-active" : ""}`}
           aria-label="播放列表"
+          aria-expanded={queueOpen.value}
+          aria-controls="queue-drawer"
           title="播放列表"
           onClick={() => (queueOpen.value = !queueOpen.value)}
         >

@@ -6,8 +6,12 @@ import {
   filterCommands,
   openPalette,
   paletteOpen,
+  pinnedCommandIds,
+  PINNED_COMMAND_LIMIT,
+  reconcilePinnedCommands,
   readRecent,
   runCommand,
+  togglePinnedCommand,
   type Command,
 } from "../state/commands";
 import { djTab, drawerOpen, openDrawer } from "../state/dj";
@@ -18,6 +22,11 @@ import {
   next,
   playTracks,
   previous,
+  queueModesLocked,
+  shuffleAvailable,
+  repeatMode,
+  cycleRepeatMode,
+  shuffleQueue,
   queueOpen,
   setVolume,
   togglePlayback,
@@ -67,6 +76,16 @@ function buildCommands(): Command[] {
     { id: "play.next", title: "下一首", group: "播放", run: () => next(true) },
     { id: "play.queue", title: "打开播放队列", group: "播放", run: () => (queueOpen.value = true) },
     { id: "play.clear", title: "清空播放队列", group: "播放", run: () => clearQueue() },
+    ...(!queueModesLocked.value ? [
+      ...(shuffleAvailable.value ? [{ id: "play.shuffle", title: "随机播放 · 打乱后续曲目", group: "播放" as const, run: () => shuffleQueue() }] : []),
+      {
+        id: "play.repeat",
+        title: `循环播放 · ${repeatMode.value === "all" ? "列表循环" : repeatMode.value === "one" ? "单曲循环" : "关闭循环"}`,
+        group: "播放" as const,
+        hint: "切换播放模式",
+        run: () => cycleRepeatMode(),
+      },
+    ] : []),
     { id: "volume.up", title: "音量 · 加大", group: "播放", hint: `${Math.round(volume.value * 100)}%`, run: () => setVolume(volume.value + 0.1) },
     { id: "volume.down", title: "音量 · 减小", group: "播放", hint: `${Math.round(volume.value * 100)}%`, run: () => setVolume(volume.value - 0.1) },
     { id: "volume.mute", title: "音量 · 静音", group: "播放", run: () => setVolume(0) },
@@ -88,6 +107,7 @@ function buildCommands(): Command[] {
     { id: "sleep.cancel", title: "睡眠定时 · 取消", group: "睡眠", run: () => cancelSleepTimer() },
     // 外观
     { id: "theme.system", title: "外观 · 跟随系统", group: "外观", run: () => setThemeChoice("system") },
+    { id: "theme.custom", title: "外观 · 自由配色", group: "外观", run: () => setThemeChoice("custom") },
     ...THEME_PRESETS.map((preset) => ({
       id: `theme.${preset.id}`,
       title: `外观 · ${preset.label}`,
@@ -120,6 +140,7 @@ export function CommandPalette() {
   const open = paletteOpen.value;
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
+  const [pinNotice, setPinNotice] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -148,8 +169,16 @@ export function CommandPalette() {
   }, [open]);
 
   const commands = useMemo(() => (open ? buildCommands() : []), [open]);
+  const pinnedIds = pinnedCommandIds.value;
+  useEffect(() => {
+    if (open) reconcilePinnedCommands(commands.map((command) => command.id));
+  }, [open, commands]);
   const visible = useMemo(() => filterCommands(commands, query, readRecent()), [commands, query]);
-  const clampedCursor = Math.min(cursor, Math.max(0, visible.length - 1));
+  const pinnedCommands = pinnedIds
+    .map((id) => commands.find((command) => command.id === id))
+    .filter((command): command is Command => Boolean(command));
+  const selectionCount = pinnedCommands.length + visible.length;
+  const clampedCursor = Math.min(cursor, Math.max(0, selectionCount - 1));
 
   // 光标项滚进可视区
   useEffect(() => {
@@ -157,12 +186,14 @@ export function CommandPalette() {
     if (!list) return;
     const active = list.querySelector('[data-active="true"]');
     active?.scrollIntoView({ block: "nearest" });
-  }, [clampedCursor, visible.length]);
+  }, [clampedCursor, visible.length, pinnedCommands.length]);
 
   if (!open) return null;
 
   const submit = (index: number) => {
-    const command = visible[index];
+    const command = index < pinnedCommands.length
+      ? pinnedCommands[index]
+      : visible[index - pinnedCommands.length];
     if (command) void runCommand(command);
   };
 
@@ -201,7 +232,7 @@ export function CommandPalette() {
             onKeyDown={(event) => {
               if (event.key === "ArrowDown") {
                 event.preventDefault();
-                setCursor(Math.min(clampedCursor + 1, visible.length - 1));
+                setCursor(Math.min(clampedCursor + 1, selectionCount - 1));
               } else if (event.key === "ArrowUp") {
                 event.preventDefault();
                 setCursor(Math.max(clampedCursor - 1, 0));
@@ -214,27 +245,84 @@ export function CommandPalette() {
           <kbd class="palette-kbd">Ctrl K</kbd>
         </div>
 
+        {pinnedCommands.length > 0 && (
+          <div class="palette-pinned" role="group" aria-label="固定常用命令">
+            <div class="palette-pinned-heading">
+              <span>常用</span>
+              <span>{pinnedCommands.length}/{PINNED_COMMAND_LIMIT}</span>
+            </div>
+            <div class="palette-pinned-list">
+              {pinnedCommands.map((command, index) => (
+                <div
+                  class="palette-pinned-item"
+                  data-active={index === clampedCursor}
+                  key={command.id}
+                  onMouseEnter={() => setCursor(index)}
+                >
+                  <button
+                    class="palette-pinned-run"
+                    type="button"
+                    title={command.title}
+                    aria-label={`执行固定命令：${command.title}`}
+                    onClick={() => void runCommand(command)}
+                  >
+                    <span>{command.title}</span>
+                  </button>
+                  <button
+                    class="palette-pin-toggle is-pinned"
+                    type="button"
+                    aria-label={`取消固定：${command.title}`}
+                    title="取消固定"
+                    onClick={() => {
+                      togglePinnedCommand(command.id);
+                      setPinNotice("");
+                    }}
+                  >
+                    <Icon name="pin" size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div class="palette-list" ref={listRef}>
           {visible.length === 0 && <p class="palette-empty">没有匹配的命令</p>}
-          {rows.map((row) =>
+          {rows.map((row, rowIndex) =>
             row.type === "group" ? (
-              <div key={`group-${row.name}`} class="palette-group">
+              <div key={`group-${row.name}-${rowIndex}`} class="palette-group">
                 {row.name}
               </div>
             ) : (
-              <button
+              <div
                 key={row.command.id}
-                class="palette-item"
-                data-active={row.index === clampedCursor}
-                onMouseEnter={() => setCursor(row.index)}
-                onClick={() => submit(row.index)}
+                class="palette-command-row"
+                data-active={row.index + pinnedCommands.length === clampedCursor}
+                onMouseEnter={() => setCursor(row.index + pinnedCommands.length)}
               >
-                <span class="palette-item-title">{row.command.title}</span>
-                {row.command.hint && <span class="palette-item-hint">{row.command.hint}</span>}
-              </button>
+                <button class="palette-item" type="button" onClick={() => submit(row.index + pinnedCommands.length)}>
+                  <span class="palette-item-title">{row.command.title}</span>
+                  {row.command.hint && <span class="palette-item-hint">{row.command.hint}</span>}
+                </button>
+                <button
+                  class={`palette-pin-toggle${pinnedIds.includes(row.command.id) ? " is-pinned" : ""}`}
+                  type="button"
+                  aria-label={`${pinnedIds.includes(row.command.id) ? "取消固定" : "固定到常用"}：${row.command.title}`}
+                  title={pinnedIds.includes(row.command.id) ? "取消固定" : pinnedIds.length >= PINNED_COMMAND_LIMIT ? "最多固定 3 项，请先取消一项" : "固定到常用"}
+                  disabled={!pinnedIds.includes(row.command.id) && pinnedIds.length >= PINNED_COMMAND_LIMIT}
+                  onClick={() => {
+                    const result = togglePinnedCommand(row.command.id);
+                    setPinNotice(result === "limit" ? "常用位置已满，请先取消固定一项。" : "");
+                  }}
+                >
+                  <Icon name="pin" size={14} />
+                </button>
+              </div>
             ),
           )}
         </div>
+
+        {pinNotice && <div class="palette-pin-notice" aria-live="polite">{pinNotice}</div>}
 
         {/* folia 式内嵌音量 surface：面板里直接调音量，不必先执行命令 */}
         <div class="palette-volume" onClick={(event) => event.stopPropagation()}>

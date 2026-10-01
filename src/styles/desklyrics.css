@@ -61,6 +61,18 @@ html.desklyrics body {
   color: #fff;
 }
 
+/* 主歌词可选渐变，副字幕继续保持中性白，避免争夺阅读焦点。 */
+.dlx:not([data-palette="white"]) .dlx-plain-line,
+.dlx:not([data-palette="white"]) .dlx-lit,
+.dlx:not([data-palette="white"]) .dlx-word.is-singing,
+.dlx:not([data-palette="white"]) .dlx-word.is-sung {
+  color: transparent;
+  background-image: var(--dlx-lyric-gradient);
+  background-size: 100% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
 /* lrc 整行扫光：底层暗、上层亮，宽度即进度（与歌词舞台 KaraokeFill 同思路） */
 .dlx-base {
   color: rgba(255, 255, 255, 0.4);
@@ -95,6 +107,7 @@ html.desklyrics body {
   color: rgba(255, 255, 255, 0.62);
   min-height: 1em;
 }
+.dlx-sub-romanization { letter-spacing: 0.035em; }
 
 /* 字号三档 */
 .dlx[data-size="s"] { --dlx-font: 26px; }
@@ -115,7 +128,20 @@ html.desklyrics body {
 .dlx[data-vertical] .dlx-tools {
   writing-mode: horizontal-tb; /* 工具条保持横排可读 */
   top: 6px;
-  right: 8px;
+  right: 2px;
+  gap: 2px;
+}
+.dlx[data-vertical] .dlx-btn,
+.dlx[data-vertical] .dlx-btn-text {
+  width: 22px;
+  min-width: 22px;
+  padding: 0 3px;
+}
+.dlx[data-vertical] .dlx-palette-trigger {
+  gap: 0;
+}
+.dlx[data-vertical] .dlx-palette-label {
+  display: none;
 }
 
 /* hover 工具条：平时零干扰，浮现于右上角 */
@@ -132,6 +158,12 @@ html.desklyrics body {
 }
 
 .dlx-tools.is-on {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.dlx:focus-within .dlx-tools {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
@@ -163,10 +195,80 @@ html.desklyrics body {
   font-size: 12px;
 }
 
+.dlx-palette-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dlx-palette-trigger {
+  gap: 5px;
+}
+
+.dlx-palette-current {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.dlx-palette-options {
+  display: flex;
+  gap: 4px;
+  padding: 0;
+}
+
+.dlx[data-vertical] .dlx-palette-options {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: auto;
+  left: -8px;
+  flex-direction: column;
+  writing-mode: horizontal-tb;
+  transform: translateY(-50%);
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(12, 12, 16, 0.94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.dlx-palette-option {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: scale 0.18s var(--ease-signature), box-shadow 0.18s var(--ease-signature);
+}
+
+.dlx-palette-option[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.95), 0 0 0 4px rgba(12, 12, 16, 0.95);
+}
+
+.dlx-palette-option:hover {
+  scale: 1.08;
+}
+
+.dlx-btn:focus-visible,
+.dlx-palette-option:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.95);
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dlx-word,
   .dlx-tools,
-  .dlx-btn {
+  .dlx-btn,
+  .dlx-palette-option {
     transition: none;
   }
 }

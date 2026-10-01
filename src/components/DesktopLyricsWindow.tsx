@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import type { CSSProperties } from "preact";
 import { emit, listen } from "@tauri-apps/api/event";
 import {
   availableMonitors,
@@ -13,14 +14,17 @@ import {
   deskLineProgress,
   deskPositionAt,
   deskSizeFor,
+  DESK_LYRIC_PALETTES,
   DESK_CLOSE_EVENT,
   DESK_HELLO_EVENT,
   DESK_LOCK_EVENT,
   DESK_LYRIC_EVENT,
   readDeskRect,
+  readDeskLyricPalette,
   readDeskSizeId,
   readDeskVertical,
   saveDeskRect,
+  saveDeskLyricPalette,
   saveDeskSizeId,
   saveDeskVertical,
   type DeskLyricSnapshot,
@@ -67,6 +71,9 @@ export function DesktopLyricsWindow() {
   const [hover, setHover] = useState(false);
   const [sizeId, setSizeId] = useState<DeskSizeId>(() => readDeskSizeId());
   const [vertical, setVertical] = useState<boolean>(() => readDeskVertical());
+  const [paletteId, setPaletteId] = useState(() => readDeskLyricPalette());
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const paletteTriggerRef = useRef<HTMLButtonElement>(null);
   const snapRef = useRef<DeskLyricSnapshot | null>(null);
   snapRef.current = snap;
 
@@ -166,20 +173,70 @@ export function DesktopLyricsWindow() {
 
   const track = snap?.track ?? null;
   const line = snap?.line ?? null;
-  const sub = snap?.translation ?? snap?.next ?? null;
+  const palette = DESK_LYRIC_PALETTES.find((item) => item.id === paletteId) ?? DESK_LYRIC_PALETTES[0];
+  const paletteStyle = palette.gradient
+    ? ({ "--dlx-lyric-gradient": palette.gradient } as CSSProperties)
+    : undefined;
+  const applyPalette = (next: typeof palette.id) => {
+    setPaletteId(next);
+    saveDeskLyricPalette(next);
+    setPaletteOpen(false);
+    paletteTriggerRef.current?.focus();
+  };
+  const renderPaletteOptions = (verticalMode: boolean) => (
+    <div
+      id="dlx-palette-options"
+      class={`dlx-palette-options ${verticalMode ? "is-vertical" : ""}`}
+      role="group"
+      aria-label="选择歌词色彩"
+    >
+      {DESK_LYRIC_PALETTES.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          class="dlx-palette-option"
+          style={{ background: option.swatch }}
+          aria-label={option.label}
+          aria-pressed={palette.id === option.id}
+          title={option.label}
+          onClick={() => applyPalette(option.id)}
+        />
+      ))}
+    </div>
+  );
   const emptyText = snap?.pending
     ? "歌词加载中…"
     : track
       ? "暂无歌词，尽情聆听"
       : "等待播放…";
+  const subtitles = line && snap && snap.subtitles.length > 0
+    ? snap.subtitles
+    : line && snap?.next
+      ? [{ kind: "translation" as const, text: snap.next }]
+      : !line
+        ? [{ kind: "translation" as const, text: emptyText }]
+        : [];
 
   return (
     <div
       class="dlx"
       data-size={sizeId}
+      data-palette={palette.id}
       data-vertical={vertical || undefined}
+      style={paletteStyle}
       onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onMouseLeave={() => {
+        setHover(false);
+        setPaletteOpen(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && paletteOpen) {
+          event.preventDefault();
+          event.stopPropagation();
+          setPaletteOpen(false);
+          paletteTriggerRef.current?.focus();
+        }
+      }}
     >
       <div class="dlx-glass">
         {track && (
@@ -190,16 +247,20 @@ export function DesktopLyricsWindow() {
         <p class="dlx-line" data-tauri-drag-region key={line ? `${line.start}|${line.text}` : "idle"}>
           {line && snap?.words ? (
             <DlxWords words={snap.words} pos={pos} />
+          ) : line && snap?.plain ? (
+            <span class="dlx-plain-line">{line.text}</span>
           ) : line ? (
             <DlxFill text={line.text} progress={deskLineProgress(line, pos)} />
           ) : (
             <span class="dlx-idle">…</span>
           )}
         </p>
-        <p class="dlx-sub" data-tauri-drag-region>
-          {line ? sub ?? "" : emptyText}
-        </p>
-        <div class={`dlx-tools ${hover ? "is-on" : ""}`}>
+        {subtitles.map(({ kind, text }) => (
+          <p key={kind} class={`dlx-sub ${kind === "romanization" ? "dlx-sub-romanization" : ""}`} data-tauri-drag-region>
+            {text}
+          </p>
+        ))}
+        <div class={`dlx-tools ${hover || paletteOpen ? "is-on" : ""}`}>
           <button
             class="dlx-btn dlx-btn-text"
             onClick={() => applySize(cycleDeskSize(sizeId))}
@@ -215,6 +276,22 @@ export function DesktopLyricsWindow() {
           >
             {vertical ? "横" : "竖"}
           </button>
+          <div class="dlx-palette-control">
+            <button
+              ref={paletteTriggerRef}
+              type="button"
+              class="dlx-btn dlx-btn-text dlx-palette-trigger"
+              onClick={() => setPaletteOpen((open) => !open)}
+              aria-label={`歌词色彩：${palette.label}`}
+              aria-expanded={paletteOpen}
+              aria-controls="dlx-palette-options"
+              title={`歌词色彩：${palette.label}`}
+            >
+              <span class="dlx-palette-current" style={{ background: palette.swatch }} aria-hidden="true" />
+              <span class="dlx-palette-label">色</span>
+            </button>
+            {paletteOpen && !vertical && renderPaletteOptions(false)}
+          </div>
           <button
             class="dlx-btn"
             onClick={() => void emit(DESK_LOCK_EVENT)}
@@ -227,6 +304,7 @@ export function DesktopLyricsWindow() {
             <Icon name="close" size={13} />
           </button>
         </div>
+        {paletteOpen && vertical && renderPaletteOptions(true)}
       </div>
     </div>
   );

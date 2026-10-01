@@ -4,6 +4,7 @@ import { Icon } from "./Icon";
 import type { Track } from "../types/music";
 
 export interface ArtistGroup {
+  id: string | null;
   name: string;
   tracks: Track[];
   albumCount: number;
@@ -16,7 +17,13 @@ export function groupArtists(tracks: Track[]): ArtistGroup[] {
     const name = track.artist?.trim() || "未知艺术家";
     let group = map.get(name);
     if (!group) {
-      group = { name, tracks: [], albumCount: 0 };
+      const inDemo = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo");
+      group = {
+        id: track.artistId ?? (inDemo && track.source === "local" ? `demo-artist:${name}` : null),
+        name,
+        tracks: [],
+        albumCount: 0,
+      };
       map.set(name, group);
     }
     group.tracks.push(track);
@@ -28,7 +35,13 @@ export function groupArtists(tracks: Track[]): ArtistGroup[] {
 }
 
 /** ECHO 式艺人墙：2×2 封面拼贴 + 名字 + 曲数/专辑数，点击播放该艺人全部曲目 */
-export function ArtistGrid({ artists }: { artists: ArtistGroup[] }) {
+export function ArtistGrid({
+  artists,
+  onRename,
+}: {
+  artists: ArtistGroup[];
+  onRename?: (artist: ArtistGroup) => void;
+}) {
   return (
     <ul class="artist-grid">
       {artists.map((artist) => {
@@ -60,6 +73,17 @@ export function ArtistGrid({ artists }: { artists: ArtistGroup[] }) {
                 {artist.tracks.length} 首{artist.albumCount > 1 ? ` · ${artist.albumCount} 专辑` : ""}
               </span>
             </button>
+            {artist.id && artist.tracks.some((track) => track.source === "local") && onRename && (
+              <button
+                type="button"
+                class="library-entity-edit"
+                aria-label={`修改艺人名 ${artist.name}`}
+                title="修改艺人名"
+                onClick={() => onRename(artist)}
+              >
+                <Icon name="edit" size={14} />
+              </button>
+            )}
           </li>
         );
       })}
