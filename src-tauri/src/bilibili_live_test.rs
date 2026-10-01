@@ -17,8 +17,8 @@ fn live_search_qingtian_returns_results() {
 #[ignore = "live network: real playurl"]
 fn live_stream_url_first_result_is_http() {
     let songs = tauri::async_runtime::block_on(search_songs("晴天", 12)).expect("search failed");
-    let stream =
-        tauri::async_runtime::block_on(fetch_stream_url(&songs[0].id)).expect("stream url failed");
+    let stream = tauri::async_runtime::block_on(fetch_stream_url_with_quality(&songs[0].id, None))
+        .expect("stream url failed");
     assert!(stream.url.starts_with("https://") || stream.url.starts_with("http://"));
     assert_eq!(stream.referer, "https://www.bilibili.com");
 }

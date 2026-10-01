@@ -43,9 +43,11 @@ pub struct BilibiliSongDto {
 
 /// 取流结果 DTO：前端用它拼 `/remote?p=…&r=…` 代理地址。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BilibiliStreamUrlDto {
     pub url: String,
     pub referer: String,
+    pub quality_label: String,
 }
 
 /// 弹幕 DTO。
@@ -397,14 +399,43 @@ fn non_empty_json_id(value: Option<&serde_json::Value>) -> Option<String> {
     }
 }
 
-/// 取流：view → cid → playurl(qn=64, fnval=0) → durl[0].url（音频向 mp4）。
-pub async fn fetch_stream_url(song_id: &str) -> Result<BilibiliStreamUrlDto, String> {
+fn bilibili_quality_label(quality: u32) -> String {
+    match quality {
+        6 => "240p".to_string(),
+        16 => "360p".to_string(),
+        32 => "480p".to_string(),
+        48 | 64 | 74 => "720p".to_string(),
+        80 => "1080p".to_string(),
+        112 => "1080p+".to_string(),
+        116 => "1080p 60fps".to_string(),
+        120 => "4K".to_string(),
+        125 => "HDR".to_string(),
+        126 => "Dolby Vision".to_string(),
+        127 => "8K".to_string(),
+        _ => format!("B 站画质 {quality}"),
+    }
+}
+
+fn normalize_bilibili_quality(requested: Option<u32>) -> Result<u32, String> {
+    match requested {
+        None => Ok(64),
+        Some(value @ (16 | 32 | 64)) => Ok(value),
+        Some(_) => Err("不支持所选的 B 站 MV 画质".to_string()),
+    }
+}
+
+pub async fn fetch_stream_url_with_quality(
+    song_id: &str,
+    requested_quality: Option<u32>,
+) -> Result<BilibiliStreamUrlDto, String> {
+    let requested_quality_value = normalize_bilibili_quality(requested_quality)?;
     let (core_id, page) = bilibili_song_id_parts(song_id);
     if core_id.is_empty() {
         return Err("audio_stream_missing".to_string());
     }
     let cid = fetch_video_cid(&core_id, page).await?;
     let (key, id) = view_query_parts(&core_id);
+    let requested_quality_query = requested_quality_value.to_string();
     // B 站网页播放器端点为 /x/player/playurl（/x/web-interface/playurl 已 404）。
     // fnval=0 强制返回 mp4 durl（音频向），无需 DASH 解封装。
     let value = request_bilibili_json(
@@ -412,7 +443,7 @@ pub async fn fetch_stream_url(song_id: &str) -> Result<BilibiliStreamUrlDto, Str
         &[
             (key.as_str(), id.as_str()),
             ("cid", cid.as_str()),
-            ("qn", "64"),
+            ("qn", requested_quality_query.as_str()),
             ("fnval", "0"),
         ],
     )
@@ -427,9 +458,18 @@ pub async fn fetch_stream_url(song_id: &str) -> Result<BilibiliStreamUrlDto, Str
         .map(str::trim)
         .filter(|url| !url.is_empty())
         .ok_or("audio_stream_missing")?;
+    let resolved_quality = value
+        .pointer("/data/quality")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|quality| u32::try_from(quality).ok())
+        .unwrap_or(requested_quality_value);
+    if requested_quality.is_some() && resolved_quality > requested_quality_value {
+        return Err("B 站返回的画质高于所选上限，已停止加载".to_string());
+    }
     Ok(BilibiliStreamUrlDto {
         url: url.to_string(),
         referer: BILIBILI_REFERER.to_string(),
+        quality_label: bilibili_quality_label(resolved_quality),
     })
 }
 
@@ -665,8 +705,11 @@ pub async fn bilibili_search(
 }
 
 #[tauri::command]
-pub async fn bilibili_stream_url(id: String) -> Result<BilibiliStreamUrlDto, String> {
-    fetch_stream_url(&id).await
+pub async fn bilibili_stream_url(
+    id: String,
+    quality: Option<u32>,
+) -> Result<BilibiliStreamUrlDto, String> {
+    fetch_stream_url_with_quality(&id, quality).await
 }
 
 #[tauri::command]

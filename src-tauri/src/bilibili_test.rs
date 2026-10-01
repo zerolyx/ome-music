@@ -145,6 +145,18 @@ fn extract_bilibili_id_finds_bv_and_av() {
     assert_eq!(extract_bilibili_id("nothing"), None);
 }
 
+#[test]
+fn bilibili_mv_quality_limit_is_allowlisted_and_labeled() {
+    assert_eq!(normalize_bilibili_quality(None), Ok(64));
+    assert_eq!(normalize_bilibili_quality(Some(16)), Ok(16));
+    assert_eq!(normalize_bilibili_quality(Some(32)), Ok(32));
+    assert_eq!(normalize_bilibili_quality(Some(64)), Ok(64));
+    assert!(normalize_bilibili_quality(Some(1080)).is_err());
+    assert_eq!(bilibili_quality_label(16), "360p");
+    assert_eq!(bilibili_quality_label(32), "480p");
+    assert_eq!(bilibili_quality_label(64), "720p");
+}
+
 const DANMAKU_FIXTURE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <i><chatserver>chat.bilibili.com</chatserver><maxlimit>200</maxlimit>
 <d p="0.91,1,25,16777215,1700000001,0,abc123,111">前奏一起就哭了</d>
