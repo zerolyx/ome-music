@@ -6200,12 +6200,7 @@ mod tests {
 
     #[test]
     fn local_media_authorization_follows_directory_and_explicit_grants() {
-        let root = std::env::temp_dir().join(format!(
-            "ome-local-media-{}-{}",
-            std::process::id(),
-            rand::random::<u64>()
-        ));
-        std::fs::create_dir_all(&root).unwrap();
+        let root = test_temp_root("ome-local-media");
         let inside = root.join("夜航.mp3");
         let outside = root.with_extension("outside.mp3");
         std::fs::write(&inside, b"test audio").unwrap();
@@ -6248,12 +6243,7 @@ mod tests {
 
     #[test]
     fn local_video_lookup_requires_a_registered_directory_and_revalidates_candidates() {
-        let root = std::env::temp_dir().join(format!(
-            "ome-local-video-library-{}-{}",
-            std::process::id(),
-            rand::random::<u64>()
-        ));
-        std::fs::create_dir_all(&root).unwrap();
+        let root = test_temp_root("ome-local-video-library");
         let audio = root.join("夜航.mp3");
         let video = root.join("MV").join("林桥 - 夜航.mp4");
         let outside = root.with_extension("outside.mp4");
@@ -7418,6 +7408,19 @@ mod tests {
 
     // ---------- 同目录歌词 sidecar ----------
 
+    /// 测试根目录必须用 canonicalize 展开后的真实路径：GitHub 的 Windows
+    /// runner 把 TEMP 指向 8.3 短名（如 C:\Users\RUNNER~1\...），而授权链路
+    /// 一律按 canonicalize 后的键比较，短名与长名两个键永远对不上。
+    fn test_temp_root(tag: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "{tag}-{}-{}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        root.canonicalize().unwrap()
+    }
+
     /// 临时目录造一个音频 + 歌词文件，返回音频路径
     fn make_sidecar_pair(lrc_name: &str, lrc_bytes: &[u8]) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -7425,6 +7428,7 @@ mod tests {
             md5::compute(format!("{lrc_name:?}{lrc_bytes:?}"))
         ));
         std::fs::create_dir_all(&dir).unwrap();
+        let dir = dir.canonicalize().unwrap();
         let audio = dir.join("夜曲.flac");
         std::fs::write(&audio, b"fake-audio").unwrap();
         std::fs::write(dir.join(lrc_name), lrc_bytes).unwrap();
@@ -8143,14 +8147,7 @@ mod tests {
     #[test]
     fn repair_local_track_path_preserves_identity_and_grants_only_the_selected_file() {
         let mut conn = memory_db();
-        let unique = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let temp_root = std::env::temp_dir().join(format!(
-            "ome-library-repair-{}-{unique}",
-            std::process::id()
-        ));
+        let temp_root = test_temp_root("ome-library-repair");
         let authorized_root = temp_root.join("old-library");
         let moved_root = temp_root.join("moved-library");
         std::fs::create_dir_all(&authorized_root).unwrap();
@@ -8300,11 +8297,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "ome-library-quick-backfill-{}-{unique}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&root).unwrap();
+        let root = test_temp_root("ome-library-quick-backfill");
         let available = root.join("available.wav");
         let stale = root.join("stale.wav");
         let outside_ungranted = root
@@ -8435,14 +8428,7 @@ mod tests {
     #[test]
     fn move_candidates_require_matching_quick_identity_and_flag_ambiguity() {
         let conn = memory_db();
-        let unique = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "ome-library-move-candidates-{}-{unique}",
-            std::process::id()
-        ));
+        let root = test_temp_root("ome-library-move-candidates");
         let old_root = root.join("old");
         let new_root = root.join("new");
         std::fs::create_dir_all(&old_root).unwrap();
