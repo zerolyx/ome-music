@@ -3,6 +3,9 @@ dist/
 src-tauri/target/
 src-tauri/gen/
 test-results/
+.playwright-mcp/
+artifacts/
+output/
 PersonalConfig/
 *.local
 .env
