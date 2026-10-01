@@ -6,6 +6,7 @@ use crate::AppState;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::OnceLock;
 use tauri::State;
@@ -27,6 +28,15 @@ const CONTEXT_MESSAGE_LIMIT: i64 = 12;
 const LLM_TIMEOUT_SECS: u64 = 20;
 const LLM_TEMPERATURE: f64 = 0.8;
 const LLM_MAX_TOKENS: u32 = 300;
+const RADIO_GENRE_EVENT_LIMIT: i64 = 10_000;
+const RADIO_GENRES_PER_HOUR_LIMIT: usize = 32;
+
+/// 记忆提炼使用的 max_tokens（轻量单独 LLM 调用）。
+const MEMORY_EXTRACT_MAX_TOKENS: u32 = 120;
+/// 记忆提炼 temperature（偏确定性，避免幻想事实）。
+const MEMORY_EXTRACT_TEMPERATURE: f64 = 0.3;
+/// 单条记忆内容最大字符数（防止 LLM 输出太长的事实）。
+const MEMORY_FACT_MAX_LEN: usize = 80;
 
 pub fn system_prompt() -> String {
     format!("{PERSONA_PROMPT}\n{OUTPUT_FORMAT_PROMPT}")
@@ -89,6 +99,19 @@ pub struct MemoryFactDto {
     pub content: String,
     pub weight: f64,
     pub updated_at: String,
+    /// 来源：manual（用户手动）/ inferred（LLM 自动提炼）/ summary（对话摘要）
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GenreHourPreferenceDto {
+    pub genre: String,
+    pub plays: i64,
+    pub completions: i64,
+    pub skips: i64,
+    pub likes: i64,
+    pub unlikes: i64,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -98,6 +121,7 @@ pub struct HourPreferenceDto {
     pub plays: i64,
     pub completions: i64,
     pub skips: i64,
+    pub genre_preferences: Vec<GenreHourPreferenceDto>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -372,11 +396,12 @@ pub fn append_message(conn: &Connection, role: &str, content: &str) -> Result<St
     Ok(id)
 }
 
-/// 最近 limit 条对话，按旧→新排列（依赖 rowid 的插入序，秒级 created_at 无法区分同秒消息）。
+/// 最近 limit 条对话（仅 summarized=0 的记录），按旧→新排列。
 pub fn recent_messages(conn: &Connection, limit: i64) -> Result<Vec<DjMessage>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, role, content, created_at FROM dj_messages ORDER BY rowid DESC LIMIT ?1",
+            "SELECT id, role, content, created_at FROM dj_messages \
+             WHERE summarized = 0 ORDER BY rowid DESC LIMIT ?1",
         )
         .map_err(|error| error.to_string())?;
     let rows = stmt
@@ -396,10 +421,58 @@ pub fn recent_messages(conn: &Connection, limit: i64) -> Result<Vec<DjMessage>, 
     Ok(messages)
 }
 
-/// 事实卡 upsert：同 content 合并 → weight+1，否则按权重 1.0 新建。
-/// 写入入口由后续任务（对话摘要 / 喜好沉淀）接入，先随记忆层一并交付。
-#[allow(dead_code)]
-pub fn upsert_memory_fact(conn: &Connection, kind: &str, content: &str) -> Result<(), String> {
+/// 未摘要的对话总条数
+fn unsummarized_message_count(conn: &Connection) -> i64 {
+    conn.query_row(
+        "SELECT COUNT(*) FROM dj_messages WHERE summarized = 0",
+        [],
+        |row| row.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
+}
+
+/// 将指定 id 列表标记为已摘要
+fn mark_messages_summarized(conn: &Connection, ids: &[String]) -> Result<(), String> {
+    for id in ids {
+        conn.execute(
+            "UPDATE dj_messages SET summarized = 1 WHERE id = ?1",
+            params![id],
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+/// 取最旧的 N 条未摘要消息（id + 内容），用于摘要压缩
+fn oldest_unsummarized_messages(conn: &Connection, limit: i64) -> Result<Vec<DjMessage>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, role, content, created_at FROM dj_messages \
+             WHERE summarized = 0 ORDER BY rowid ASC LIMIT ?1",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map(params![limit], |row| {
+            Ok(DjMessage {
+                id: row.get(0)?,
+                role: row.get(1)?,
+                content: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+/// 事实卡 upsert（指定来源）：供手动写入（manual）、自动提炼（inferred）和摘要（summary）使用。
+/// 同 content 合并 → weight+1，否则按权重 1.0 新建。
+pub fn upsert_memory_fact_with_source(
+    conn: &Connection,
+    kind: &str,
+    content: &str,
+    source: &str,
+) -> Result<(), String> {
     let existing: Option<(String, f64)> = conn
         .query_row(
             "SELECT id, weight FROM dj_memory_facts WHERE content = ?1 LIMIT 1",
@@ -418,8 +491,8 @@ pub fn upsert_memory_fact(conn: &Connection, kind: &str, content: &str) -> Resul
         }
         None => {
             conn.execute(
-                "INSERT INTO dj_memory_facts (id, kind, content, weight) VALUES (?1, ?2, ?3, 1.0)",
-                params![new_id("dj-fact"), kind, content],
+                "INSERT INTO dj_memory_facts (id, kind, content, weight, source) VALUES (?1, ?2, ?3, 1.0, ?4)",
+                params![new_id("dj-fact"), kind, content, source],
             )
             .map_err(|error| error.to_string())?;
         }
@@ -427,10 +500,207 @@ pub fn upsert_memory_fact(conn: &Connection, kind: &str, content: &str) -> Resul
     Ok(())
 }
 
+/// 从单条用户消息中提炼记忆事实，持久化到 dj_memory_facts。
+/// 失败时静默，不影响主对话流程。
+/// 解析格式：JSON 数组 [{"kind":"pref|habit|fact","content":"..."}]
+async fn extract_and_store_memory(
+    config: &LlmConfig,
+    user_text: &str,
+    db: &std::sync::Mutex<Connection>,
+) {
+    if user_text.trim().is_empty() {
+        return;
+    }
+    let prompt = format!(
+        "从用户这句话中提炼 0 到 2 条关于用户长期偏好或习惯的事实。\
+        只提炼明确表达了喜好、习惯或个人信息的内容；闲聊、问题或指令不提炼。\
+        只输出 JSON 数组（可以为空）：\
+        [{{\"kind\":\"pref\",\"content\":\"简短事实，不超过20字\"}}]\
+        kind 只能是 pref（偏好）、habit（习惯）或 fact（事实）。\
+        用户说：「{user_text}」"
+    );
+    let messages = vec![
+        json!({ "role": "system", "content": "你是一个提炼用户偏好的助手，只输出 JSON。" }),
+        json!({ "role": "user", "content": prompt }),
+    ];
+    let extract_config = LlmConfig {
+        provider_name: config.provider_name.clone(),
+        base_url: config.base_url.clone(),
+        model: config.model.clone(),
+        api_key: config.api_key.clone(),
+    };
+    // 使用独立的 HTTP 请求（低 temperature，小 token 预算）
+    let body = json!({
+        "model": extract_config.model,
+        "messages": messages,
+        "temperature": MEMORY_EXTRACT_TEMPERATURE,
+        "max_tokens": MEMORY_EXTRACT_MAX_TOKENS,
+    });
+    let url = format!(
+        "{}/chat/completions",
+        extract_config.base_url.trim_end_matches('/')
+    );
+    let Ok(response) = http_client()
+        .post(&url)
+        .bearer_auth(&extract_config.api_key)
+        .json(&body)
+        .send()
+        .await
+    else {
+        return;
+    };
+    let Ok(text) = response.text().await else {
+        return;
+    };
+    let Ok(value) = serde_json::from_str::<Value>(&text) else {
+        return;
+    };
+    let Some(raw_content) = value
+        .pointer("/choices/0/message/content")
+        .and_then(Value::as_str)
+    else {
+        return;
+    };
+    // 容错：尝试从可能含 markdown 围栏的输出中提取 JSON
+    let json_str = raw_content.trim();
+    let json_str = json_str
+        .strip_prefix("```json")
+        .or_else(|| json_str.strip_prefix("```"))
+        .map(|s| s.trim_start())
+        .and_then(|s| s.strip_suffix("```"))
+        .map(str::trim_end)
+        .unwrap_or(json_str);
+
+    let Ok(facts) = serde_json::from_str::<Vec<Value>>(json_str) else {
+        return;
+    };
+
+    let Ok(conn) = db.lock() else { return };
+    for fact in facts.iter().take(2) {
+        let Some(kind) = fact.get("kind").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(content) = fact.get("content").and_then(Value::as_str) else {
+            continue;
+        };
+        let kind = kind.trim();
+        let content = content.trim();
+        // 合法性校验
+        if !["pref", "habit", "fact"].contains(&kind)
+            || content.is_empty()
+            || content.chars().count() > MEMORY_FACT_MAX_LEN
+        {
+            continue;
+        }
+        // 静默忽略写入失败，标记为自动提炼
+        let _ = upsert_memory_fact_with_source(&conn, kind, content, "inferred");
+    }
+}
+
+/// 对话摘要压缩：当未摘要消息超过 SUMMARY_TRIGGER 条时，
+/// 取最旧的 SUMMARY_BATCH 条生成摘要事实卡，并标记为已摘要。
+/// 失败时静默，不阻塞主流程。
+const SUMMARY_TRIGGER: i64 = 30;
+const SUMMARY_BATCH: i64 = 20;
+
+async fn summarize_old_messages(config: &LlmConfig, db: &std::sync::Mutex<Connection>) {
+    let (count, old_messages) = {
+        let Ok(conn) = db.lock() else { return };
+        let count = unsummarized_message_count(&conn);
+        if count < SUMMARY_TRIGGER {
+            return;
+        }
+        let messages = match oldest_unsummarized_messages(&conn, SUMMARY_BATCH) {
+            Ok(m) => m,
+            Err(_) => return,
+        };
+        (count, messages)
+    };
+    if old_messages.is_empty() {
+        return;
+    }
+    // 构造摘要 prompt
+    let dialogue: String = old_messages
+        .iter()
+        .map(|m| {
+            let role = if m.role == "user" { "用户" } else { "DJ" };
+            format!("{role}：{}", m.content)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let prompt = format!(
+        "以下是 DJ 电台的历史对话（共 {count} 条，取其中最旧的 {} 条）：\n\n\
+        {dialogue}\n\n\
+        请用 2-3 句简体中文提炼出关于「用户音乐偏好」的核心事实，\
+        存为 JSON 数组 [{{\"kind\":\"summary\",\"content\":\"事实\"}}]；\
+        不要有其他文字。",
+        old_messages.len()
+    );
+    let messages = vec![
+        json!({ "role": "system", "content": "你是一个提炼对话摘要的助手，只输出 JSON。" }),
+        json!({ "role": "user", "content": prompt }),
+    ];
+    let body = json!({
+        "model": config.model,
+        "messages": messages,
+        "temperature": MEMORY_EXTRACT_TEMPERATURE,
+        "max_tokens": 200_u32,
+    });
+    let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
+    let Ok(response) = http_client()
+        .post(&url)
+        .bearer_auth(&config.api_key)
+        .json(&body)
+        .send()
+        .await
+    else {
+        return;
+    };
+    let Ok(text) = response.text().await else {
+        return;
+    };
+    let Ok(value) = serde_json::from_str::<Value>(&text) else {
+        return;
+    };
+    let Some(raw_content) = value
+        .pointer("/choices/0/message/content")
+        .and_then(Value::as_str)
+    else {
+        return;
+    };
+    let json_str = raw_content.trim();
+    let json_str = json_str
+        .strip_prefix("```json")
+        .or_else(|| json_str.strip_prefix("```"))
+        .map(|s| s.trim_start())
+        .and_then(|s| s.strip_suffix("```"))
+        .map(str::trim_end)
+        .unwrap_or(json_str);
+    let Ok(facts) = serde_json::from_str::<Vec<Value>>(json_str) else {
+        return;
+    };
+
+    let Ok(conn) = db.lock() else { return };
+    // 写入摘要事实卡
+    for fact in facts.iter().take(3) {
+        let Some(content) = fact.get("content").and_then(Value::as_str) else {
+            continue;
+        };
+        let content = content.trim();
+        if content.is_empty() || content.chars().count() > MEMORY_FACT_MAX_LEN {
+            continue;
+        }
+        let _ = upsert_memory_fact_with_source(&conn, "summary", content, "summary");
+    }
+    // 标记旧消息为已摘要
+    let ids: Vec<String> = old_messages.into_iter().map(|m| m.id).collect();
+    let _ = mark_messages_summarized(&conn, &ids);
+}
+
 pub fn list_memory_facts(conn: &Connection) -> Result<Vec<MemoryFactDto>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, kind, content, weight, updated_at
+            "SELECT id, kind, content, weight, updated_at, source
              FROM dj_memory_facts
              ORDER BY weight DESC, updated_at DESC, rowid DESC",
         )
@@ -443,6 +713,9 @@ pub fn list_memory_facts(conn: &Connection) -> Result<Vec<MemoryFactDto>, String
                 content: row.get(2)?,
                 weight: row.get(3)?,
                 updated_at: row.get(4)?,
+                source: row
+                    .get::<_, Option<String>>(5)?
+                    .unwrap_or_else(|| "manual".to_string()),
             })
         })
         .map_err(|error| error.to_string())?;
@@ -468,6 +741,7 @@ pub fn hour_preferences(conn: &Connection) -> Result<Vec<HourPreferenceDto>, Str
                     SUM(CASE WHEN pe.event_type = 'skip' THEN 1 ELSE 0 END) AS skips
              FROM playback_events pe
              JOIN tracks t ON pe.track_id = t.id
+             WHERE t.source IN ('local', 'netease') AND t.ignored_by_rules = 0
              GROUP BY hour",
         )
         .map_err(|error| error.to_string())?;
@@ -489,6 +763,8 @@ pub fn hour_preferences(conn: &Connection) -> Result<Vec<HourPreferenceDto>, Str
         }
         buckets[hour as usize] = [plays, completions, skips];
     }
+
+    let genre_buckets = hour_genre_preferences(conn)?;
     Ok(buckets
         .iter()
         .enumerate()
@@ -497,6 +773,97 @@ pub fn hour_preferences(conn: &Connection) -> Result<Vec<HourPreferenceDto>, Str
             plays: bucket[0],
             completions: bucket[1],
             skips: bucket[2],
+            genre_preferences: genre_buckets[hour].clone(),
+        })
+        .collect())
+}
+
+/// 按本地小时聚合最近播放事件中的曲风反馈；只看本地/网易云并排除已忽略曲目。
+/// 有界读取可让自动电台在大曲库中保持稳定耗时，Bilibili 不参与主口味画像。
+fn hour_genre_preferences(conn: &Connection) -> Result<Vec<Vec<GenreHourPreferenceDto>>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT CAST(strftime('%H', recent.played_at, 'localtime') AS INTEGER) AS hour,
+                    recent.event_type, recent.genres_json
+             FROM (
+                 SELECT pe.track_id, pe.event_type, pe.played_at, t.genres_json
+                 FROM playback_events pe
+                 JOIN tracks t ON pe.track_id = t.id
+                 WHERE pe.event_type IN ('play', 'completed', 'skip', 'liked', 'unliked')
+                   AND t.source IN ('local', 'netease')
+                   AND t.ignored_by_rules = 0
+                 ORDER BY pe.played_at DESC
+                 LIMIT ?1
+             ) recent",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map(params![RADIO_GENRE_EVENT_LIMIT], |row| {
+            Ok((
+                row.get::<_, Option<i64>>("hour")?,
+                row.get::<_, String>("event_type")?,
+                row.get::<_, String>("genres_json")?,
+            ))
+        })
+        .map_err(|error| error.to_string())?;
+
+    let mut buckets: Vec<HashMap<String, [i64; 5]>> = (0..24).map(|_| HashMap::new()).collect();
+    for row in rows {
+        let (hour, event_type, genres_json) = row.map_err(|error| error.to_string())?;
+        let Some(hour) = hour.filter(|hour| (0..24).contains(hour)) else {
+            continue;
+        };
+        let event_index = match event_type.as_str() {
+            "play" => 0,
+            "completed" => 1,
+            "skip" => 2,
+            "liked" => 3,
+            "unliked" => 4,
+            _ => continue,
+        };
+        let Ok(genres) = serde_json::from_str::<Vec<String>>(&genres_json) else {
+            continue;
+        };
+        let mut seen = HashSet::new();
+        for genre in genres {
+            let genre = genre.trim();
+            if genre.is_empty()
+                || genre.chars().count() > 64
+                || genre.chars().any(char::is_control)
+                || !seen.insert(genre.to_lowercase())
+            {
+                continue;
+            }
+            buckets[hour as usize].entry(genre.to_string()).or_default()[event_index] += 1;
+        }
+    }
+
+    Ok(buckets
+        .into_iter()
+        .map(|genres| {
+            let mut preferences: Vec<_> = genres
+                .into_iter()
+                .map(|(genre, counts)| GenreHourPreferenceDto {
+                    genre,
+                    plays: counts[0],
+                    completions: counts[1],
+                    skips: counts[2],
+                    likes: counts[3],
+                    unlikes: counts[4],
+                })
+                .collect();
+            preferences.sort_by(|left, right| {
+                let strength = |value: &GenreHourPreferenceDto| {
+                    value.plays + value.completions * 2 + value.likes * 3
+                        - value.skips * 2
+                        - value.unlikes * 3
+                };
+                strength(right)
+                    .cmp(&strength(left))
+                    .then_with(|| left.genre.cmp(&right.genre))
+            });
+            preferences.truncate(RADIO_GENRES_PER_HOUR_LIMIT);
+            preferences
         })
         .collect())
 }
@@ -520,6 +887,8 @@ fn top_played_artists(conn: &Connection, limit: i64) -> Vec<String> {
          JOIN tracks t ON pe.track_id = t.id
          JOIN artists ar ON t.artist_id = ar.id
          WHERE pe.event_type = 'play'
+           AND t.source IN ('local', 'netease')
+           AND t.ignored_by_rules = 0
          GROUP BY ar.id
          ORDER BY plays DESC, ar.name
          LIMIT ?1",
@@ -538,6 +907,9 @@ fn top_played_genres(conn: &Connection, limit: usize) -> Vec<String> {
          FROM playback_events pe
          JOIN tracks t ON pe.track_id = t.id
          WHERE pe.event_type = 'play'
+           AND t.source IN ('local', 'netease')
+           AND t.ignored_by_rules = 0
+         ORDER BY pe.played_at DESC
          LIMIT 2000",
     ) else {
         return Vec::new();
@@ -772,6 +1144,23 @@ pub async fn dj_chat(state: State<'_, AppState>, text: String) -> Result<DjReply
         let conn = state.db.lock().map_err(|error| error.to_string())?;
         append_message(&conn, "dj", &reply.say)?;
     }
+
+    // 异步记忆提炼：最多等待 3s，失败时静默，不影响响应
+    if config_configured(&config) {
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            extract_and_store_memory(&config, &user_text, &state.db),
+        )
+        .await;
+    }
+
+    // 对话摘要压缩：消息超过阈值时压缩最旧的一批，最多等待 5s
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        summarize_old_messages(&config, &state.db),
+    )
+    .await;
+
     Ok(reply)
 }
 
@@ -787,7 +1176,10 @@ pub async fn dj_greeting(state: State<'_, AppState>) -> Result<GreetingDto, Stri
         return Ok(GreetingDto { say: String::new() });
     }
     let directive = format!(
-        "现在是{band}，电台刚开播。请给听众一句简短自然的开场问候，并在 actions 里选一个适合此刻氛围的 mood。"
+        "现在是{band}，电台刚开播。\
+        用一句简短自然的港台腔口语开场，像深夜老朋友回来了那种感觉，\
+        不要太正式，结尾可以夹一句轻松的英文（hey、alright、let's go 这类）；\
+        同时在 actions 里选一个适合此刻氛围的 mood。"
     );
     let messages = chat_messages(&context, &[], Some(&directive));
     let raw = match llm_chat(&config, &messages).await {
@@ -807,22 +1199,29 @@ pub async fn dj_intro(
     state: State<'_, AppState>,
     track_id: String,
     event: Option<String>,
+    mood: Option<String>,
 ) -> Result<IntroDto, String> {
     let track_id = track_id.trim().to_string();
     if track_id.is_empty() {
         return Err("trackId 不能为空".into());
     }
-    let (config, context, track_label) = {
+    let (config, context, track_label, band, top_memory) = {
         let conn = state.db.lock().map_err(|error| error.to_string())?;
         let config = load_llm_config(&conn)?;
-        let (context, _hour) = gather_context(&conn)?;
+        let (context, hour) = gather_context(&conn)?;
+        let current_band = time_band(hour);
         // 本地曲库按 id 命中；netease-{n} 多数不在 tracks 表中 → 接受缺失。
         let label = match track_title_artist(&conn, &track_id)? {
             Some((title, artist)) if artist.is_empty() => title,
             Some((title, artist)) => format!("{title} - {artist}"),
-            None => format!("一首曲库里没有档案的歌（id: {track_id}）"),
+            None => format!("一首曲库里没有档案的歌（id: {track_id})"),
         };
-        (config, context, label)
+        // 取权重最高且 weight ≥ 2 的记忆事实（值得在歌前提及的长期偏好）
+        let top_fact = list_memory_facts(&conn)
+            .ok()
+            .and_then(|facts| facts.into_iter().find(|f| f.weight >= 2.0))
+            .map(|f| f.content);
+        (config, context, label, current_band, top_fact)
     };
     if !config_configured(&config) {
         return Ok(IntroDto { say: String::new() });
@@ -836,8 +1235,26 @@ pub async fn dj_intro(
         Some("resume") => "听众回来了，就从上次听到一半的这首继续，像老朋友重逢一样自然地说：",
         _ => "接下来要播放：",
     };
+
+    // 注入氛围、时段、记忆（有值才加，不生硬）
+    let mut context_hints = Vec::new();
+    context_hints.push(format!("现在是{band}。"));
+    if let Some(ref m) = mood {
+        if !m.is_empty() {
+            context_hints.push(format!("当前氛围是「{m}」。"));
+        }
+    }
+    if let Some(ref mem) = top_memory {
+        context_hints.push(format!("关于这个听众你记得：{mem}。"));
+    }
+    let hints = context_hints.join("");
+
     let directive = format!(
-        "{lead}{track_label}。请用不超过两句话把这首歌自然地带出来；actions 留空即可，不要再选歌。"
+        "{lead}{track_label}。\
+        {hints}\
+        用不超过两句简体中文口语港台腔，把这首歌自然地带出来；\
+        结尾加一句轻松的英文点缀（短句即可）；\
+        actions 留空，不要再选歌。"
     );
     let messages = chat_messages(&context, &[], Some(&directive));
     let raw = match llm_chat(&config, &messages).await {
@@ -1042,9 +1459,9 @@ mod tests {
     #[test]
     fn facts_upsert_same_content_increments_weight() {
         let conn = memory_db();
-        upsert_memory_fact(&conn, "pref", "喜欢深夜的民谣").unwrap();
-        upsert_memory_fact(&conn, "pref", "喜欢深夜的民谣").unwrap();
-        upsert_memory_fact(&conn, "habit", "睡前听").unwrap();
+        upsert_memory_fact_with_source(&conn, "pref", "喜欢深夜的民谣", "manual").unwrap();
+        upsert_memory_fact_with_source(&conn, "pref", "喜欢深夜的民谣", "manual").unwrap();
+        upsert_memory_fact_with_source(&conn, "habit", "睡前听", "manual").unwrap();
         let facts = list_memory_facts(&conn).unwrap();
         assert_eq!(facts.len(), 2);
         assert_eq!(facts[0].content, "喜欢深夜的民谣");
@@ -1062,7 +1479,7 @@ mod tests {
     fn hour_profile_aggregates_playback_events_by_local_hour() {
         let conn = memory_db();
         conn.execute(
-            "INSERT INTO tracks (id, title, file_path) VALUES ('t1', '夜曲', 'C:/music/yequ.flac')",
+            "INSERT INTO tracks (id, title, file_path, genres_json) VALUES ('t1', '夜曲', 'C:/music/yequ.flac', '[\"ambient\",\"dream pop\"]')",
             [],
         )
         .unwrap();
@@ -1070,6 +1487,7 @@ mod tests {
             ("play", "2026-09-22 08:15:00"),
             ("play", "2026-09-22 08:40:00"),
             ("completed", "2026-09-22 08:50:00"),
+            ("liked", "2026-09-22 08:55:00"),
             ("skip", "2026-09-22 23:30:00"),
         ];
         for (index, (event_type, played_at)) in events.iter().enumerate() {
@@ -1097,10 +1515,66 @@ mod tests {
         assert_eq!(profile[morning].plays, 2);
         assert_eq!(profile[morning].completions, 1);
         assert_eq!(profile[morning].skips, 0);
+        let ambient = profile[morning]
+            .genre_preferences
+            .iter()
+            .find(|genre| genre.genre == "ambient")
+            .unwrap();
+        assert_eq!(ambient.plays, 2);
+        assert_eq!(ambient.completions, 1);
+        assert_eq!(ambient.likes, 1);
+        let dream_pop = profile[morning]
+            .genre_preferences
+            .iter()
+            .find(|genre| genre.genre == "dream pop")
+            .unwrap();
+        assert_eq!(dream_pop.plays, 2);
         assert_eq!(profile[late_night].skips, 1);
         assert_eq!(profile[late_night].plays, 0);
+        assert_eq!(profile[late_night].genre_preferences[0].skips, 1);
         let total_plays: i64 = profile.iter().map(|stat| stat.plays).sum();
         assert_eq!(total_plays, 2);
+    }
+
+    #[test]
+    fn hour_genre_profile_uses_main_sources_and_skips_rule_excluded_tracks() {
+        let conn = memory_db();
+        conn.execute(
+            "INSERT INTO tracks (id, title, file_path, source, genres_json) VALUES
+                ('local', '本地曲目', 'C:/music/local.flac', 'local', '[\"ambient\"]'),
+                ('bili', '氛围曲目', 'C:/music/bili.mp3', 'bilibili', '[\"ambient\"]'),
+                ('ignored', '已排除曲目', 'C:/music/ignored.flac', 'local', '[\"ambient\"]')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE tracks SET ignored_by_rules = 1 WHERE id = 'ignored'",
+            [],
+        )
+        .unwrap();
+        for (id, track_id) in [
+            ("e-local", "local"),
+            ("e-bili", "bili"),
+            ("e-ignored", "ignored"),
+        ] {
+            conn.execute(
+                "INSERT INTO playback_events (id, track_id, event_type, played_at) VALUES (?1, ?2, 'completed', '2026-09-22 08:15:00')",
+                params![id, track_id],
+            )
+            .unwrap();
+        }
+
+        let hour = conn
+            .query_row(
+                "SELECT CAST(strftime('%H', '2026-09-22 08:15:00', 'localtime') AS INTEGER)",
+                [],
+                |row| row.get::<_, usize>(0),
+            )
+            .unwrap();
+        let genres = &hour_genre_preferences(&conn).unwrap()[hour];
+        assert_eq!(genres.len(), 1);
+        assert_eq!(genres[0].genre, "ambient");
+        assert_eq!(genres[0].completions, 1);
     }
 
     // ---------- 上下文组装 ----------
@@ -1136,6 +1610,7 @@ mod tests {
                 plays: 7,
                 completions: 5,
                 skips: 1,
+                genre_preferences: Vec::new(),
             }],
             top_artists: vec!["周杰伦".into(), "陈绮贞".into()],
             top_genres: vec!["民谣".into()],
