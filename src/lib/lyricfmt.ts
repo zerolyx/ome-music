@@ -1,5 +1,5 @@
 /* ============ 本地歌词格式嗅探与解析 ============
- * sidecar 文件可能是 .lrc / .ttml / .qrc / .krc（krc 已在 Rust 侧解密为明文）。
+ * sidecar 文件可能是 .lrc / .vtt / .ttml / .qrc / .krc（krc 已在 Rust 侧解密为明文）。
  * 统一策略：嗅探内容 → 解析成字级时间轴 → 合成标准 lrc/yrc 文本，
  * 交给 lyrics.ts 既有解析与渲染链（舞台/桌面歌词零改动复用）。
  */
@@ -24,11 +24,114 @@ export interface ParsedLyric {
   yrc?: string | null;
 }
 
-/** 内容嗅探：TTML（XML）→ qrc/krc 族（[ms,ms] 行头）→ 其余按 lrc 直通 */
+/** 内容嗅探：TTML（XML）→ WebVTT → qrc/krc 族（[ms,ms] 行头）→ 其余按 lrc 直通 */
 export function sniffLyricText(text: string): ParsedLyric {
-  if (/^\s*(<\?xml|<tt[\s>])/i.test(text)) return ttmlToRaw(text);
-  if (/^\s*\[\d+,\d+\]/m.test(text)) return qrcToRaw(text);
+  const withoutBom = text.replace(/^\uFEFF/, "");
+  if (/^\s*(<\?xml|<tt[\s>])/i.test(withoutBom)) return ttmlToRaw(withoutBom);
+  if (/^\s*WEBVTT(?:[ \t].*)?(?:\r?\n|$)/i.test(withoutBom)) return vttToRaw(withoutBom);
+  if (/^\s*\[\d+,\d+\]/m.test(withoutBom)) return qrcToRaw(withoutBom);
   return { lrc: text };
+}
+
+/* ---- WebVTT：cue 起始时间 → 标准 lrc 行 ---- */
+
+/** WebVTT 时间戳：MM:SS.mmm 或 HH:MM:SS.mmm */
+export function parseVttTimestamp(value: string): number | null {
+  const parts = value.split(":");
+  if (parts.length !== 2 && parts.length !== 3) return null;
+  const seconds = /^(\d{2})\.(\d{3})$/.exec(parts[parts.length - 1]);
+  if (!seconds) return null;
+  const minuteIndex = parts.length - 2;
+  const minuteToken = parts[minuteIndex];
+  if (parts.length === 2 && !/^\d{2,}$/.test(minuteToken)) return null;
+  if (parts.length === 3 && (!/^\d{2,}$/.test(parts[0]) || !/^\d{2}$/.test(minuteToken))) return null;
+  const minutes = Number(parts[minuteIndex]);
+  const secondValue = Number(seconds[1]);
+  if (!Number.isSafeInteger(minutes) || secondValue > 59) return null;
+  if (parts.length === 2) return minutes * 60 + secondValue + Number(seconds[2]) / 1000;
+  const hours = Number(parts[0]);
+  if (!Number.isSafeInteger(hours) || minutes > 59) return null;
+  return hours * 3600 + minutes * 60 + secondValue + Number(seconds[2]) / 1000;
+}
+
+const VTT_NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: "\u00a0",
+  lrm: "\u200e",
+  rlm: "\u200f",
+};
+
+function stripVttMarkup(text: string): string {
+  const plain = text
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\d{2,}:\d{2}:\d{2}\.\d{3}>/g, "")
+    .replace(/<\/?(?:b|i|u|ruby|rt|c|v|lang)(?:\.[^\s>]+)?(?:\s+[^>]*)?>/gi, "")
+    .replace(/<\/?[a-z][^>]*>/gi, "");
+  return plain.replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp|lrm|rlm);/gi, (entity, body: string) => {
+    if (!body.startsWith("#")) return VTT_NAMED_ENTITIES[body.toLowerCase()] ?? entity;
+    const codePoint = body[1]?.toLowerCase() === "x"
+      ? Number.parseInt(body.slice(2), 16)
+      : Number.parseInt(body.slice(1), 10);
+    if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+      return "\ufffd";
+    }
+    return String.fromCodePoint(codePoint);
+  });
+}
+
+export function parseVtt(text: string): FmtLine[] {
+  const source = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+  const rows = source.split("\n");
+  const out: FmtLine[] = [];
+  let index = 0;
+
+  if (/^WEBVTT(?:[ \t].*)?$/i.test(rows[0]?.trim() ?? "")) {
+    index = 1;
+    // 文件头元数据直到空行；不把它误认为 cue 内容。
+    while (index < rows.length && rows[index].trim()) index++;
+  }
+
+  while (index < rows.length) {
+    while (index < rows.length && !rows[index].trim()) index++;
+    if (index >= rows.length) break;
+    if (/^(?:NOTE|STYLE|REGION)(?:\s|$)/.test(rows[index].trim())) {
+      while (index < rows.length && rows[index].trim()) index++;
+      continue;
+    }
+
+    let timing = rows[index].trim();
+    if (!timing.includes("-->")) {
+      // cue identifier 单独占一行时，时间戳位于下一行。
+      index++;
+      timing = rows[index]?.trim() ?? "";
+    }
+    const cue = /^([^\s]+)\s+-->\s+([^\s]+)(?:[ \t]+.*)?$/.exec(timing);
+    if (!cue) {
+      index++;
+      continue;
+    }
+    const start = parseVttTimestamp(cue[1]);
+    const end = parseVttTimestamp(cue[2]);
+    index++;
+    const cueText: string[] = [];
+    while (index < rows.length && rows[index].trim()) cueText.push(rows[index++]);
+    const content = stripVttMarkup(cueText.join(" ")).replace(/\s+/g, " ").trim();
+    if (start !== null && end !== null && end > start && content) out.push({ time: start, text: content });
+  }
+
+  return out.sort((a, b) => a.time - b.time);
+}
+
+export function vttToRaw(text: string): ParsedLyric {
+  const lines = parseVtt(text);
+  return {
+    lrc: lines.map((line) => `${toLrcTimestamp(line.time)}${line.text}`).join("\n"),
+    yrc: null,
+  };
 }
 
 /* ---- qrc / krc：[start,dur]行 + <start,dur>字（毫秒） ---- */
