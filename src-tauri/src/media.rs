@@ -46,6 +46,131 @@ pub fn remote_media_url_allowed(url: &str) -> bool {
         .unwrap_or(false)
 }
 
+const METADATA_COVER_HOST_SUFFIXES: &[&str] = &["126.net", "gtimg.cn", "kugou.com"];
+
+fn metadata_cover_host_allowed(host: &str) -> bool {
+    let host = host.trim().to_ascii_lowercase();
+    host.chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-'))
+        && METADATA_COVER_HOST_SUFFIXES
+            .iter()
+            .any(|suffix| host == *suffix || host.ends_with(&format!(".{suffix}")))
+}
+
+fn metadata_cover_url_allowed(url: &str) -> bool {
+    reqwest::Url::parse(url)
+        .map(|parsed| {
+            parsed.scheme() == "https"
+                && parsed.username().is_empty()
+                && parsed.password().is_none()
+                && parsed.port().is_none_or(|port| port == 443)
+                && parsed
+                    .host_str()
+                    .map(metadata_cover_host_allowed)
+                    .unwrap_or(false)
+        })
+        .unwrap_or(false)
+}
+
+/// Normalize provider artwork links before they enter a candidate DTO.
+/// HTTP artwork links are upgraded; all other non-HTTPS or non-provider hosts are rejected.
+pub fn normalize_metadata_cover_url(raw: &str) -> Option<String> {
+    if raw.trim().len() > 2048 {
+        return None;
+    }
+    let mut parsed = reqwest::Url::parse(raw.trim()).ok()?;
+    if parsed.scheme() == "http" {
+        parsed.set_scheme("https").ok()?;
+    }
+    parsed.set_fragment(None);
+    let normalized = parsed.to_string();
+    metadata_cover_url_allowed(&normalized).then_some(normalized)
+}
+
+fn metadata_cover_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(8))
+            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                if attempt.previous().len() >= 5 {
+                    return attempt.stop();
+                }
+                if metadata_cover_url_allowed(attempt.url().as_str()) {
+                    attempt.follow()
+                } else {
+                    attempt.stop()
+                }
+            }))
+            .build()
+            .expect("构建候选封面客户端失败")
+    })
+}
+
+async fn fetch_metadata_cover(url: &str) -> Result<(Vec<u8>, &'static str), StatusCode> {
+    if !metadata_cover_url_allowed(url) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let mut response = metadata_cover_client()
+        .get(url)
+        .header("Accept", "image/png,image/jpeg;q=0.9")
+        .header(
+            "User-Agent",
+            concat!("Ome Music/", env!("CARGO_PKG_VERSION")),
+        )
+        .send()
+        .await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    if !response.status().is_success()
+        || response
+            .content_length()
+            .is_some_and(|length| length > crate::library::MAX_AUDIO_COVER_BYTES as u64)
+    {
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?
+    {
+        if bytes.len().saturating_add(chunk.len()) > crate::library::MAX_AUDIO_COVER_BYTES {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+
+    let (mime_type, content_type) = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        (lofty::picture::MimeType::Png, "image/png")
+    } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        (lofty::picture::MimeType::Jpeg, "image/jpeg")
+    } else {
+        return Err(StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    };
+    crate::library::validate_audio_cover_dimensions(&bytes, &mime_type)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    Ok((bytes, content_type))
+}
+
+fn proxy_metadata_cover(query: &str) -> Result<tauri::http::Response<Vec<u8>>, StatusCode> {
+    let url = query_param(query, "p").ok_or(StatusCode::BAD_REQUEST)?;
+    if !metadata_cover_url_allowed(&url) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let (bytes, content_type) = tauri::async_runtime::block_on(fetch_metadata_cover(&url))?;
+    tauri::http::Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", content_type)
+        .header("Content-Length", bytes.len())
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-store")
+        .header("X-Content-Type-Options", "nosniff")
+        .body(bytes)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
 pub fn parse_range(header: Option<&str>, size: u64) -> Option<(u64, u64)> {
     let header = header?;
     let spec = header.strip_prefix("bytes=")?;
@@ -185,7 +310,7 @@ fn proxy_remote(
 }
 
 /// 从 query 串取单个参数并做百分号解码。
-fn query_param(query: &str, key: &str) -> Option<String> {
+pub(crate) fn query_param(query: &str, key: &str) -> Option<String> {
     for pair in query.split('&') {
         let mut parts = pair.splitn(2, '=');
         if parts.next() == Some(key) {
@@ -220,6 +345,40 @@ fn regenerate_cover(app: &tauri::AppHandle, missing: &std::path::Path) -> bool {
     crate::library::reextract_cover_by_id(&conn, &covers_dir, stem).is_some()
 }
 
+/// `/local` 授权闸门：应用自有目录（封面缓存、数据目录）始终放行，其余交给曲库授权判定。
+///
+/// 没有 AppHandle（仅测试入口）或拿不到数据库时一律拒绝——授权无法判定就不服务，
+/// 避免媒体协议退化成任意文件读取通道。
+fn local_media_path_is_authorized(
+    app: Option<&tauri::AppHandle>,
+    target: &std::path::Path,
+) -> bool {
+    let Some(app) = app else {
+        return false;
+    };
+    let canonical = target.canonicalize().ok();
+    let probe = canonical.as_deref().unwrap_or(target);
+    for directory in [
+        app.path().app_cache_dir().ok(),
+        app.path().app_data_dir().ok(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let root = directory.canonicalize().unwrap_or(directory);
+        if crate::library::path_is_within_directory(probe, &root) {
+            return true;
+        }
+    }
+    let Some(state) = app.try_state::<crate::AppState>() else {
+        return false;
+    };
+    let Ok(conn) = state.db.lock() else {
+        return false;
+    };
+    crate::library::local_media_path_is_authorized(&conn, target)
+}
+
 /// 测试入口：不带 AppHandle，不触发自愈
 #[cfg(test)]
 pub fn handle(request: tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
@@ -250,6 +409,75 @@ fn handle_impl(
                 .map(|value| value.to_string());
             return proxy_remote(query, range);
         }
+        if path == "/remote-cover" {
+            return proxy_metadata_cover(query);
+        }
+        if path == "/subsonic" {
+            let range = request
+                .headers()
+                .get("range")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
+            let app = app.ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+            return proxy_subsonic(app, query, range.as_deref());
+        }
+        if path == "/subsonic-cover" {
+            let app = app.ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+            return proxy_subsonic_cover(app, query);
+        }
+        if path == "/jellyfin" {
+            let range = request
+                .headers()
+                .get("range")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
+            let app = app.ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+            return proxy_jellyfin(app, query, range.as_deref());
+        }
+        if path == "/jellyfin-cover" {
+            let app = app.ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+            return proxy_jellyfin_cover(app, query);
+        }
+        if path == "/emby" {
+            let range = request
+                .headers()
+                .get("range")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
+            let app = app.ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+            return proxy_emby(app, query, range.as_deref());
+        }
+        if path == "/emby-cover" {
+            let app = app.ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+            return proxy_emby_cover(app, query);
+        }
+        if path == "/webdav" {
+            let range = request
+                .headers()
+                .get("range")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
+            let app = app.ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+            return proxy_webdav(app, query, range.as_deref());
+        }
+        if path == "/smb" {
+            let range = request
+                .headers()
+                .get("range")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
+            let app = app.ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+            return proxy_smb(app, query, range.as_deref());
+        }
+        if path == "/local-video" {
+            let range = request
+                .headers()
+                .get("range")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
+            let app = app.ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+            return crate::local_video::proxy_local_video(app, query, range.as_deref());
+        }
         // 形如 http://ome-media.localhost/local?p=%2FD%3A%2Fmusic%2Fa.mp3（或 ome-media://local?p=...）
         let path = query_param(query, "p").ok_or(StatusCode::BAD_REQUEST)?;
         if !std::path::Path::new(&path).is_absolute() {
@@ -261,6 +489,10 @@ fn handle_impl(
             .and_then(|value| value.to_str().ok())
             .map(|value| value.to_string());
         let target = std::path::PathBuf::from(&path);
+        // 授权闸门：/local 只服务应用自有文件与已授权曲库文件，不能变成任意文件读取通道。
+        if !local_media_path_is_authorized(app, &target) {
+            return Err(StatusCode::FORBIDDEN);
+        }
         match serve_file(target.clone(), range.clone()) {
             Err(StatusCode::NOT_FOUND) => {
                 // 封面缓存被清理（covers 在 app_cache，可能被系统管家删除）：就地再生一次
@@ -291,6 +523,233 @@ fn handle_impl(
     }
 }
 
+fn proxy_subsonic(
+    app: &tauri::AppHandle,
+    query: &str,
+    range: Option<&str>,
+) -> Result<tauri::http::Response<Vec<u8>>, StatusCode> {
+    let id = query_param(query, "id").ok_or(StatusCode::BAD_REQUEST)?;
+    let state = app
+        .try_state::<crate::AppState>()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let session = state
+        .subsonic_session
+        .lock()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+        .clone()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let chunk = tauri::async_runtime::block_on(crate::subsonic::stream_chunk(&session, &id, range))
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    tauri::http::Response::builder()
+        .status(StatusCode::PARTIAL_CONTENT)
+        .header("Content-Type", chunk.content_type)
+        .header(CONTENT_RANGE, chunk.content_range)
+        .header("Accept-Ranges", "bytes")
+        .header("Content-Length", chunk.body.len())
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-store")
+        .body(chunk.body)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn proxy_subsonic_cover(
+    app: &tauri::AppHandle,
+    query: &str,
+) -> Result<tauri::http::Response<Vec<u8>>, StatusCode> {
+    let id = query_param(query, "id").ok_or(StatusCode::BAD_REQUEST)?;
+    let state = app
+        .try_state::<crate::AppState>()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let session = state
+        .subsonic_session
+        .lock()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+        .clone()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let cover = tauri::async_runtime::block_on(crate::subsonic::cover_art(&session, &id))
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    tauri::http::Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", cover.content_type)
+        .header("Content-Length", cover.body.len())
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-store")
+        .header("X-Content-Type-Options", "nosniff")
+        .body(cover.body)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn proxy_jellyfin(
+    app: &tauri::AppHandle,
+    query: &str,
+    range: Option<&str>,
+) -> Result<tauri::http::Response<Vec<u8>>, StatusCode> {
+    let id = query_param(query, "id").ok_or(StatusCode::BAD_REQUEST)?;
+    let state = app
+        .try_state::<crate::AppState>()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let session = state
+        .jellyfin_session
+        .lock()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+        .clone()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let chunk = tauri::async_runtime::block_on(crate::jellyfin::stream_chunk(&session, &id, range))
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    tauri::http::Response::builder()
+        .status(StatusCode::PARTIAL_CONTENT)
+        .header("Content-Type", chunk.content_type)
+        .header(CONTENT_RANGE, chunk.content_range)
+        .header("Accept-Ranges", "bytes")
+        .header("Content-Length", chunk.body.len())
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-store")
+        .body(chunk.body)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn proxy_jellyfin_cover(
+    app: &tauri::AppHandle,
+    query: &str,
+) -> Result<tauri::http::Response<Vec<u8>>, StatusCode> {
+    let id = query_param(query, "id").ok_or(StatusCode::BAD_REQUEST)?;
+    let state = app
+        .try_state::<crate::AppState>()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let session = state
+        .jellyfin_session
+        .lock()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+        .clone()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let cover = tauri::async_runtime::block_on(crate::jellyfin::cover_art(&session, &id))
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    tauri::http::Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", cover.content_type)
+        .header("Content-Length", cover.body.len())
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-store")
+        .header("X-Content-Type-Options", "nosniff")
+        .body(cover.body)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn proxy_emby(
+    app: &tauri::AppHandle,
+    query: &str,
+    range: Option<&str>,
+) -> Result<tauri::http::Response<Vec<u8>>, StatusCode> {
+    let id = query_param(query, "id").ok_or(StatusCode::BAD_REQUEST)?;
+    let state = app
+        .try_state::<crate::AppState>()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let session = state
+        .emby_session
+        .lock()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+        .clone()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let chunk = tauri::async_runtime::block_on(crate::jellyfin::stream_chunk(&session, &id, range))
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    tauri::http::Response::builder()
+        .status(StatusCode::PARTIAL_CONTENT)
+        .header("Content-Type", chunk.content_type)
+        .header(CONTENT_RANGE, chunk.content_range)
+        .header("Accept-Ranges", "bytes")
+        .header("Content-Length", chunk.body.len())
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-store")
+        .body(chunk.body)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn proxy_emby_cover(
+    app: &tauri::AppHandle,
+    query: &str,
+) -> Result<tauri::http::Response<Vec<u8>>, StatusCode> {
+    let id = query_param(query, "id").ok_or(StatusCode::BAD_REQUEST)?;
+    let state = app
+        .try_state::<crate::AppState>()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let session = state
+        .emby_session
+        .lock()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+        .clone()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let cover = tauri::async_runtime::block_on(crate::jellyfin::cover_art(&session, &id))
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    tauri::http::Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", cover.content_type)
+        .header("Content-Length", cover.body.len())
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-store")
+        .header("X-Content-Type-Options", "nosniff")
+        .body(cover.body)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn proxy_webdav(
+    app: &tauri::AppHandle,
+    query: &str,
+    range: Option<&str>,
+) -> Result<tauri::http::Response<Vec<u8>>, StatusCode> {
+    let id = query_param(query, "id").ok_or(StatusCode::BAD_REQUEST)?;
+    let state = app
+        .try_state::<crate::AppState>()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let session = state
+        .webdav_session
+        .lock()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+        .clone()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let chunk = tauri::async_runtime::block_on(crate::webdav::stream_chunk(&session, &id, range))
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    tauri::http::Response::builder()
+        .status(StatusCode::PARTIAL_CONTENT)
+        .header("Content-Type", chunk.content_type)
+        .header(CONTENT_RANGE, chunk.content_range)
+        .header("Accept-Ranges", "bytes")
+        .header("Content-Length", chunk.body.len())
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-store")
+        .header("X-Content-Type-Options", "nosniff")
+        .body(chunk.body)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn proxy_smb(
+    app: &tauri::AppHandle,
+    query: &str,
+    range: Option<&str>,
+) -> Result<tauri::http::Response<Vec<u8>>, StatusCode> {
+    let id = query_param(query, "id").ok_or(StatusCode::BAD_REQUEST)?;
+    let state = app
+        .try_state::<crate::AppState>()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let mut session = state
+        .smb_session
+        .lock()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let session = session.as_mut().ok_or(StatusCode::UNAUTHORIZED)?;
+    let chunk = crate::smb_share::stream_chunk(session, &id, range, &state.smb_generation)
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    tauri::http::Response::builder()
+        .status(StatusCode::PARTIAL_CONTENT)
+        .header("Content-Type", chunk.content_type)
+        .header(CONTENT_RANGE, chunk.content_range)
+        .header("Accept-Ranges", "bytes")
+        .header("Content-Length", chunk.body.len())
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-store")
+        .header("X-Content-Type-Options", "nosniff")
+        .body(chunk.body)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,10 +774,127 @@ mod tests {
     }
 
     #[test]
+    fn local_route_rejects_paths_outside_the_authorized_library() {
+        // 授权无法判定（无 AppHandle）时必须拒绝，/local 不能退化成任意文件读取通道。
+        let request = tauri::http::Request::builder()
+            .uri(format!(
+                "http://ome-media.localhost/local?p={}",
+                urlencoding::encode("C:/Windows/win.ini")
+            ))
+            .body(Vec::new())
+            .unwrap();
+        assert_eq!(handle(request).status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn subsonic_proxy_requires_a_managed_desktop_session() {
+        let request = tauri::http::Request::builder()
+            .uri("http://ome-media.localhost/subsonic?id=track-1")
+            .body(Vec::new())
+            .unwrap();
+        assert_eq!(handle(request).status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn subsonic_cover_proxy_requires_a_managed_desktop_session() {
+        let request = tauri::http::Request::builder()
+            .uri("http://ome-media.localhost/subsonic-cover?id=cover-1")
+            .body(Vec::new())
+            .unwrap();
+        assert_eq!(handle(request).status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn jellyfin_proxy_requires_a_managed_desktop_session() {
+        let request = tauri::http::Request::builder()
+            .uri("http://ome-media.localhost/jellyfin?id=01234567-89ab-cdef-0123-456789abcdef")
+            .header("range", "bytes=0-10")
+            .body(Vec::new())
+            .unwrap();
+        let response = handle(request);
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn jellyfin_cover_proxy_requires_a_managed_desktop_session() {
+        let request = tauri::http::Request::builder()
+            .uri(
+                "http://ome-media.localhost/jellyfin-cover?id=01234567-89ab-cdef-0123-456789abcdef",
+            )
+            .body(Vec::new())
+            .unwrap();
+        let response = handle(request);
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn emby_proxy_requires_a_managed_desktop_session() {
+        let request = tauri::http::Request::builder()
+            .uri("http://ome-media.localhost/emby?id=01234567-89ab-cdef-0123-456789abcdef")
+            .header("range", "bytes=0-10")
+            .body(Vec::new())
+            .unwrap();
+        let response = handle(request);
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn webdav_proxy_requires_a_managed_desktop_session() {
+        let response = handle(
+            tauri::http::Request::builder()
+                .uri("http://ome-media.localhost/webdav?id=opaque-item")
+                .body(Vec::new())
+                .unwrap(),
+        );
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn smb_proxy_requires_a_managed_desktop_session() {
+        let response = handle(
+            tauri::http::Request::builder()
+                .uri("http://ome-media.localhost/smb?id=opaque-item")
+                .body(Vec::new())
+                .unwrap(),
+        );
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn emby_cover_proxy_requires_a_managed_desktop_session() {
+        let request = tauri::http::Request::builder()
+            .uri("http://ome-media.localhost/emby-cover?id=01234567-89ab-cdef-0123-456789abcdef")
+            .body(Vec::new())
+            .unwrap();
+        let response = handle(request);
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
     fn content_type_by_extension() {
         assert_eq!(content_type_for("mp3"), "audio/mpeg");
         assert_eq!(content_type_for("FLAC"), "audio/flac");
         assert_eq!(content_type_for("xyz"), "application/octet-stream");
+    }
+
+    #[test]
+    fn metadata_cover_urls_require_https_and_known_provider_hosts() {
+        assert_eq!(
+            normalize_metadata_cover_url("http://p1.music.126.net/cover.jpg?param=300y300"),
+            Some("https://p1.music.126.net/cover.jpg?param=300y300".into())
+        );
+        assert_eq!(
+            normalize_metadata_cover_url("https://y.gtimg.cn/cover.jpg"),
+            Some("https://y.gtimg.cn/cover.jpg".into())
+        );
+        assert_eq!(
+            normalize_metadata_cover_url("https://imge.kugou.com/cover.jpg"),
+            Some("https://imge.kugou.com/cover.jpg".into())
+        );
+        assert!(normalize_metadata_cover_url("https://evil-example.com/cover.jpg").is_none());
+        assert!(normalize_metadata_cover_url("https://kugou.com.evil.example/cover.jpg").is_none());
+        assert!(normalize_metadata_cover_url("https://user@p1.music.126.net/cover.jpg").is_none());
+        assert!(normalize_metadata_cover_url("https://p1.music.126.net:444/cover.jpg").is_none());
     }
 
     #[test]
@@ -379,9 +955,10 @@ mod tests {
         fn live_remote_proxy_fetches_media_bytes() {
             let songs = tauri::async_runtime::block_on(crate::bilibili::search_songs("晴天", 12))
                 .expect("search failed");
-            let stream =
-                tauri::async_runtime::block_on(crate::bilibili::fetch_stream_url(&songs[0].id))
-                    .expect("stream url failed");
+            let stream = tauri::async_runtime::block_on(
+                crate::bilibili::fetch_stream_url_with_quality(&songs[0].id, None),
+            )
+            .expect("stream url failed");
             let proxy_uri = format!(
                 "http://ome-media.localhost/remote?p={}&r=www.bilibili.com",
                 urlencoding::encode(&stream.url)
