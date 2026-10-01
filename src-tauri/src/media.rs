@@ -776,10 +776,14 @@ mod tests {
     #[test]
     fn local_route_rejects_paths_outside_the_authorized_library() {
         // 授权无法判定（无 AppHandle）时必须拒绝，/local 不能退化成任意文件读取通道。
+        #[cfg(windows)]
+        let outside_path = "C:/Windows/win.ini";
+        #[cfg(not(windows))]
+        let outside_path = "/etc/passwd";
         let request = tauri::http::Request::builder()
             .uri(format!(
                 "http://ome-media.localhost/local?p={}",
-                urlencoding::encode("C:/Windows/win.ini")
+                urlencoding::encode(outside_path)
             ))
             .body(Vec::new())
             .unwrap();

@@ -668,8 +668,23 @@ mod tests {
     #[test]
     fn m3u_import_matches_only_indexed_local_paths_and_keeps_order() {
         let mut conn = memory_db();
-        seed_track(&conn, "first", r"C:\music\first.mp3");
-        seed_track(&conn, "second", r"C:\music\second.mp3");
+        #[cfg(windows)]
+        let (music_dir, playlist_file, missing_path) =
+            (r"C:\music", r"C:\playlists\mix.m3u8", r"C:\missing.mp3");
+        #[cfg(not(windows))]
+        let (music_dir, playlist_file, missing_path) =
+            ("/music", "/playlists/mix.m3u8", "/missing.mp3");
+        let music_dir_path = Path::new(music_dir);
+        seed_track(
+            &conn,
+            "first",
+            &music_dir_path.join("first.mp3").to_string_lossy(),
+        );
+        seed_track(
+            &conn,
+            "second",
+            &music_dir_path.join("second.mp3").to_string_lossy(),
+        );
         let tracks = load_tracks(&conn).unwrap();
         let first_id = tracks
             .iter()
@@ -683,12 +698,12 @@ mod tests {
             .unwrap()
             .id
             .clone();
-        let result = import_m3u_contents(
-            &mut conn,
-            Path::new(r"C:\playlists\mix.m3u8"),
-            "#EXTM3U\n#EXTINF:1,Second\nC:\\music\\second.mp3\n../music/first.mp3\nhttps://example.com/remote.mp3\nC:\\music\\second.mp3\nC:\\missing.mp3\n",
-        )
-        .unwrap();
+        let second_path = music_dir_path.join("second.mp3");
+        let second_line = second_path.to_string_lossy();
+        let contents = format!(
+            "#EXTM3U\n#EXTINF:1,Second\n{second_line}\n../music/first.mp3\nhttps://example.com/remote.mp3\n{second_line}\n{missing_path}\n",
+        );
+        let result = import_m3u_contents(&mut conn, Path::new(playlist_file), &contents).unwrap();
 
         let playlist = result.playlist.unwrap();
         assert_eq!(result.imported, 2);
@@ -744,9 +759,14 @@ mod tests {
     fn file_uri_paths_decode_spaces_and_metadata_cannot_inject_m3u_lines() {
         let base = Path::new(r"C:\playlists");
         let file_uri = m3u_candidate_path("file:///C:/my%20music/song.mp3", base).unwrap();
+        // to_file_path 语义按平台不同：Windows 剥掉盘符前的斜杠，Unix 保留它。
+        #[cfg(windows)]
+        let expected = Path::new(r"C:\my music\song.mp3");
+        #[cfg(not(windows))]
+        let expected = Path::new("/C:/my music/song.mp3");
         assert_eq!(
             normalized_path_key(&file_uri),
-            normalized_path_key(Path::new(r"C:\my music\song.mp3"))
+            normalized_path_key(expected)
         );
         assert_eq!(
             safe_m3u_metadata("artist\r\n#EXTINF:0,Injected"),
@@ -757,6 +777,10 @@ mod tests {
     #[test]
     fn m3u_export_skips_online_tracks_and_sanitizes_metadata_lines() {
         let conn = memory_db();
+        #[cfg(windows)]
+        let (track_path, playlist_dir) = (r"C:\music\track.mp3", Path::new(r"C:\playlists"));
+        #[cfg(not(windows))]
+        let (track_path, playlist_dir) = ("/music/track.mp3", Path::new("/playlists"));
         insert_track(
             &conn,
             &NewTrack {
@@ -764,7 +788,7 @@ mod tests {
                 artist: "艺人\nInjected".into(),
                 album: String::new(),
                 duration_seconds: 12,
-                file_path: r"C:\music\track.mp3".into(),
+                file_path: track_path.into(),
                 cover_path: None,
             },
         )
@@ -784,8 +808,7 @@ mod tests {
         let playlist = create_playlist(&conn, "mix").unwrap();
         playlist_add_tracks(&conn, &playlist.id, &ids).unwrap();
 
-        let (contents, result) =
-            build_m3u_playlist(&conn, &playlist.id, Path::new(r"C:\playlists")).unwrap();
+        let (contents, result) = build_m3u_playlist(&conn, &playlist.id, playlist_dir).unwrap();
         assert_eq!(result.exported, 1);
         assert_eq!(result.skipped, 1);
         assert_eq!(
